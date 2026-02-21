@@ -33,6 +33,12 @@ module HakumiORM
       # Symbolic identifier for this dialect.
       sig { abstract.returns(Symbol) }
       def name; end
+
+      sig { returns(SqlCompiler) }
+      def compiler
+        @compiler = T.let(@compiler, T.nilable(SqlCompiler))
+        @compiler ||= SqlCompiler.new(self)
+      end
     end
   end
 end

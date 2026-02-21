@@ -51,6 +51,12 @@ module HakumiORM
       sig { abstract.params(sql: String).returns(Result) }
       def exec(sql); end
 
+      sig { abstract.params(name: String, sql: String).void }
+      def prepare(name, sql); end
+
+      sig { abstract.params(name: String, params: T::Array[PGValue]).returns(Result) }
+      def exec_prepared(name, params); end
+
       sig { abstract.void }
       def close; end
 

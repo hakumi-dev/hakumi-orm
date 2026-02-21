@@ -89,11 +89,7 @@ module HakumiORM
         result
       end
 
-      # ERB template locals are inherently heterogeneous (String, Array,
-      # Integer, nil, etc. in a single Hash). T.untyped is strictly
-      # necessary here as the ERB boundary -- all values fed in are
-      # computed from typed methods above this layer.
-      sig { params(template_name: String, locals: T::Hash[Symbol, T.untyped]).returns(String) }
+      sig { params(template_name: String, locals: T::Hash[Symbol, TemplateLocal]).returns(String) }
       def render(template_name, locals)
         path = File.join(TEMPLATE_DIR, "#{template_name}.rb.erb")
         T.cast(ERB.new(File.read(path), trim_mode: "-").result_with_hash(locals), String)
@@ -122,6 +118,9 @@ module HakumiORM
         record_cls = "#{cls}Record"
         ins_cols = insertable_columns(table)
 
+        col_list = ins_cols.map { |c| @dialect.quote_id(c.name) }.join(", ")
+        returning_list = table.columns.map { |c| @dialect.quote_id(c.name) }.join(", ")
+
         render("record",
                module_name: @module_name,
                ind: indent,
@@ -134,11 +133,15 @@ module HakumiORM
                qualified_relation: qualify("#{cls}Relation"),
                has_many: build_has_many_assocs(table, has_many_map),
                belongs_to: build_belongs_to_assocs(table),
+               insert_all_prefix: "INSERT INTO #{@dialect.quote_id(table.name)} (#{col_list}) VALUES ",
+               insert_all_columns: ins_cols.map { |c| { name: c.name } },
+               supports_returning: @dialect.supports_returning?,
+               returning_cols: returning_list,
                **build_find_locals(table, record_cls),
                **build_build_locals(ins_cols, ins_cols.reject(&:nullable), ins_cols.select(&:nullable), record_cls))
       end
 
-      sig { params(table: TableInfo, has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]).returns(T::Array[T::Hash[Symbol, T.untyped]]) }
+      sig { params(table: TableInfo, has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]).returns(T::Array[T::Hash[Symbol, String]]) }
       def build_has_many_assocs(table, has_many_map)
         pk_col = table.columns.find { |c| c.name == (table.primary_key || "id") }
         pk_type = pk_col ? hakumi_type_for(pk_col).ruby_type_string(nullable: false) : "Integer"
@@ -158,7 +161,7 @@ module HakumiORM
         end
       end
 
-      sig { params(table: TableInfo).returns(T::Array[T::Hash[Symbol, T.untyped]]) }
+      sig { params(table: TableInfo).returns(T::Array[BelongsToEntry]) }
       def build_belongs_to_assocs(table)
         table.foreign_keys.map do |fk|
           fk_col = table.columns.find { |c| c.name == fk.column_name }
@@ -187,7 +190,7 @@ module HakumiORM
           required_ins: T::Array[ColumnInfo],
           optional_ins: T::Array[ColumnInfo],
           _record_cls: String
-        ).returns(T::Hash[Symbol, T.untyped])
+        ).returns(T::Hash[Symbol, T.nilable(String)])
       end
       def build_build_locals(ins_cols, required_ins, optional_ins, _record_cls)
         return { build_sig_params: nil } if ins_cols.empty?
@@ -204,25 +207,28 @@ module HakumiORM
       sig { params(table: TableInfo).returns(T::Array[String]) }
       def build_cast_lines(table)
         table.columns.each_with_index.map do |col, ci|
-          accessor = col.nullable ? "result.get_value(i, #{ci})" : "result.fetch_value(i, #{ci})"
-          TypeMap.cast_expression(hakumi_type_for(col), accessor, nullable: col.nullable)
+          TypeMap.cast_expression(hakumi_type_for(col), "c#{ci}[i]", nullable: col.nullable)
         end
       end
 
-      sig { params(table: TableInfo, _record_cls: String).returns(T::Hash[Symbol, T.untyped]) }
+      sig { params(table: TableInfo, _record_cls: String).returns(T::Hash[Symbol, T.nilable(String)]) }
       def build_find_locals(table, _record_cls)
         pk = table.primary_key
-        return { find_sql: nil, pk_ruby_type: nil } unless pk
+        return { find_sql: nil, pk_ruby_type: nil, stmt_find_name: nil } unless pk
 
         pk_col = table.columns.find { |c| c.name == pk }
-        return { find_sql: nil, pk_ruby_type: nil } unless pk_col
+        return { find_sql: nil, pk_ruby_type: nil, stmt_find_name: nil } unless pk_col
 
         pk_ht = hakumi_type_for(pk_col)
         select_cols = table.columns.map { |c| @dialect.qualified_name(table.name, c.name) }.join(", ")
         sql = "SELECT #{select_cols} FROM #{@dialect.quote_id(table.name)} " \
               "WHERE #{@dialect.qualified_name(table.name, pk)} = #{@dialect.bind_marker(0)} LIMIT 1"
 
-        { find_sql: sql, pk_ruby_type: pk_ht.ruby_type_string(nullable: false) }
+        {
+          find_sql: sql,
+          pk_ruby_type: pk_ht.ruby_type_string(nullable: false),
+          stmt_find_name: "hakumi_#{table.name}_find"
+        }
       end
 
       sig { params(table: TableInfo).returns(String) }
@@ -248,7 +254,7 @@ module HakumiORM
                **build_insert_locals(table, record_cls))
       end
 
-      sig { params(table: TableInfo, _record_cls: String).returns(T::Hash[Symbol, T.untyped]) }
+      sig { params(table: TableInfo, _record_cls: String).returns(T::Hash[Symbol, T.nilable(String)]) }
       def build_insert_locals(table, _record_cls)
         ins_cols = insertable_columns(table)
         return { insert_sql: nil } if ins_cols.empty?
@@ -276,12 +282,16 @@ module HakumiORM
         preloadable = hm.map { |a| { method_name: a[:method_name] } } +
                       bt.map { |a| { method_name: a[:method_name] } }
 
+        count_sql = "SELECT COUNT(*) FROM #{@dialect.quote_id(table.name)}"
+
         render("relation",
                module_name: @module_name,
                ind: indent,
                relation_class_name: "#{cls}Relation",
                qualified_record_class: qualify("#{cls}Record"),
                qualified_schema: qualify("#{cls}Schema"),
+               count_sql: count_sql,
+               stmt_count_name: "hakumi_#{table.name}_count",
                preloadable_assocs: preloadable)
       end
 

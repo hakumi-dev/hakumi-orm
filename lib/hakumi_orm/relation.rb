@@ -15,6 +15,7 @@ module HakumiORM
     def initialize(table_name, columns)
       @table_name = T.let(table_name, String)
       @columns = T.let(columns, T::Array[FieldRef])
+      @select_columns = T.let(nil, T.nilable(T::Array[FieldRef]))
       @where_exprs = T.let([], T::Array[Expr])
       @order_clauses = T.let([], T::Array[OrderClause])
       @joins = T.let([], T::Array[JoinClause])
@@ -51,6 +52,12 @@ module HakumiORM
     sig { params(n: Integer).returns(T.self_type) }
     def offset(n)
       @offset_value = n
+      self
+    end
+
+    sig { params(fields: FieldRef).returns(T.self_type) }
+    def select(*fields)
+      @select_columns = T.let(fields, T.nilable(T::Array[FieldRef]))
       self
     end
 
@@ -108,11 +115,18 @@ module HakumiORM
       preloaded = @_preloaded_results
       return preloaded.length if preloaded
 
-      compiled = SqlCompiler.new(adapter.dialect).count(
-        table: @table_name,
-        where_expr: combined_where
-      )
-      result = adapter.exec_params(compiled.sql, compiled.pg_params)
+      if @where_exprs.empty? && self.class.const_defined?(:STMT_COUNT_ALL)
+        stmt = T.unsafe(self.class).const_get(:STMT_COUNT_ALL)
+        sql = T.unsafe(self.class).const_get(:SQL_COUNT_ALL)
+        adapter.prepare(stmt, sql)
+        result = adapter.exec_prepared(stmt, [])
+      else
+        compiled = adapter.dialect.compiler.count(
+          table: @table_name,
+          where_expr: combined_where
+        )
+        result = adapter.exec_params(compiled.sql, compiled.pg_params)
+      end
       T.must(result.get_value(0, 0)).to_i
     ensure
       result&.close
@@ -129,7 +143,7 @@ module HakumiORM
 
     sig { params(adapter: Adapter::Base).returns(Integer) }
     def delete_all(adapter: HakumiORM.adapter)
-      compiled = SqlCompiler.new(adapter.dialect).delete(
+      compiled = adapter.dialect.compiler.delete(
         table: @table_name,
         where_expr: combined_where
       )
@@ -141,7 +155,7 @@ module HakumiORM
 
     sig { params(assignments: T::Array[Assignment], adapter: Adapter::Base).returns(Integer) }
     def update_all(assignments, adapter: HakumiORM.adapter)
-      compiled = SqlCompiler.new(adapter.dialect).update(
+      compiled = adapter.dialect.compiler.update(
         table: @table_name,
         assignments: assignments,
         where_expr: combined_where
@@ -155,6 +169,36 @@ module HakumiORM
     sig { params(adapter: Adapter::Base).returns(CompiledQuery) }
     def to_sql(adapter: HakumiORM.adapter)
       build_select(adapter.dialect)
+    end
+
+    sig { params(batch_size: Integer, adapter: Adapter::Base, blk: T.proc.params(record: ModelType).void).void }
+    def find_each(batch_size: 1000, adapter: HakumiORM.adapter, &blk)
+      find_in_batches(batch_size: batch_size, adapter: adapter) do |batch|
+        batch.each(&blk)
+      end
+    end
+
+    sig { params(batch_size: Integer, adapter: Adapter::Base, blk: T.proc.params(batch: T::Array[ModelType]).void).void }
+    def find_in_batches(batch_size: 1000, adapter: HakumiORM.adapter, &blk)
+      compiled = build_select(adapter.dialect)
+      cursor_name = "hakumi_cursor_#{object_id}"
+
+      adapter.exec("BEGIN")
+      declare_sql = "DECLARE #{cursor_name} CURSOR FOR #{compiled.sql}"
+      adapter.exec_params(declare_sql, compiled.pg_params)
+
+      loop do
+        result = adapter.exec("FETCH #{batch_size} FROM #{cursor_name}")
+        batch = hydrate(result)
+        result.close
+        break if batch.empty?
+
+        blk.call(batch)
+        break if batch.length < batch_size
+      end
+    ensure
+      adapter.exec("CLOSE #{cursor_name}") rescue nil # rubocop:disable Style/RescueModifier
+      adapter.exec("COMMIT") rescue nil # rubocop:disable Style/RescueModifier
     end
 
     sig { overridable.params(records: T::Array[ModelType], names: T::Array[Symbol], adapter: Adapter::Base).void }
@@ -192,9 +236,9 @@ module HakumiORM
       ).returns(CompiledQuery)
     end
     def build_select(dialect, columns_override: nil, limit_override: nil)
-      SqlCompiler.new(dialect).select(
+      dialect.compiler.select(
         table: @table_name,
-        columns: columns_override || @columns,
+        columns: columns_override || @select_columns || @columns,
         where_expr: combined_where,
         orders: @order_clauses,
         joins: @joins,

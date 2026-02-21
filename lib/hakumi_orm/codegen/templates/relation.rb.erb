@@ -10,6 +10,9 @@ module <%= module_name %>
 
 <%= ind %>  ModelType = type_member {{ fixed: <%= qualified_record_class %> }}
 
+<%= ind %>  SQL_COUNT_ALL = T.let('<%= count_sql %>', String)
+<%= ind %>  STMT_COUNT_ALL = T.let('<%= stmt_count_name %>', String)
+
 <%= ind %>  sig { void }
 <%= ind %>  def initialize
 <%= ind %>    super(<%= qualified_schema %>::TABLE_NAME, <%= qualified_schema %>::ALL)

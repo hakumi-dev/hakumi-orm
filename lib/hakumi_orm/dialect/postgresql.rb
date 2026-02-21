@@ -6,17 +6,16 @@ module HakumiORM
     class Postgresql < Base
       extend T::Sig
 
-      MARKERS = T.let((1..500).map { |i| -"$#{i}" }.freeze, T::Array[String])
-
       sig { void }
       def initialize
         @id_cache = T.let({}, T::Hash[String, String])
         @qn_cache = T.let({}, T::Hash[String, String])
+        @marker_cache = T.let({}, T::Hash[Integer, String])
       end
 
       sig { override.params(index: Integer).returns(String) }
       def bind_marker(index)
-        T.must(MARKERS[index])
+        @marker_cache[index] ||= -"$#{index + 1}"
       end
 
       sig { override.params(name: String).returns(String) }

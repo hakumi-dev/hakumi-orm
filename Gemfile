@@ -17,3 +17,7 @@ gem "pg", require: false
 # Sorbet static analysis
 gem "sorbet", require: false
 gem "tapioca", ">= 0.17", require: false
+
+# Benchmarking (sandbox only)
+gem "activerecord", require: false
+gem "benchmark-ips", require: false
