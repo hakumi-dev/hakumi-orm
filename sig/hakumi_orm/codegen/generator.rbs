@@ -25,7 +25,7 @@ module HakumiORM
       def build_find_locals: (TableInfo table, String record_cls) -> Hash[Symbol, untyped]
       def build_new_record: (TableInfo table) -> String
       def build_insert_locals: (TableInfo table, String record_cls) -> Hash[Symbol, untyped]
-      def build_relation: (TableInfo table) -> String
+      def build_relation: (TableInfo table, Hash[String, Array[Hash[Symbol, String]]] has_many_map) -> String
       def build_model: (TableInfo table) -> String
       def build_manifest: () -> String
       def indent: () -> String

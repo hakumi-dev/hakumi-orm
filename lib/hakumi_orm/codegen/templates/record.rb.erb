@@ -15,10 +15,26 @@ module <%= module_name %>
 <%= ind %>  attr_reader :<%= col[:name] %>
 
 <%- end -%>
+<%- has_many.each do |assoc| -%>
+<%= ind %>  sig { returns(T.nilable(T::Array[<%= assoc[:record_class] %>])) }
+<%= ind %>  attr_accessor :_preloaded_<%= assoc[:method_name] %>
+
+<%- end -%>
+<%- belongs_to.each do |assoc| -%>
+<%= ind %>  sig { returns(T.nilable(T::Array[<%= assoc[:record_class] %>])) }
+<%= ind %>  attr_accessor :_preloaded_<%= assoc[:method_name] %>
+
+<%- end -%>
 <%= ind %>  sig { params(<%= init_sig_params %>).void }
 <%= ind %>  def initialize(<%= init_args %>)
 <%- columns.each do |col| -%>
 <%= ind %>    @<%= col[:name] %> = T.let(<%= col[:name] %>, <%= col[:ruby_type] %>)
+<%- end -%>
+<%- has_many.each do |assoc| -%>
+<%= ind %>    @_preloaded_<%= assoc[:method_name] %> = T.let(nil, T.nilable(T::Array[<%= assoc[:record_class] %>]))
+<%- end -%>
+<%- belongs_to.each do |assoc| -%>
+<%= ind %>    @_preloaded_<%= assoc[:method_name] %> = T.let(nil, T.nilable(T::Array[<%= assoc[:record_class] %>]))
 <%- end -%>
 <%= ind %>  end
 
@@ -72,7 +88,30 @@ module <%= module_name %>
 
 <%= ind %>  sig { returns(<%= assoc[:relation_class] %>) }
 <%= ind %>  def <%= assoc[:method_name] %>
+<%= ind %>    cached = @_preloaded_<%= assoc[:method_name] %>
+<%= ind %>    if cached
+<%= ind %>      return <%= assoc[:relation_class] %>.new._set_preloaded(cached)
+<%= ind %>    end
 <%= ind %>    <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.eq(@<%= assoc[:pk_attr] %>))
+<%= ind %>  end
+
+<%= ind %>  sig { params(records: T::Array[<%= record_class_name %>], adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def self.preload_<%= assoc[:method_name] %>(records, adapter: ::HakumiORM.adapter)
+<%= ind %>    return if records.empty?
+
+<%= ind %>    ids = records.map { |r| r.<%= assoc[:pk_attr] %> }.uniq
+<%= ind %>    return if ids.empty?
+
+<%= ind %>    all_related = <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.in_list(ids)).to_a(adapter: adapter)
+<%= ind %>    grouped = T.let({}, T::Hash[<%= assoc[:pk_ruby_type] %>, T::Array[<%= assoc[:record_class] %>]])
+<%= ind %>    all_related.each do |related|
+<%= ind %>      key = related.<%= assoc[:fk_attr] %>
+<%= ind %>      (grouped[key] ||= []) << related
+<%= ind %>    end
+
+<%= ind %>    records.each do |record|
+<%= ind %>      record._preloaded_<%= assoc[:method_name] %> = grouped[record.<%= assoc[:pk_attr] %>] || []
+<%= ind %>    end
 <%= ind %>  end
 <%- end -%>
 <%- belongs_to.each do |assoc| -%>
@@ -80,6 +119,9 @@ module <%= module_name %>
 <%- if assoc[:nullable] -%>
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).returns(T.nilable(<%= assoc[:record_class] %>)) }
 <%= ind %>  def <%= assoc[:method_name] %>(adapter: ::HakumiORM.adapter)
+<%= ind %>    cached = @_preloaded_<%= assoc[:method_name] %>
+<%= ind %>    return cached.first if cached
+
 <%= ind %>    fk_val = @<%= assoc[:fk_attr] %>
 <%= ind %>    return nil if fk_val.nil?
 
@@ -88,9 +130,29 @@ module <%= module_name %>
 <%- else -%>
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).returns(T.nilable(<%= assoc[:record_class] %>)) }
 <%= ind %>  def <%= assoc[:method_name] %>(adapter: ::HakumiORM.adapter)
+<%= ind %>    cached = @_preloaded_<%= assoc[:method_name] %>
+<%= ind %>    return cached.first if cached
+
 <%= ind %>    <%= assoc[:record_class] %>.find(@<%= assoc[:fk_attr] %>, adapter: adapter)
 <%= ind %>  end
 <%- end -%>
+
+<%= ind %>  sig { params(records: T::Array[<%= record_class_name %>], adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def self.preload_<%= assoc[:method_name] %>(records, adapter: ::HakumiORM.adapter)
+<%= ind %>    return if records.empty?
+
+<%= ind %>    fk_values = records.map { |r| r.<%= assoc[:fk_attr] %> }.compact.uniq
+<%= ind %>    return if fk_values.empty?
+
+<%= ind %>    all_related = <%= assoc[:target_relation] %>.new.where(<%= assoc[:target_schema] %>::<%= assoc[:target_pk_const] %>.in_list(fk_values)).to_a(adapter: adapter)
+<%= ind %>    indexed = T.let({}, T::Hash[<%= assoc[:target_pk_type] %>, <%= assoc[:record_class] %>])
+<%= ind %>    all_related.each { |r| indexed[r.<%= assoc[:target_pk_attr] %>] = r }
+
+<%= ind %>    records.each do |record|
+<%= ind %>      fk = record.<%= assoc[:fk_attr] %>
+<%= ind %>      record._preloaded_<%= assoc[:method_name] %> = fk ? [indexed[fk]].compact : []
+<%= ind %>    end
+<%= ind %>  end
 <%- end -%>
 <%= ind %>end
 <%- if module_name -%>

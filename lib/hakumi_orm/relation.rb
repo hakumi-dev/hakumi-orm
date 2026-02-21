@@ -20,6 +20,8 @@ module HakumiORM
       @joins = T.let([], T::Array[JoinClause])
       @limit_value = T.let(nil, T.nilable(Integer))
       @offset_value = T.let(nil, T.nilable(Integer))
+      @_preloaded_results = T.let(nil, T.nilable(T::Array[ModelType]))
+      @_preload_names = T.let(nil, T.nilable(T::Array[Symbol]))
     end
 
     sig { params(expr: Expr).returns(T.self_type) }
@@ -58,20 +60,42 @@ module HakumiORM
       self
     end
 
+    sig { params(names: Symbol).returns(T.self_type) }
+    def preload(*names)
+      existing = @_preload_names
+      if existing
+        existing.concat(names)
+      else
+        @_preload_names = T.let(names, T.nilable(T::Array[Symbol]))
+      end
+      self
+    end
+
+    sig { params(results: T::Array[ModelType]).returns(T.self_type) }
+    def _set_preloaded(results)
+      @_preloaded_results = results
+      self
+    end
+
     sig { abstract.params(result: Adapter::Result).returns(T::Array[ModelType]) }
     def hydrate(result); end
 
     sig { params(adapter: Adapter::Base).returns(T::Array[ModelType]) }
     def to_a(adapter: HakumiORM.adapter)
-      compiled = build_select(adapter.dialect)
-      result = adapter.exec_params(compiled.sql, compiled.pg_params)
-      hydrate(result)
-    ensure
-      result&.close
+      preloaded = @_preloaded_results
+      return preloaded if preloaded
+
+      records = fetch_records(adapter)
+      names = @_preload_names
+      run_preloads(records, names, adapter) if names
+      records
     end
 
     sig { params(adapter: Adapter::Base).returns(T.nilable(ModelType)) }
     def first(adapter: HakumiORM.adapter)
+      preloaded = @_preloaded_results
+      return preloaded.first if preloaded
+
       compiled = build_select(adapter.dialect, limit_override: 1)
       result = adapter.exec_params(compiled.sql, compiled.pg_params)
       hydrate(result).first
@@ -81,6 +105,9 @@ module HakumiORM
 
     sig { params(adapter: Adapter::Base).returns(Integer) }
     def count(adapter: HakumiORM.adapter)
+      preloaded = @_preloaded_results
+      return preloaded.length if preloaded
+
       compiled = SqlCompiler.new(adapter.dialect).count(
         table: @table_name,
         where_expr: combined_where
@@ -130,7 +157,19 @@ module HakumiORM
       build_select(adapter.dialect)
     end
 
+    sig { overridable.params(records: T::Array[ModelType], names: T::Array[Symbol], adapter: Adapter::Base).void }
+    def run_preloads(records, names, adapter); end
+
     private
+
+    sig { params(adapter: Adapter::Base).returns(T::Array[ModelType]) }
+    def fetch_records(adapter)
+      compiled = build_select(adapter.dialect)
+      result = adapter.exec_params(compiled.sql, compiled.pg_params)
+      hydrate(result)
+    ensure
+      result&.close
+    end
 
     sig { returns(T.nilable(Expr)) }
     def combined_where

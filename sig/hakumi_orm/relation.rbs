@@ -7,6 +7,8 @@ module HakumiORM
     def limit: (Integer n) -> self
     def offset: (Integer n) -> self
     def join: (JoinClause clause) -> self
+    def preload: (*Symbol names) -> self
+    def _set_preloaded: (Array[ModelType] results) -> self
     def hydrate: (Adapter::Result result) -> Array[ModelType]
     def to_a: (?adapter: Adapter::Base) -> Array[ModelType]
     def first: (?adapter: Adapter::Base) -> ModelType?
@@ -15,9 +17,11 @@ module HakumiORM
     def delete_all: (?adapter: Adapter::Base) -> Integer
     def update_all: (Array[Assignment] assignments, ?adapter: Adapter::Base) -> Integer
     def to_sql: (?adapter: Adapter::Base) -> CompiledQuery
+    def run_preloads: (Array[ModelType] records, Array[Symbol] names, Adapter::Base adapter) -> void
 
     private
 
+    def fetch_records: (Adapter::Base adapter) -> Array[ModelType]
     def combined_where: () -> Expr?
     def build_select: (Dialect::Base dialect, ?columns_override: Array[FieldRef]?, ?limit_override: Integer?) -> CompiledQuery
   end

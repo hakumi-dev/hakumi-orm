@@ -54,7 +54,7 @@ module HakumiORM
           File.write(File.join(table_dir, "schema.rb"), build_schema(table))
           File.write(File.join(table_dir, "record.rb"), build_record(table, has_many_map))
           File.write(File.join(table_dir, "new_record.rb"), build_new_record(table))
-          File.write(File.join(table_dir, "relation.rb"), build_relation(table))
+          File.write(File.join(table_dir, "relation.rb"), build_relation(table, has_many_map))
         end
 
         File.write(File.join(@output_dir, "manifest.rb"), build_manifest)
@@ -138,28 +138,43 @@ module HakumiORM
                **build_build_locals(ins_cols, ins_cols.reject(&:nullable), ins_cols.select(&:nullable), record_cls))
       end
 
-      sig { params(table: TableInfo, has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]).returns(T::Array[T::Hash[Symbol, String]]) }
+      sig { params(table: TableInfo, has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]).returns(T::Array[T::Hash[Symbol, T.untyped]]) }
       def build_has_many_assocs(table, has_many_map)
+        pk_col = table.columns.find { |c| c.name == (table.primary_key || "id") }
+        pk_type = pk_col ? hakumi_type_for(pk_col).ruby_type_string(nullable: false) : "Integer"
+
         (has_many_map[table.name] || []).map do |info|
           target_cls = classify(T.must(info[:source_table]))
           {
             method_name: T.must(info[:source_table]),
             relation_class: qualify("#{target_cls}Relation"),
+            record_class: qualify("#{target_cls}Record"),
             schema_module: qualify("#{target_cls}Schema"),
             fk_const: T.must(info[:fk_column]).upcase,
-            pk_attr: table.primary_key || "id"
+            fk_attr: T.must(info[:fk_column]),
+            pk_attr: table.primary_key || "id",
+            pk_ruby_type: pk_type
           }
         end
       end
 
-      sig { params(table: TableInfo).returns(T::Array[T::Hash[Symbol, T.any(String, T::Boolean)]]) }
+      sig { params(table: TableInfo).returns(T::Array[T::Hash[Symbol, T.untyped]]) }
       def build_belongs_to_assocs(table)
         table.foreign_keys.map do |fk|
           fk_col = table.columns.find { |c| c.name == fk.column_name }
           target_cls = classify(fk.foreign_table)
+          target_table = @tables[fk.foreign_table]
+          target_pk = target_table&.primary_key || "id"
+          target_pk_col = target_table&.columns&.find { |c| c.name == target_pk }
+          target_pk_type = target_pk_col ? hakumi_type_for(target_pk_col).ruby_type_string(nullable: false) : "Integer"
           {
             method_name: singularize(fk.foreign_table),
             record_class: qualify("#{target_cls}Record"),
+            target_relation: qualify("#{target_cls}Relation"),
+            target_schema: qualify("#{target_cls}Schema"),
+            target_pk_const: target_pk.upcase,
+            target_pk_attr: target_pk,
+            target_pk_type: target_pk_type,
             fk_attr: fk.column_name,
             nullable: fk_col&.nullable || false
           }
@@ -253,16 +268,21 @@ module HakumiORM
         }
       end
 
-      sig { params(table: TableInfo).returns(String) }
-      def build_relation(table)
+      sig { params(table: TableInfo, has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]).returns(String) }
+      def build_relation(table, has_many_map)
         cls = classify(table.name)
+        hm = build_has_many_assocs(table, has_many_map)
+        bt = build_belongs_to_assocs(table)
+        preloadable = hm.map { |a| { method_name: a[:method_name] } } +
+                      bt.map { |a| { method_name: a[:method_name] } }
 
         render("relation",
                module_name: @module_name,
                ind: indent,
                relation_class_name: "#{cls}Relation",
                qualified_record_class: qualify("#{cls}Record"),
-               qualified_schema: qualify("#{cls}Schema"))
+               qualified_schema: qualify("#{cls}Schema"),
+               preloadable_assocs: preloadable)
       end
 
       sig { params(table: TableInfo).returns(String) }

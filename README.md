@@ -193,7 +193,7 @@ Associations are generated automatically from foreign keys. `has_many` returns a
 | Hydration | Reflection + type coercion | Generated positional `fetch_value` |
 | New vs persisted | Same class, `id` is nilable | Two distinct types: `Record::New` and `Record` |
 | Associations | Declared via DSL macros | Generated from foreign keys |
-| Eager loading | `includes` / `preload` / `eager_load` | Not yet |
+| Eager loading | `includes` / `preload` / `eager_load` | `.preload(:assoc)` on Relation (batch query) |
 | Callbacks | Before/after hooks | None (explicit control flow) |
 | Dirty tracking | Automatic | None (opt-in if needed) |
 | Migrations | Built-in | Not included (use standalone tools) |
@@ -352,6 +352,7 @@ user.id                  # => Integer (guaranteed)
 | `limit(n)` | Set LIMIT. |
 | `offset(n)` | Set OFFSET. |
 | `join(clause)` | Add a JOIN clause. |
+| `preload(*names)` | Eager-load associations after the main query (avoids N+1). |
 
 ```ruby
 User
@@ -491,9 +492,9 @@ post = Post.find(1)
 post.user                    # => T.nilable(UserRecord) (executes SELECT)
 ```
 
-#### Association loading behavior
+#### Preloading (eager loading)
 
-Associations are **lazy-loaded** by default. Each call executes an independent query:
+By default, associations are lazy-loaded (N+1):
 
 ```ruby
 users = User.all.to_a           # 1 query
@@ -502,14 +503,43 @@ users.each do |u|
 end
 ```
 
-There is no `includes` / `preload` / `eager_load` yet. For batch loading, query the association table directly:
+Use `preload` to batch-load associations in a single extra query:
 
 ```ruby
-users = User.all.to_a
-user_ids = users.map(&:id)
-all_posts = Post.where(PostSchema::USER_ID.in_list(user_ids)).to_a
-posts_by_user = all_posts.group_by(&:user_id)
+# 2 queries total: SELECT * FROM users; SELECT * FROM posts WHERE user_id IN (1, 2, 3)
+users = User.all.preload(:posts).to_a
+
+users.each do |u|
+  puts u.posts.count             # no query -- data is already loaded
+  puts u.posts.to_a.size         # no query
+end
 ```
+
+`preload` works for both `has_many` and `belongs_to`:
+
+```ruby
+# Preload the author for each post (2 queries)
+posts = Post.all.preload(:user).to_a
+posts.each { |p| puts p.user&.name }   # no N+1
+```
+
+Preloaded associations still return a `Relation`, so `.to_a`, `.first`, and `.count` all work without hitting the database. If you chain `.where(...)` on a preloaded relation, it falls back to a real query.
+
+### Joins
+
+Use `join` to filter records based on related table conditions. The join is for filtering only -- the SELECT returns the main table's columns.
+
+```ruby
+# Find users who have at least one published post
+join = HakumiORM::JoinClause.new(:inner, "posts", UserSchema::ID, PostSchema::USER_ID)
+users = User.all
+  .join(join)
+  .where(PostSchema::PUBLISHED.eq(true))
+  .order(UserSchema::NAME.asc)
+  .to_a
+```
+
+Supported join types: `:inner`, `:left`, `:right`, `:cross`.
 
 ### Creating Records
 
@@ -596,7 +626,7 @@ createdb hakumi_sandbox
 bundle exec ruby sandbox/smoke_test.rb
 ```
 
-This connects to a local database, creates tables, runs the code generator, loads the generated files, and exercises the full API: all predicates, relation methods, CRUD, associations, and mutations.
+This connects to a local database, creates tables, runs the code generator, loads the generated files, and exercises the full API: all predicates, relation methods, CRUD, associations, preloading, joins, and mutations.
 
 ## Contributing
 
