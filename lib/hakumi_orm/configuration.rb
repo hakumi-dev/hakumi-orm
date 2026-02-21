@@ -32,6 +32,9 @@ module HakumiORM
     attr_accessor :models_dir
 
     sig { returns(T.nilable(String)) }
+    attr_accessor :contracts_dir
+
+    sig { returns(T.nilable(String)) }
     attr_accessor :module_name
 
     sig { void }
@@ -45,6 +48,7 @@ module HakumiORM
       @password = T.let(nil, T.nilable(String))
       @output_dir = T.let("app/db/generated", String)
       @models_dir = T.let(nil, T.nilable(String))
+      @contracts_dir = T.let(nil, T.nilable(String))
       @module_name = T.let(nil, T.nilable(String))
     end
 

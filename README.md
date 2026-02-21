@@ -36,6 +36,7 @@ No `method_missing`. No `define_method`. No runtime reflection for column access
 - **Minimal allocations** -- designed for low GC pressure and YJIT-friendly object layouts
 - **Prepared statements only** -- all values go through bind parameters, never interpolated into SQL
 - **No Arel dependency** -- SQL is built directly from a typed expression tree with sequential bind markers
+- **Type-state validation** -- `Record::New` -> `Record::Validated` -> `Record` lifecycle enforced at compile time
 - **Pre-persist vs persisted types** -- `UserRecord::New` (without `id`) and `UserRecord` (with `id`) are distinct types
 - **Multi-database support** -- dialect abstraction for PostgreSQL, MySQL, and SQLite
 
@@ -79,20 +80,24 @@ In HakumiORM, every model is generated from the schema as typed, explicit code:
 ```
 app/db/generated/          <-- always overwritten by codegen
   user/
+    checkable.rb           # UserRecord::Checkable -- interface for validatable fields
     schema.rb              # UserSchema -- typed Field constants
     record.rb              # UserRecord -- persisted record (all columns, keyword init)
-    new_record.rb          # UserRecord::New -- pre-persist record (no id, save!)
+    new_record.rb          # UserRecord::New -- pre-persist record (validate!)
+    validated_record.rb    # UserRecord::Validated -- validated record (save!)
+    base_contract.rb       # UserRecord::BaseContract -- overridable validation hooks
     relation.rb            # UserRelation -- typed query builder
   post/
-    schema.rb
-    record.rb
-    new_record.rb
-    relation.rb
+    ...
   manifest.rb              # require_relative for all files
 
 app/models/                <-- generated once, never overwritten
   user.rb                  # class User < UserRecord
   post.rb                  # class Post < PostRecord
+
+app/contracts/             <-- generated once, never overwritten
+  user_contract.rb         # UserRecord::Contract < UserRecord::BaseContract
+  post_contract.rb         # PostRecord::Contract < PostRecord::BaseContract
 ```
 
 The `models/` files are your public API. They inherit from the generated records and are where you add custom logic:
@@ -116,7 +121,7 @@ You interact with `User`, not `UserRecord`:
 user = User.find(1)
 user.published_posts.to_a
 new_user = User.build(name: "Alice", email: "alice@example.com", active: true)
-new_user.save!
+new_user.validate!.save!
 ```
 
 ### Querying
@@ -150,17 +155,19 @@ user.save! # => true
 user.id    # => 1 (after save)
 # The same object changes state. `id` is T.nilable(Integer) everywhere.
 
-# HakumiORM
+# HakumiORM -- type-state enforced lifecycle
 new_user = User.build(name: "Alice", email: "alice@example.com", active: true)
 # new_user is UserRecord::New -- no `id` attribute at all
-# new_user.id  # => Sorbet error: method 'id' does not exist on UserRecord::New
 
-user = new_user.save!
+validated = new_user.validate!
+# validated is UserRecord::Validated -- contract passed, New is frozen
+
+user = validated.save!
 # user is UserRecord -- `id` is Integer, guaranteed non-nil
 user.id    # => 1 (always present, never nil)
 ```
 
-The type system enforces the lifecycle: you **cannot** accidentally access `id` before persistence, and you **cannot** get a `nil` id after persistence.
+The type system enforces the lifecycle: `New` -> `Validated` -> `Record`. You **cannot** call `save!` on a `New` (must validate first), and you **cannot** get a `nil` id after persistence.
 
 ### Associations
 
@@ -193,7 +200,7 @@ Associations are generated automatically from foreign keys. `has_many` returns a
 | Query DSL | Strings / hash conditions | `Field[T]` objects with type-safe operations |
 | SQL generation | Arel (dynamic AST) | `SqlCompiler` with sequential bind markers |
 | Hydration | Reflection + type coercion | Generated positional `fetch_value` |
-| New vs persisted | Same class, `id` is nilable | Two distinct types: `Record::New` and `Record` |
+| New vs persisted | Same class, `id` is nilable | Type-state: `Record::New` -> `Record::Validated` -> `Record` |
 | Associations | Declared via DSL macros | Generated from foreign keys |
 | Eager loading | `includes` / `preload` / `eager_load` | `.preload(:assoc)` on Relation (batch query) |
 | Callbacks | Before/after hooks | None (explicit control flow) |
@@ -238,8 +245,9 @@ HakumiORM.configure do |config|
 
   # Paths
   config.output_dir   = "app/db/generated"   # where generated code goes (default)
-  config.models_dir   = "app/models"         # where model stubs go (nil = skip)
-  config.module_name  = "App"                # optional namespace wrapping
+  config.models_dir    = "app/models"          # where model stubs go (nil = skip)
+  config.contracts_dir = "app/contracts"      # where contract stubs go (nil = skip)
+  config.module_name   = "App"               # optional namespace wrapping
 end
 ```
 
@@ -262,6 +270,7 @@ end
 | `adapter` | auto | Set directly to skip lazy building. Takes precedence over connection params. |
 | `output_dir` | `"app/db/generated"` | Directory for generated schemas, records, and relations (always overwritten). |
 | `models_dir` | `nil` | Directory for model stubs (`User < UserRecord`). Generated **once**, never overwritten. `nil` = skip. |
+| `contracts_dir` | `nil` | Directory for contract stubs (`UserRecord::Contract`). Generated **once**, never overwritten. `nil` = skip. |
 | `module_name` | `nil` | Wraps all generated code in a namespace (`App::User`, `App::UserRecord`, etc.). |
 
 All generated methods (`find`, `where`, `save!`, associations, etc.) default to `HakumiORM.adapter`, so you never pass the adapter manually.
@@ -331,12 +340,23 @@ new_user.class           # => UserRecord::New
 
 ### Record::New Instance Methods
 
-#### `save!(adapter: HakumiORM.adapter) -> Record`
+#### `validate! -> Record::Validated`
 
-Persist the record via `INSERT ... RETURNING *`. Returns a fully hydrated `Record` with `id`.
+Run `Contract.on_all` and `Contract.on_create` validations. Returns a frozen `Record::Validated` on success, raises `ValidationError` on failure.
 
 ```ruby
-user = new_user.save!
+validated = new_user.validate!
+validated.class          # => UserRecord::Validated
+```
+
+### Record::Validated Instance Methods
+
+#### `save!(adapter: HakumiORM.adapter) -> Record`
+
+Run `Contract.on_persist` validations, then persist via `INSERT ... RETURNING *`. Returns a fully hydrated `Record` with `id`.
+
+```ruby
+user = validated.save!
 user.id                  # => Integer (guaranteed)
 ```
 
@@ -574,8 +594,12 @@ new_user = User.build(name: "Alice", email: "alice@example.com", active: true)
 new_user.name    # => "Alice"
 new_user.class   # => UserRecord::New (no id attribute)
 
-# Persist it -- INSERT RETURNING * hydrates a full record
-user = new_user.save!
+# Validate it -- runs on_all + on_create contract hooks
+validated = new_user.validate!
+validated.class  # => UserRecord::Validated (frozen, immutable)
+
+# Persist it -- runs on_persist, then INSERT RETURNING * hydrates a full record
+user = validated.save!
 user.class       # => UserRecord
 user.id          # => Integer (guaranteed non-nil)
 ```
@@ -597,6 +621,56 @@ class User < UserRecord
   def published_posts
     posts.where(PostSchema::PUBLISHED.eq(true))
   end
+end
+```
+
+### Validation Contracts
+
+Each model has a validation contract that controls the `New -> Validated -> Record` lifecycle. Contracts are generated once in your `contracts_dir` and never overwritten -- they are yours to edit.
+
+```ruby
+# app/contracts/user_contract.rb
+class UserRecord::Contract < UserRecord::BaseContract
+  extend T::Sig
+
+  # Runs during both validate! and save! -- for both create and (future) update flows.
+  # Receives UserRecord::Checkable (shared interface for New and Validated).
+  sig { override.params(record: UserRecord::Checkable, e: ::HakumiORM::Errors).void }
+  def self.on_all(record, e)
+    e.add(:name, "cannot be blank") if record.name.strip.empty?
+    e.add(:email, "must contain @") unless record.email.include?("@")
+  end
+
+  # Runs only during validate! on a New record (before persistence).
+  sig { override.params(record: UserRecord::New, e: ::HakumiORM::Errors).void }
+  def self.on_create(record, e)
+    e.add(:email, "is reserved") if record.email.end_with?("@system.internal")
+  end
+
+  # Runs during save! just before INSERT -- has adapter access for DB-dependent checks.
+  sig { override.params(record: UserRecord::Checkable, adapter: ::HakumiORM::Adapter::Base, e: ::HakumiORM::Errors).void }
+  def self.on_persist(record, adapter, e)
+    # Example: check uniqueness
+  end
+end
+```
+
+The three contract hooks correspond to different phases:
+
+| Hook | Runs during | Receives | Use case |
+|---|---|---|---|
+| `on_all` | `validate!` and `save!` | `Checkable` | Pure business rules (format, presence, ranges) |
+| `on_create` | `validate!` only | `New` | Rules specific to new record creation |
+| `on_persist` | `save!` only | `Checkable` + `Adapter` | DB-dependent rules (uniqueness, FK existence) |
+
+When validation fails, a `HakumiORM::ValidationError` is raised with a structured `Errors` object:
+
+```ruby
+begin
+  new_user.validate!
+rescue HakumiORM::ValidationError => e
+  e.errors.messages  # => { name: ["cannot be blank"], email: ["must contain @"] }
+  e.errors.count     # => 2
 end
 ```
 

@@ -7,7 +7,8 @@ All source code lives under `lib/hakumi_orm/`. Every file is Sorbet `typed: stri
 | File | Module / Class | Description |
 |---|---|---|
 | `hakumi_orm.rb` | `HakumiORM` | Entry point. Provides `configure(&blk)`, `config`, `adapter`, `adapter=`, `reset_config!`. All generated code defaults to `HakumiORM.adapter`. |
-| `configuration.rb` | `Configuration` | Global config object. Attributes: `adapter_name`, `database`, `host`, `port`, `username`, `password`, `output_dir`, `models_dir`, `module_name`, `adapter`. Builds the adapter lazily from connection params. |
+| `errors.rb` | `Errors`, `ValidationError` | `Errors` collects validation messages grouped by field. `ValidationError < Error` wraps `Errors` for the type-state flow (`New -> Validated -> Record`). |
+| `configuration.rb` | `Configuration` | Global config object. Attributes: `adapter_name`, `database`, `host`, `port`, `username`, `password`, `output_dir`, `models_dir`, `contracts_dir`, `module_name`, `adapter`. Builds the adapter lazily from connection params. |
 
 ## Query Engine
 
@@ -47,4 +48,5 @@ All source code lives under `lib/hakumi_orm/`. Every file is Sorbet `typed: stri
 | `codegen/type_maps/mysql.rb` | `Codegen::TypeMaps::Mysql` | Maps MySQL data types (`int`, `varchar`, `tinyint`, `datetime`, ...) to `HakumiType`. |
 | `codegen/type_maps/sqlite.rb` | `Codegen::TypeMaps::Sqlite` | Maps SQLite data types (`INTEGER`, `TEXT`, `REAL`, ...) to `HakumiType`. |
 | `codegen/schema_reader.rb` | `Codegen::SchemaReader` | Reads `information_schema` to extract tables, columns (with type, nullability, defaults), primary keys, and foreign keys. Defines `ColumnInfo`, `ForeignKeyInfo`, and `TableInfo` structs. |
-| `codegen/generator.rb` | `Codegen::Generator` | Generates `typed: strict` Ruby files from ERB templates. Uses folder-per-table structure: `schema.rb` (field constants), `record.rb` (persisted record with keyword init, find, where, build, preload class methods, `_preloaded_*` storage), `new_record.rb` (pre-persist record with save!), `relation.rb` (typed Relation subclass with `run_preloads` override), plus a manifest. Generates `has_many`/`belongs_to` associations with preload support from foreign keys. Reads `output_dir`, `models_dir`, `module_name` from global config. |
+| `codegen/generator.rb` | `Codegen::Generator` | Generates `typed: strict` Ruby files from ERB templates. Uses folder-per-table structure: `checkable.rb` (field interface), `schema.rb` (field constants), `record.rb` (persisted record), `new_record.rb` (pre-persist with validate!), `validated_record.rb` (validated with save!), `base_contract.rb` (overridable validation hooks), `relation.rb` (typed Relation subclass), plus a manifest. Generates `has_many`/`belongs_to` associations with preload support from foreign keys. Reads `output_dir`, `models_dir`, `contracts_dir`, `module_name` from global config. |
+| `codegen/generator_validation.rb` | `Codegen::Generator` (reopened) | Validation-related builder methods extracted from Generator to stay under the ClassLength limit: `build_checkable`, `build_validated_record`, `build_base_contract`, `build_contract`, `build_validated_insert_locals`, `generate_contracts!`. |

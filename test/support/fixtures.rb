@@ -84,19 +84,60 @@ class UserRecord
 end
 
 class UserRecord
-  class New
+  module Checkable
+    extend T::Sig
+    extend T::Helpers
+
+    interface!
+
+    sig { abstract.returns(String) }
+    def name; end
+
+    sig { abstract.returns(String) }
+    def email; end
+
+    sig { abstract.returns(T::Boolean) }
+    def active; end
+
+    sig { abstract.returns(T.nilable(Integer)) }
+    def age; end
+  end
+end
+
+class UserRecord
+  class BaseContract
     extend T::Sig
 
-    sig { returns(String) }
+    sig { overridable.params(record: UserRecord::Checkable, e: HakumiORM::Errors).void }
+    def self.on_all(record, e); end
+
+    sig { overridable.params(record: UserRecord::New, e: HakumiORM::Errors).void }
+    def self.on_create(record, e); end
+
+    sig { overridable.params(record: UserRecord::Checkable, adapter: HakumiORM::Adapter::Base, e: HakumiORM::Errors).void }
+    def self.on_persist(record, adapter, e); end
+  end
+
+  class Contract < BaseContract
+    extend T::Sig
+  end
+end
+
+class UserRecord
+  class New
+    extend T::Sig
+    include UserRecord::Checkable
+
+    sig { override.returns(String) }
     attr_reader :name
 
-    sig { returns(String) }
+    sig { override.returns(String) }
     attr_reader :email
 
-    sig { returns(T.nilable(Integer)) }
+    sig { override.returns(T.nilable(Integer)) }
     attr_reader :age
 
-    sig { returns(T::Boolean) }
+    sig { override.returns(T::Boolean) }
     attr_reader :active
 
     sig { params(name: String, email: String, active: T::Boolean, age: T.nilable(Integer)).void }
@@ -105,6 +146,41 @@ class UserRecord
       @email = T.let(email, String)
       @age = T.let(age, T.nilable(Integer))
       @active = T.let(active, T::Boolean)
+    end
+
+    sig { returns(UserRecord::Validated) }
+    def validate!
+      errors = HakumiORM::Errors.new
+      UserRecord::Contract.on_all(self, errors)
+      UserRecord::Contract.on_create(self, errors)
+      raise HakumiORM::ValidationError, errors unless errors.valid?
+
+      UserRecord::Validated.new(self)
+    end
+  end
+end
+
+class UserRecord
+  class Validated
+    extend T::Sig
+    include UserRecord::Checkable
+
+    sig { override.returns(String) }
+    def name = @record.name
+
+    sig { override.returns(String) }
+    def email = @record.email
+
+    sig { override.returns(T::Boolean) }
+    def active = @record.active
+
+    sig { override.returns(T.nilable(Integer)) }
+    def age = @record.age
+
+    sig { params(record: UserRecord::New).void }
+    def initialize(record)
+      record.freeze
+      @record = T.let(record, UserRecord::New)
     end
   end
 end

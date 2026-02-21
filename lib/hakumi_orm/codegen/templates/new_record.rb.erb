@@ -8,9 +8,10 @@ module <%= module_name %>
 <%= ind %>class <%= record_class_name %>
 <%= ind %>  class New
 <%= ind %>    extend T::Sig
+<%= ind %>    include <%= record_class_name %>::Checkable
 
 <%- columns.each do |col| -%>
-<%= ind %>    sig { returns(<%= col[:ruby_type] %>) }
+<%= ind %>    sig { override.returns(<%= col[:ruby_type] %>) }
 <%= ind %>    attr_reader :<%= col[:name] %>
 
 <%- end -%>
@@ -20,21 +21,16 @@ module <%= module_name %>
 <%= ind %>      @<%= col[:name] %> = T.let(<%= col[:name] %>, <%= col[:ruby_type] %>)
 <%- end -%>
 <%= ind %>    end
-<%- if insert_sql -%>
 
-<%= ind %>    SQL_INSERT = T.let('<%= insert_sql %>', String)
+<%= ind %>    sig { returns(<%= record_class_name %>::Validated) }
+<%= ind %>    def validate!
+<%= ind %>      errors = ::HakumiORM::Errors.new
+<%= ind %>      <%= record_class_name %>::Contract.on_all(self, errors)
+<%= ind %>      <%= record_class_name %>::Contract.on_create(self, errors)
+<%= ind %>      raise ::HakumiORM::ValidationError, errors unless errors.valid?
 
-<%= ind %>    sig { params(adapter: ::HakumiORM::Adapter::Base).returns(<%= record_class_name %>) }
-<%= ind %>    def save!(adapter: ::HakumiORM.adapter)
-<%= ind %>      result = adapter.exec_params(SQL_INSERT, [<%= bind_list %>])
-<%= ind %>      record = <%= record_class_name %>.from_result(result).first
-<%= ind %>      raise ::HakumiORM::Error, "INSERT returned no rows" unless record
-<%= ind %>
-<%= ind %>      record
-<%= ind %>    ensure
-<%= ind %>      result&.close
+<%= ind %>      <%= record_class_name %>::Validated.new(self)
 <%= ind %>    end
-<%- end -%>
 <%= ind %>  end
 <%= ind %>end
 <%- if module_name -%>

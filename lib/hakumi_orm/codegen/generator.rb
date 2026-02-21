@@ -20,10 +20,11 @@ module HakumiORM
           dialect: T.nilable(Dialect::Base),
           output_dir: T.nilable(String),
           module_name: T.nilable(String),
-          models_dir: T.nilable(String)
+          models_dir: T.nilable(String),
+          contracts_dir: T.nilable(String)
         ).void
       end
-      def initialize(tables, dialect: nil, output_dir: nil, module_name: nil, models_dir: nil)
+      def initialize(tables, dialect: nil, output_dir: nil, module_name: nil, models_dir: nil, contracts_dir: nil)
         cfg = HakumiORM.config
 
         resolved_dialect = dialect
@@ -39,6 +40,7 @@ module HakumiORM
         @output_dir = T.let(output_dir || cfg.output_dir, String)
         @module_name = T.let(module_name || cfg.module_name, T.nilable(String))
         @models_dir = T.let(models_dir || cfg.models_dir, T.nilable(String))
+        @contracts_dir = T.let(contracts_dir || cfg.contracts_dir, T.nilable(String))
       end
 
       sig { void }
@@ -51,15 +53,19 @@ module HakumiORM
           table_dir = File.join(@output_dir, singularize(table.name))
           FileUtils.mkdir_p(table_dir)
 
+          File.write(File.join(table_dir, "checkable.rb"), build_checkable(table))
           File.write(File.join(table_dir, "schema.rb"), build_schema(table))
           File.write(File.join(table_dir, "record.rb"), build_record(table, has_many_map))
           File.write(File.join(table_dir, "new_record.rb"), build_new_record(table))
+          File.write(File.join(table_dir, "validated_record.rb"), build_validated_record(table))
+          File.write(File.join(table_dir, "base_contract.rb"), build_base_contract(table))
           File.write(File.join(table_dir, "relation.rb"), build_relation(table, has_many_map))
         end
 
         File.write(File.join(@output_dir, "manifest.rb"), build_manifest)
 
         generate_models! if @models_dir
+        generate_contracts! if @contracts_dir
       end
 
       private
@@ -250,28 +256,7 @@ module HakumiORM
                columns: cols,
                init_sig_params: ordered.map { |c| "#{c.name}: #{ruby_type(c)}" }.join(", "),
                init_args: (required_ins.map { |c| "#{c.name}:" } +
-                           optional_ins.map { |c| "#{c.name}: nil" }).join(", "),
-               **build_insert_locals(table, record_cls))
-      end
-
-      sig { params(table: TableInfo, _record_cls: String).returns(T::Hash[Symbol, T.nilable(String)]) }
-      def build_insert_locals(table, _record_cls)
-        ins_cols = insertable_columns(table)
-        return { insert_sql: nil } if ins_cols.empty?
-
-        col_list = ins_cols.map { |c| @dialect.quote_id(c.name) }.join(", ")
-        markers = ins_cols.each_with_index.map { |_, i| @dialect.bind_marker(i) }.join(", ")
-        sql = "INSERT INTO #{@dialect.quote_id(table.name)} (#{col_list}) VALUES (#{markers})"
-
-        if @dialect.supports_returning?
-          returning_cols = table.columns.map { |c| @dialect.quote_id(c.name) }.join(", ")
-          sql += " RETURNING #{returning_cols}"
-        end
-
-        {
-          insert_sql: sql,
-          bind_list: ins_cols.map { |c| "@#{c.name}" }.join(", ")
-        }
+                           optional_ins.map { |c| "#{c.name}: nil" }).join(", "))
       end
 
       sig { params(table: TableInfo, has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]).returns(String) }

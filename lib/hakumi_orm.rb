@@ -54,3 +54,5 @@ module HakumiORM
 
   class Error < StandardError; end
 end
+
+require_relative "hakumi_orm/errors"

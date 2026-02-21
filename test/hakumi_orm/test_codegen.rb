@@ -36,16 +36,18 @@ class TestCodegen < HakumiORM::TestCase
     @tables = { "users" => table }
   end
 
-  test "generates singular folder with schema, record, new_record, relation" do
+  test "generates singular folder with all required files" do
     Dir.mktmpdir do |dir|
       gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
       gen.generate!
 
-      assert_path_exists File.join(dir, "user/schema.rb"), "Missing user/schema.rb"
-      assert_path_exists File.join(dir, "user/record.rb"), "Missing user/record.rb"
-      assert_path_exists File.join(dir, "user/new_record.rb"), "Missing user/new_record.rb"
-      assert_path_exists File.join(dir, "user/relation.rb"), "Missing user/relation.rb"
-      assert_path_exists File.join(dir, "manifest.rb"), "Missing manifest.rb"
+      %w[
+        user/checkable.rb user/schema.rb user/record.rb user/new_record.rb
+        user/validated_record.rb user/base_contract.rb user/relation.rb
+        manifest.rb
+      ].each do |file|
+        assert_path_exists File.join(dir, file), "Missing #{file}"
+      end
     end
   end
 
@@ -92,7 +94,7 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
-  test "new_record has insertable columns and save!" do
+  test "new_record has insertable columns, validate!, and includes Checkable" do
     Dir.mktmpdir do |dir|
       gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
       gen.generate!
@@ -102,14 +104,16 @@ class TestCodegen < HakumiORM::TestCase
       assert_includes code, "typed: strict"
       assert_includes code, "class UserRecord"
       assert_includes code, "class New"
+      assert_includes code, "include UserRecord::Checkable"
       assert_includes code, "attr_reader :name"
       assert_includes code, "attr_reader :email"
       assert_includes code, "attr_reader :age"
       assert_includes code, "attr_reader :active"
       refute_includes code, "attr_reader :id"
-      assert_includes code, "def save!"
-      assert_includes code, "SQL_INSERT"
-      assert_includes code, "RETURNING"
+      assert_includes code, "def validate!"
+      assert_includes code, "UserRecord::Validated.new(self)"
+      refute_includes code, "def save!"
+      refute_includes code, "SQL_INSERT"
     end
   end
 
@@ -133,7 +137,10 @@ class TestCodegen < HakumiORM::TestCase
       gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
       gen.generate!
 
-      %w[user/schema.rb user/record.rb user/new_record.rb user/relation.rb].each do |file|
+      %w[
+        user/checkable.rb user/schema.rb user/record.rb user/new_record.rb
+        user/validated_record.rb user/base_contract.rb user/relation.rb
+      ].each do |file|
         code = File.read(File.join(dir, file))
 
         refute_includes code, "T.untyped", "#{file} contains T.untyped"
@@ -161,30 +168,32 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
-  test "manifest requires files in singular folder structure" do
+  test "manifest requires files in correct order" do
     Dir.mktmpdir do |dir|
       gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
       gen.generate!
 
       code = File.read(File.join(dir, "manifest.rb"))
 
-      assert_includes code, 'require_relative "user/schema"'
-      assert_includes code, 'require_relative "user/record"'
-      assert_includes code, 'require_relative "user/new_record"'
-      assert_includes code, 'require_relative "user/relation"'
+      %w[checkable schema record new_record validated_record base_contract relation].each do |name|
+        assert_includes code, "require_relative \"user/#{name}\""
+      end
     end
   end
 
-  test "insert SQL in new_record skips serial columns and uses RETURNING with all columns" do
+  test "validated_record has SQL_INSERT with RETURNING, save!, and on_persist" do
     Dir.mktmpdir do |dir|
       gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
       gen.generate!
 
-      code = File.read(File.join(dir, "user/new_record.rb"))
+      code = File.read(File.join(dir, "user/validated_record.rb"))
 
       assert_includes code, "SQL_INSERT"
       refute_includes code, '"id") VALUES'
       assert_includes code, "RETURNING"
+      assert_includes code, "def save!"
+      assert_includes code, "UserRecord::Contract.on_persist"
+      assert_includes code, "include UserRecord::Checkable"
     end
   end
 
@@ -224,6 +233,79 @@ class TestCodegen < HakumiORM::TestCase
       gen.generate!
 
       assert_equal custom_code, File.read(File.join(models_dir, "user.rb"))
+    end
+  end
+
+  test "checkable generates an interface module with abstract field readers" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/checkable.rb"))
+
+      assert_includes code, "module Checkable"
+      assert_includes code, "interface!"
+      assert_includes code, "abstract.returns(String)"
+      assert_includes code, "def name; end"
+      assert_includes code, "def email; end"
+      assert_includes code, "def active; end"
+      assert_includes code, "def age; end"
+    end
+  end
+
+  test "base_contract has overridable on_all, on_create, on_persist" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/base_contract.rb"))
+
+      assert_includes code, "class UserRecord::BaseContract"
+      assert_includes code, "overridable"
+      assert_includes code, "def self.on_all"
+      assert_includes code, "def self.on_create"
+      assert_includes code, "def self.on_persist"
+      assert_includes code, "UserRecord::Checkable"
+      assert_includes code, "UserRecord::New"
+    end
+  end
+
+  test "contracts_dir generates contract stubs extending BaseContract" do
+    Dir.mktmpdir do |dir|
+      gen_dir = File.join(dir, "generated")
+      contracts_dir = File.join(dir, "contracts")
+
+      gen = HakumiORM::Codegen::Generator.new(
+        @tables, dialect: @dialect, output_dir: gen_dir, contracts_dir: contracts_dir
+      )
+      gen.generate!
+
+      contract_path = File.join(contracts_dir, "user_contract.rb")
+
+      assert_path_exists contract_path, "Missing contracts/user_contract.rb"
+
+      code = File.read(contract_path)
+
+      assert_includes code, "class UserRecord::Contract < UserRecord::BaseContract"
+      assert_includes code, "typed: strict"
+    end
+  end
+
+  test "contracts_dir does not overwrite existing contract files" do
+    Dir.mktmpdir do |dir|
+      gen_dir = File.join(dir, "generated")
+      contracts_dir = File.join(dir, "contracts")
+      FileUtils.mkdir_p(contracts_dir)
+
+      custom_code = "class UserRecord::Contract < UserRecord::BaseContract\n  # custom\nend\n"
+      File.write(File.join(contracts_dir, "user_contract.rb"), custom_code)
+
+      gen = HakumiORM::Codegen::Generator.new(
+        @tables, dialect: @dialect, output_dir: gen_dir, contracts_dir: contracts_dir
+      )
+      gen.generate!
+
+      assert_equal custom_code, File.read(File.join(contracts_dir, "user_contract.rb"))
     end
   end
 
