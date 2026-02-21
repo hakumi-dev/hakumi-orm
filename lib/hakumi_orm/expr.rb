@@ -14,14 +14,32 @@ module HakumiORM
       AndExpr.new(self, other)
     end
 
+    sig { params(other: Expr).returns(AndExpr) }
+    def &(other)
+      # self. required: `and` is a Ruby keyword
+      self.and(other)
+    end
+
     sig { params(other: Expr).returns(OrExpr) }
     def or(other)
       OrExpr.new(self, other)
     end
 
+    sig { params(other: Expr).returns(OrExpr) }
+    def |(other)
+      # self. required: `or` is a Ruby keyword
+      self.or(other)
+    end
+
     sig { returns(NotExpr) }
     def not
       NotExpr.new(self)
+    end
+
+    sig { returns(NotExpr) }
+    def !
+      # self. required: `not` is a Ruby keyword
+      self.not
     end
   end
 

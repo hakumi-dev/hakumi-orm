@@ -21,9 +21,22 @@ module HakumiORM
       Predicate.new(self, :eq, [to_bind(value)])
     end
 
+    # Operator form of #eq. Returns a Predicate, NOT a Boolean.
+    # Use inside .where(): User.where(UserSchema::NAME == "Alice")
+    sig { params(other: ValueType).returns(Predicate) }
+    def ==(other)
+      eq(other)
+    end
+
     sig { params(value: ValueType).returns(Predicate) }
     def neq(value)
       Predicate.new(self, :neq, [to_bind(value)])
+    end
+
+    # Operator form of #neq. Returns a Predicate, NOT a Boolean.
+    sig { params(other: ValueType).returns(Predicate) }
+    def !=(other)
+      neq(other)
     end
 
     sig { params(values: T::Array[ValueType]).returns(Predicate) }
@@ -61,9 +74,19 @@ module HakumiORM
       Predicate.new(self, :gt, [to_bind(value)])
     end
 
+    sig { params(other: ValueType).returns(Predicate) }
+    def >(other)
+      gt(other)
+    end
+
     sig { params(value: ValueType).returns(Predicate) }
     def gte(value)
       Predicate.new(self, :gte, [to_bind(value)])
+    end
+
+    sig { params(other: ValueType).returns(Predicate) }
+    def >=(other)
+      gte(other)
     end
 
     sig { params(value: ValueType).returns(Predicate) }
@@ -71,9 +94,19 @@ module HakumiORM
       Predicate.new(self, :lt, [to_bind(value)])
     end
 
+    sig { params(other: ValueType).returns(Predicate) }
+    def <(other)
+      lt(other)
+    end
+
     sig { params(value: ValueType).returns(Predicate) }
     def lte(value)
       Predicate.new(self, :lte, [to_bind(value)])
+    end
+
+    sig { params(other: ValueType).returns(Predicate) }
+    def <=(other)
+      lte(other)
     end
 
     sig { params(low: ValueType, high: ValueType).returns(Predicate) }

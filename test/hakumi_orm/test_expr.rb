@@ -47,6 +47,39 @@ class TestExpr < HakumiORM::TestCase
     assert_instance_of HakumiORM::Predicate, expr.right
   end
 
+  test "operator & compiles identical SQL to .and" do
+    compiler = HakumiORM::SqlCompiler.new(HakumiORM::Dialect::Postgresql.new)
+    expr = (UserSchema::AGE > 18) & (UserSchema::ACTIVE == true)
+    q = compiler.select(table: "users", columns: [UserSchema::ID], where_expr: expr)
+
+    assert_includes q.sql, '("users"."age" > $1 AND "users"."active" = $2)'
+  end
+
+  test "operator | and ! compose into NOT (a OR b)" do
+    compiler = HakumiORM::SqlCompiler.new(HakumiORM::Dialect::Postgresql.new)
+    expr = !((UserSchema::AGE < 18) | (UserSchema::AGE > 65))
+    q = compiler.select(table: "users", columns: [UserSchema::ID], where_expr: expr)
+
+    assert_includes q.sql, 'NOT (("users"."age" < $1 OR "users"."age" > $2))'
+  end
+
+  test "!= operator compiles to SQL <>" do
+    compiler = HakumiORM::SqlCompiler.new(HakumiORM::Dialect::Postgresql.new)
+    expr = UserSchema::NAME != "temp"
+    q = compiler.select(table: "users", columns: [UserSchema::ID], where_expr: expr)
+
+    assert_includes q.sql, '"users"."name" <> $1'
+    assert_equal "temp", q.binds[0].value
+  end
+
+  test "operators and methods interop in the same expression" do
+    compiler = HakumiORM::SqlCompiler.new(HakumiORM::Dialect::Postgresql.new)
+    expr = (UserSchema::AGE >= 18).and(UserSchema::EMAIL.like("%@co.jp"))
+    q = compiler.select(table: "users", columns: [UserSchema::ID], where_expr: expr)
+
+    assert_includes q.sql, '("users"."age" >= $1 AND "users"."email" LIKE $2)'
+  end
+
   test "deeply nested expressions compile without error" do
     expr = UserSchema::AGE.gt(1)
     50.times { |i| expr = expr.and(UserSchema::AGE.lt(100 + i)) }

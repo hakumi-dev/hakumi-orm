@@ -44,6 +44,7 @@ No `method_missing`. No `define_method`. No runtime reflection for column access
 ```ruby
 active_users = User
   .where(UserSchema::ACTIVE.eq(true))
+  .where(UserSchema::AGE.gt(18))
   .order(UserSchema::NAME.asc)
   .limit(25)
   .offset(50)
@@ -127,7 +128,8 @@ User.where("email LIKE ?", "%@gmail.com")  # raw SQL strings, no type checking
 
 # HakumiORM
 User
-  .where(UserSchema::ACTIVE.eq(true).and(UserSchema::AGE.gt(18)))
+  .where(UserSchema::ACTIVE.eq(true))
+  .where(UserSchema::AGE.gt(18))
   .order(UserSchema::NAME.asc)
   .limit(10)
 
@@ -411,7 +413,7 @@ Every `Schema::FIELD` constant is a typed field object. The available predicates
 | Method | SQL | Example |
 |---|---|---|
 | `eq(value)` | `= $1` | `UserSchema::NAME.eq("Alice")` |
-| `neq(value)` | `!= $1` | `UserSchema::NAME.neq("Alice")` |
+| `neq(value)` | `<> $1` | `UserSchema::NAME.neq("Alice")` |
 | `in_list(values)` | `IN ($1, $2, ...)` | `UserSchema::ID.in_list([1, 2, 3])` |
 | `not_in_list(values)` | `NOT IN ($1, $2, ...)` | `UserSchema::ID.not_in_list([1, 2])` |
 | `is_null` | `IS NULL` | `UserSchema::AGE.is_null` |
@@ -451,6 +453,14 @@ Predicates return `Expr` objects that can be combined with boolean logic:
 | `expr.or(other)` | `(left) OR (right)` | `UserSchema::NAME.eq("Alice").or(UserSchema::NAME.eq("Bob"))` |
 | `expr.not` | `NOT (expr)` | `UserSchema::ACTIVE.eq(true).not` |
 
+Multiple `.where` calls are ANDed automatically, so the most common case needs no explicit combinator:
+
+```ruby
+# These are equivalent
+User.where(UserSchema::AGE.gte(18)).where(UserSchema::ACTIVE.eq(true))
+User.where(UserSchema::AGE.gte(18).and(UserSchema::ACTIVE.eq(true)))
+```
+
 Expressions nest with deterministic parentheses:
 
 ```ruby
@@ -460,6 +470,21 @@ User.where(
     .or(UserSchema::NAME.eq("admin"))
 )
 ```
+
+#### Operator aliases
+
+All predicates and combinators have operator aliases that delegate to the named methods:
+
+| Operator | Delegates to | Available on |
+|---|---|---|
+| `==` | `eq` | All fields |
+| `!=` | `neq` | All fields |
+| `>`, `>=`, `<`, `<=` | `gt`, `gte`, `lt`, `lte` | `ComparableField` only |
+| `&` | `and` | `Expr` |
+| `\|` | `or` | `Expr` |
+| `!` | `not` | `Expr` |
+
+> **Note:** `==`/`!=` return `Predicate`, not `Boolean`. Ruby's `&&`/`||` cannot be overloaded, so use `&`/`|` instead. Because `&`/`|` have higher precedence than comparison operators, parentheses are required: `(AGE > 18) & (ACTIVE == true)`.
 
 ### Associations
 

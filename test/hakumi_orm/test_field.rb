@@ -78,10 +78,35 @@ class TestField < HakumiORM::TestCase
     assert_equal :desc, UserSchema::NAME.desc.direction
   end
 
-  test "frozen fields still work correctly" do
+  test "operators delegate to named methods (same op, same binds)" do
+    assert_equal :eq, (UserSchema::NAME == "Alice").op
+    assert_equal :neq, (UserSchema::NAME != "Bob").op
+    assert_equal :gt, (UserSchema::AGE > 18).op
+    assert_equal :gte, (UserSchema::AGE >= 18).op
+    assert_equal :lt, (UserSchema::AGE < 65).op
+    assert_equal :lte, (UserSchema::AGE <= 65).op
+  end
+
+  test "== and != work on every field type including BoolField" do
+    assert_instance_of HakumiORM::Predicate, UserSchema::ACTIVE == true
+    assert_instance_of HakumiORM::Predicate, UserSchema::ACTIVE != false
+    assert_instance_of HakumiORM::Predicate, UserSchema::NAME == "x"
+    assert_instance_of HakumiORM::Predicate, UserSchema::AGE == 1
+  end
+
+  test "comparison operators are absent on non-comparable fields" do
+    refute_respond_to UserSchema::NAME, :>
+    refute_respond_to UserSchema::NAME, :>=
+    refute_respond_to UserSchema::NAME, :<
+    refute_respond_to UserSchema::NAME, :<=
+    refute_respond_to UserSchema::ACTIVE, :>
+  end
+
+  test "frozen fields still work correctly with operators" do
     field = UserSchema::AGE
 
     assert_predicate field, :frozen?
-    assert_equal :eq, field.eq(1).op
+    assert_equal :eq, (field == 1).op
+    assert_equal :gt, (field > 18).op
   end
 end
