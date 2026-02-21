@@ -1,0 +1,5 @@
+--dir
+.
+--ignore=test/
+--ignore=sandbox/
+--suppress-payload-superclass-redefinition-for=RDoc::Markup::Heading

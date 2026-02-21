@@ -1,0 +1,6 @@
+gem:
+  exclude:
+    - rdoc
+    - tapioca
+    - rubocop-minitest
+dsl:

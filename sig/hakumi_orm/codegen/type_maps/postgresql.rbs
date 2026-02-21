@@ -1,0 +1,9 @@
+module HakumiORM
+  module Codegen
+    module TypeMaps
+      module Postgresql
+        MAP: Hash[String, HakumiType]
+      end
+    end
+  end
+end

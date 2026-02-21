@@ -1,0 +1,148 @@
+# typed: strict
+# frozen_string_literal: true
+
+require "bigdecimal"
+require "date"
+
+module HakumiORM
+  PGValue = T.type_alias { T.nilable(T.any(Integer, Float, String, T::Boolean)) }
+
+  class Bind
+    extend T::Sig
+    extend T::Helpers
+
+    abstract!
+    sealed!
+
+    sig { abstract.returns(PGValue) }
+    def pg_value; end
+  end
+
+  class IntBind < Bind
+    extend T::Sig
+
+    sig { returns(Integer) }
+    attr_reader :value
+
+    sig { params(value: Integer).void }
+    def initialize(value)
+      @value = T.let(value, Integer)
+    end
+
+    sig { override.returns(Integer) }
+    def pg_value
+      @value
+    end
+  end
+
+  class StrBind < Bind
+    extend T::Sig
+
+    sig { returns(String) }
+    attr_reader :value
+
+    sig { params(value: String).void }
+    def initialize(value)
+      @value = T.let(value, String)
+    end
+
+    sig { override.returns(String) }
+    def pg_value
+      @value
+    end
+  end
+
+  class FloatBind < Bind
+    extend T::Sig
+
+    sig { returns(Float) }
+    attr_reader :value
+
+    sig { params(value: Float).void }
+    def initialize(value)
+      @value = T.let(value, Float)
+    end
+
+    sig { override.returns(Float) }
+    def pg_value
+      @value
+    end
+  end
+
+  class DecimalBind < Bind
+    extend T::Sig
+
+    sig { returns(BigDecimal) }
+    attr_reader :value
+
+    sig { params(value: BigDecimal).void }
+    def initialize(value)
+      @value = T.let(value, BigDecimal)
+    end
+
+    sig { override.returns(String) }
+    def pg_value
+      @value.to_s("F")
+    end
+  end
+
+  class BoolBind < Bind
+    extend T::Sig
+
+    sig { returns(T::Boolean) }
+    attr_reader :value
+
+    sig { params(value: T::Boolean).void }
+    def initialize(value)
+      @value = T.let(value, T::Boolean)
+    end
+
+    sig { override.returns(String) }
+    def pg_value
+      @value ? "t" : "f"
+    end
+  end
+
+  class TimeBind < Bind
+    extend T::Sig
+
+    sig { returns(Time) }
+    attr_reader :value
+
+    sig { params(value: Time).void }
+    def initialize(value)
+      @value = T.let(value, Time)
+    end
+
+    sig { override.returns(String) }
+    def pg_value
+      @value.utc.strftime("%Y-%m-%d %H:%M:%S.%6N")
+    end
+  end
+
+  class DateBind < Bind
+    extend T::Sig
+
+    sig { returns(Date) }
+    attr_reader :value
+
+    sig { params(value: Date).void }
+    def initialize(value)
+      @value = T.let(value, Date)
+    end
+
+    sig { override.returns(String) }
+    def pg_value
+      @value.iso8601
+    end
+  end
+
+  class NullBind < Bind
+    extend T::Sig
+
+    sig { override.returns(NilClass) }
+    def pg_value
+      nil
+    end
+  end
+end

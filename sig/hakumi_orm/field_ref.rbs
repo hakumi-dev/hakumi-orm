@@ -1,0 +1,35 @@
+module HakumiORM
+  class FieldRef
+    attr_reader name: Symbol
+    attr_reader table_name: String
+    attr_reader column_name: String
+    attr_reader qualified_name: String
+
+    def initialize: (Symbol name, String table_name, String column_name, String qualified_name) -> void
+    def asc: () -> OrderClause
+    def desc: () -> OrderClause
+  end
+
+  class OrderClause
+    attr_reader field: FieldRef
+    attr_reader direction: Symbol
+
+    def initialize: (FieldRef field, Symbol direction) -> void
+  end
+
+  class JoinClause
+    attr_reader join_type: Symbol
+    attr_reader target_table: String
+    attr_reader source_field: FieldRef
+    attr_reader target_field: FieldRef
+
+    def initialize: (Symbol join_type, String target_table, FieldRef source_field, FieldRef target_field) -> void
+  end
+
+  class Assignment
+    attr_reader field: FieldRef
+    attr_reader bind: Bind
+
+    def initialize: (FieldRef field, Bind bind) -> void
+  end
+end

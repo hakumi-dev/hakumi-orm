@@ -1,0 +1,14 @@
+module HakumiORM
+  VERSION: String
+
+  type pg_value = Integer | Float | String | bool | nil
+
+  def self.config: () -> Configuration
+  def self.configure: () { (Configuration) -> void } -> void
+  def self.adapter: () -> Adapter::Base
+  def self.adapter=: (Adapter::Base adapter) -> void
+  def self.reset_config!: () -> void
+
+  class Error < StandardError
+  end
+end

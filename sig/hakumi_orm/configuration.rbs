@@ -1,0 +1,25 @@
+module HakumiORM
+  class Configuration
+    SUPPORTED_ADAPTERS: Array[Symbol]
+
+    attr_accessor adapter_name: Symbol
+    attr_accessor database: String?
+    attr_accessor host: String?
+    attr_accessor port: Integer?
+    attr_accessor username: String?
+    attr_accessor password: String?
+    attr_accessor output_dir: String
+    attr_accessor models_dir: String?
+    attr_accessor module_name: String?
+
+    def initialize: () -> void
+    attr_writer adapter: Adapter::Base?
+    def adapter: () -> Adapter::Base?
+
+    private
+
+    def build_adapter: () -> Adapter::Base?
+    def connect_adapter: (Symbol name, String database) -> Adapter::Base
+    def build_connection_params: (String database) -> Hash[Symbol, String | Integer]
+  end
+end

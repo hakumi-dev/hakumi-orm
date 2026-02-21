@@ -1,0 +1,94 @@
+require:
+  - rubocop-minitest
+
+AllCops:
+  TargetRubyVersion: 3.2
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - "vendor/**/*"
+    - "tmp/**/*"
+    - "sandbox/**/*"
+
+# Sorbet sigs inflate line counts significantly
+Metrics/MethodLength:
+  CountAsOne:
+    - heredoc
+  Max: 35
+  Exclude:
+    - "lib/hakumi_orm/sql_compiler.rb"
+
+Metrics/AbcSize:
+  Max: 30
+  Exclude:
+    - "lib/hakumi_orm/sql_compiler.rb"
+    - "lib/hakumi_orm/codegen/generator.rb"
+
+Metrics/ClassLength:
+  Max: 300
+  CountAsOne:
+    - heredoc
+  Exclude:
+    - "test/**/*"
+
+Metrics/ModuleLength:
+  Max: 200
+
+Metrics/BlockLength:
+  Exclude:
+    - "test/**/*"
+    - "*.gemspec"
+
+Metrics/CyclomaticComplexity:
+  Max: 20
+
+Metrics/PerceivedComplexity:
+  Max: 20
+
+Metrics/ParameterLists:
+  Max: 8
+
+Metrics/CollectionLiteralLength:
+  Enabled: false
+
+# Performance ORM uses short variable names intentionally (i, n, buf, idx)
+Naming/MethodParameterName:
+  AllowedNames:
+    - i
+    - n
+    - e
+    - v
+    - j
+    - a
+    - b
+    - ci
+    - ri
+    - op
+    - pk
+    - id
+
+# is_null / is_not_null are SQL semantics, not Ruby predicates
+Naming/PredicatePrefix:
+  Enabled: false
+
+Naming/PredicateMethod:
+  Enabled: false
+
+# Sorbet abstract classes don't always call super
+Lint/MissingSuper:
+  Enabled: false
+
+# Not every class needs a docstring in a typed codebase
+Style/Documentation:
+  Enabled: false
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/StringLiteralsInInterpolation:
+  EnforcedStyle: double_quotes
+
+Layout/LineLength:
+  Max: 140
+  Exclude:
+    - "test/**/*"

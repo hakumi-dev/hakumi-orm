@@ -1,0 +1,40 @@
+module HakumiORM
+  module Codegen
+    class Generator
+      TEMPLATE_DIR: String
+
+      def initialize: (
+        Hash[String, TableInfo] tables,
+        ?dialect: Dialect::Base?,
+        ?output_dir: String?,
+        ?module_name: String?,
+        ?models_dir: String?
+      ) -> void
+
+      def generate!: () -> void
+
+      private
+
+      def generate_models!: () -> void
+      def compute_has_many: () -> Hash[String, Array[Hash[Symbol, String]]]
+      def render: (String template_name, Hash[Symbol, untyped] locals) -> String
+      def build_schema: (TableInfo table) -> String
+      def build_record: (TableInfo table, Hash[String, Array[Hash[Symbol, String]]] has_many_map) -> String
+      def build_build_locals: (Array[ColumnInfo] ins_cols, Array[ColumnInfo] required_ins, Array[ColumnInfo] optional_ins, String record_cls) -> Hash[Symbol, untyped]
+      def build_cast_lines: (TableInfo table) -> Array[String]
+      def build_find_locals: (TableInfo table, String record_cls) -> Hash[Symbol, untyped]
+      def build_new_record: (TableInfo table) -> String
+      def build_insert_locals: (TableInfo table, String record_cls) -> Hash[Symbol, untyped]
+      def build_relation: (TableInfo table) -> String
+      def build_model: (TableInfo table) -> String
+      def build_manifest: () -> String
+      def indent: () -> String
+      def hakumi_type_for: (ColumnInfo col) -> HakumiType
+      def ruby_type: (ColumnInfo col) -> String
+      def insertable_columns: (TableInfo table) -> Array[ColumnInfo]
+      def qualify: (String name) -> String
+      def classify: (String table_name) -> String
+      def singularize: (String word) -> String
+    end
+  end
+end

@@ -1,0 +1,43 @@
+# Hakumi ORM -- Architecture Reference
+
+All source code lives under `lib/hakumi_orm/`. Every file is Sorbet `typed: strict`.
+
+## Query Engine
+
+| File | Module / Class | Description |
+|---|---|---|
+| `bind.rb` | `Bind` (abstract, sealed) | Base class for typed bind parameters. Subclasses: `IntBind`, `StrBind`, `FloatBind`, `DecimalBind`, `BoolBind`, `TimeBind`, `DateBind`, `NilBind`. Each implements `pg_value` to serialize its value for the PostgreSQL wire protocol. |
+| `field_ref.rb` | `FieldRef` | Holds column metadata (`name`, `table_name`, `column_name`, `qualified_name`). Provides `asc`/`desc` for ordering. Also defines `OrderClause`, `JoinClause`, and `Assignment` value objects. |
+| `field.rb` | `Field[ValueType]` (abstract, generic) | Base for typed field constants. Exposes `eq`, `neq`, `in_list`, `not_in_list`, `is_null`, `is_not_null`. Concrete subclasses: `IntField`, `FloatField`, `DecimalField`, `StrField`, `BoolField`, `TimeField`, `DateField`. `ComparableField` adds `gt`, `gte`, `lt`, `lte`, `between`. `TextField` adds `like`, `ilike`. |
+| `expr.rb` | `Expr` (abstract, sealed) | Expression tree for WHERE clauses. Subclasses: `Predicate` (leaf node with field + operator + binds), `AndExpr`, `OrExpr`, `NotExpr`. Supports `and`/`or`/`not` composition with deterministic parentheses. |
+| `cast.rb` | `Cast` | Converts raw PostgreSQL strings to Ruby types: `to_integer`, `to_float`, `to_decimal`, `to_boolean`, `to_timestamp`, `to_date`, `to_string`. |
+| `compiled_query.rb` | `CompiledQuery` | Immutable container holding a SQL string and its associated `T::Array[Bind]`. Provides `pg_params` to extract serialized values. |
+| `sql_compiler.rb` | `SqlCompiler` | Compiles `Expr` trees, ordering, joins, limit/offset into parameterized SQL. Generates `SELECT`, `INSERT`, `UPDATE`, `DELETE` with sequential bind markers. All values go through bind parameters, never interpolated. |
+| `relation.rb` | `Relation[ModelType]` (abstract, generic) | Fluent query builder with immutable chaining: `where`, `order`, `limit`, `offset`, `join`. Subclasses implement `hydrate` to materialize rows. Provides `to_a`, `first`, `count`, `pluck`. |
+
+## Adapter Layer
+
+| File | Module / Class | Description |
+|---|---|---|
+| `adapter.rb` | `Adapter::Result` (abstract) | Abstract result interface. `get_value(row, col)` returns `T.nilable(String)` for nullable columns. `fetch_value(row, col)` returns `String` and raises on unexpected NULL. Also defines `row_count`, `values`, `column_values`, `affected_rows`, `close`. |
+| `adapter.rb` | `Adapter::Base` (abstract) | Abstract database connection. Defines `exec_params(sql, params)`, `exec(sql)`, `close`, `transaction(&blk)`. Returns the associated `Dialect::Base`. |
+| `adapter/postgresql.rb` | `Adapter::Postgresql` | PostgreSQL implementation wrapping `PG::Connection`. `Adapter::PostgresqlResult` wraps `PG::Result`. |
+
+## Dialect Layer
+
+| File | Module / Class | Description |
+|---|---|---|
+| `dialect.rb` | `Dialect::Base` (abstract) | Interface for database-specific SQL syntax: `bind_marker(index)`, `quote_id(name)`, `qualified_name(table, column)`, `supports_returning?`, `name`. |
+| `dialect/postgresql.rb` | `Dialect::Postgresql` | PostgreSQL implementation. Uses `$1`, `$2` bind markers. Quotes identifiers with double quotes. Caches quoted identifiers and qualified names for zero repeated allocations. |
+
+## Code Generation
+
+| File | Module / Class | Description |
+|---|---|---|
+| `codegen/hakumi_type.rb` | `Codegen::HakumiType` | `T::Enum` representing the internal type system: `Integer`, `String`, `Boolean`, `Timestamp`, `Date`, `Float`, `Decimal`. Methods: `ruby_type`, `ruby_type_string(nullable:)`, `field_class`, `comparable?`, `text?`. All branches use `T.absurd` for exhaustiveness. |
+| `codegen/type_map.rb` | `Codegen::TypeMap` | Resolves a database column type (e.g. `"varchar"`, `"int4"`) to a `HakumiType` using dialect-specific maps. Also generates cast expressions for code generation. |
+| `codegen/type_maps/postgresql.rb` | `Codegen::TypeMaps::Postgresql` | Maps PostgreSQL data types (`int4`, `text`, `bool`, `timestamptz`, ...) to `HakumiType`. |
+| `codegen/type_maps/mysql.rb` | `Codegen::TypeMaps::Mysql` | Maps MySQL data types (`int`, `varchar`, `tinyint`, `datetime`, ...) to `HakumiType`. |
+| `codegen/type_maps/sqlite.rb` | `Codegen::TypeMaps::Sqlite` | Maps SQLite data types (`INTEGER`, `TEXT`, `REAL`, ...) to `HakumiType`. |
+| `codegen/schema_reader.rb` | `Codegen::SchemaReader` | Reads `information_schema` to extract tables, columns (with type, nullability, defaults), primary keys, and foreign keys. Defines `ColumnInfo`, `ForeignKeyInfo`, and `TableInfo` structs. |
+| `codegen/generator.rb` | `Codegen::Generator` | Generates `typed: strict` Ruby files from ERB templates. Uses folder-per-table structure: `schema.rb` (field constants), `record.rb` (persisted record with keyword init, find, where, build), `new_record.rb` (pre-persist record with save!), `relation.rb` (typed Relation subclass), plus a manifest. Generates `has_many`/`belongs_to` associations from foreign keys. |

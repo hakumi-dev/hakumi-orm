@@ -1,0 +1,11 @@
+module HakumiORM
+  module Cast
+    def self.to_integer: (String raw) -> Integer
+    def self.to_float: (String raw) -> Float
+    def self.to_decimal: (String raw) -> BigDecimal
+    def self.to_boolean: (String raw) -> bool
+    def self.to_time: (String raw) -> Time
+    def self.to_date: (String raw) -> Date
+    def self.to_string: (String raw) -> String
+  end
+end

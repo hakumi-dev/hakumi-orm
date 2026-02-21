@@ -1,0 +1,51 @@
+module HakumiORM
+  class Bind
+    def pg_value: () -> pg_value
+  end
+
+  class IntBind < Bind
+    attr_reader value: Integer
+    def initialize: (Integer value) -> void
+    def pg_value: () -> Integer
+  end
+
+  class StrBind < Bind
+    attr_reader value: String
+    def initialize: (String value) -> void
+    def pg_value: () -> String
+  end
+
+  class FloatBind < Bind
+    attr_reader value: Float
+    def initialize: (Float value) -> void
+    def pg_value: () -> Float
+  end
+
+  class DecimalBind < Bind
+    attr_reader value: BigDecimal
+    def initialize: (BigDecimal value) -> void
+    def pg_value: () -> String
+  end
+
+  class BoolBind < Bind
+    attr_reader value: bool
+    def initialize: (bool value) -> void
+    def pg_value: () -> String
+  end
+
+  class TimeBind < Bind
+    attr_reader value: Time
+    def initialize: (Time value) -> void
+    def pg_value: () -> String
+  end
+
+  class DateBind < Bind
+    attr_reader value: Date
+    def initialize: (Date value) -> void
+    def pg_value: () -> String
+  end
+
+  class NullBind < Bind
+    def pg_value: () -> nil
+  end
+end

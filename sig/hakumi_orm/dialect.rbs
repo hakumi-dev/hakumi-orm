@@ -1,0 +1,11 @@
+module HakumiORM
+  module Dialect
+    class Base
+      def bind_marker: (Integer index) -> String
+      def quote_id: (String name) -> String
+      def qualified_name: (String table, String column) -> String
+      def supports_returning?: () -> bool
+      def name: () -> Symbol
+    end
+  end
+end

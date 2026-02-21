@@ -1,0 +1,19 @@
+module HakumiORM
+  module Codegen
+    class HakumiType
+      Integer: HakumiType
+      String: HakumiType
+      Boolean: HakumiType
+      Timestamp: HakumiType
+      Date: HakumiType
+      Float: HakumiType
+      Decimal: HakumiType
+
+      def ruby_type: () -> ::String
+      def ruby_type_string: (nullable: bool) -> ::String
+      def field_class: () -> ::String
+      def comparable?: () -> bool
+      def text?: () -> bool
+    end
+  end
+end

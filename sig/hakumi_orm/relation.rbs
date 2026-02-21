@@ -1,0 +1,24 @@
+module HakumiORM
+  class Relation[ModelType]
+    def initialize: (String table_name, Array[FieldRef] columns) -> void
+    def where: (Expr expr) -> self
+    def order: (OrderClause clause) -> self
+    def order_by: (FieldRef field, ?Symbol direction) -> self
+    def limit: (Integer n) -> self
+    def offset: (Integer n) -> self
+    def join: (JoinClause clause) -> self
+    def hydrate: (Adapter::Result result) -> Array[ModelType]
+    def to_a: (?adapter: Adapter::Base) -> Array[ModelType]
+    def first: (?adapter: Adapter::Base) -> ModelType?
+    def count: (?adapter: Adapter::Base) -> Integer
+    def pluck_raw: (FieldRef field, ?adapter: Adapter::Base) -> Array[String?]
+    def delete_all: (?adapter: Adapter::Base) -> Integer
+    def update_all: (Array[Assignment] assignments, ?adapter: Adapter::Base) -> Integer
+    def to_sql: (?adapter: Adapter::Base) -> CompiledQuery
+
+    private
+
+    def combined_where: () -> Expr?
+    def build_select: (Dialect::Base dialect, ?columns_override: Array[FieldRef]?, ?limit_override: Integer?) -> CompiledQuery
+  end
+end

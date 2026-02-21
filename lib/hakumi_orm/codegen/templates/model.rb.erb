@@ -1,0 +1,11 @@
+# typed: strict
+# frozen_string_literal: true
+
+<%- if module_name -%>
+module <%= module_name %>
+<%- end -%>
+<%= ind %>class <%= model_class_name %> < <%= record_class_name %>
+<%= ind %>end
+<%- if module_name -%>
+end
+<%- end -%>

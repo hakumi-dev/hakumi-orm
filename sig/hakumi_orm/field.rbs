@@ -1,0 +1,52 @@
+module HakumiORM
+  class Field[ValueType] < FieldRef
+    def to_bind: (ValueType value) -> Bind
+    def eq: (ValueType value) -> Predicate
+    def neq: (ValueType value) -> Predicate
+    def in_list: (Array[ValueType] values) -> Predicate
+    def not_in_list: (Array[ValueType] values) -> Predicate
+    def is_null: () -> Predicate
+    def is_not_null: () -> Predicate
+  end
+
+  class ComparableField[ValueType] < Field[ValueType]
+    def gt: (ValueType value) -> Predicate
+    def gte: (ValueType value) -> Predicate
+    def lt: (ValueType value) -> Predicate
+    def lte: (ValueType value) -> Predicate
+    def between: (ValueType low, ValueType high) -> Predicate
+  end
+
+  class TextField[ValueType] < Field[ValueType]
+    def like: (String pattern) -> Predicate
+    def ilike: (String pattern) -> Predicate
+  end
+
+  class IntField < ComparableField[Integer]
+    def to_bind: (Integer value) -> Bind
+  end
+
+  class FloatField < ComparableField[Float]
+    def to_bind: (Float value) -> Bind
+  end
+
+  class DecimalField < ComparableField[BigDecimal]
+    def to_bind: (BigDecimal value) -> Bind
+  end
+
+  class TimeField < ComparableField[Time]
+    def to_bind: (Time value) -> Bind
+  end
+
+  class DateField < ComparableField[Date]
+    def to_bind: (Date value) -> Bind
+  end
+
+  class StrField < TextField[String]
+    def to_bind: (String value) -> Bind
+  end
+
+  class BoolField < Field[bool]
+    def to_bind: (bool value) -> Bind
+  end
+end

@@ -1,0 +1,19 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+gemspec
+
+gem "bigdecimal", require: false
+gem "irb", require: false
+gem "minitest", "~> 5.16", require: false
+gem "rake", "~> 13.0", require: false
+gem "rubocop", "~> 1.21", require: false
+gem "rubocop-minitest", require: false
+
+# Database drivers (optional at runtime, needed for tests/codegen)
+gem "pg", require: false
+
+# Sorbet static analysis
+gem "sorbet", require: false
+gem "tapioca", ">= 0.17", require: false
