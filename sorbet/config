@@ -2,4 +2,5 @@
 .
 --ignore=test/
 --ignore=sandbox/
+--ignore=vendor/
 --suppress-payload-superclass-redefinition-for=RDoc::Markup::Heading
