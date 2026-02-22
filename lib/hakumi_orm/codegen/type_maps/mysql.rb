@@ -33,7 +33,7 @@ module HakumiORM
 
           "decimal" => HakumiType::Decimal,
 
-          "json" => HakumiType::String,
+          "json" => HakumiType::Json,
           "binary" => HakumiType::String,
           "varbinary" => HakumiType::String,
           "blob" => HakumiType::String,

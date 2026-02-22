@@ -257,7 +257,7 @@ Configure HakumiORM once at boot -- connection, paths, and adapter are available
 ```ruby
 HakumiORM.configure do |config|
   # Connection (adapter is built lazily from these)
-  config.adapter_name = :postgresql          # :postgresql (default), :mysql, :sqlite planned
+  config.adapter_name = :postgresql          # :postgresql (default), :mysql, :sqlite
   config.database     = "myapp"
   config.host         = "localhost"
   config.port         = 5432
@@ -275,14 +275,31 @@ end
 The adapter connects automatically when first needed (`HakumiORM.adapter`). You can also set it explicitly:
 
 ```ruby
+# PostgreSQL
 HakumiORM.configure do |config|
   config.adapter = HakumiORM::Adapter::Postgresql.connect(dbname: "myapp")
+end
+
+# MySQL
+require "hakumi_orm/adapter/mysql"
+HakumiORM.configure do |config|
+  config.adapter_name = :mysql
+  config.database     = "myapp"
+  config.host         = "localhost"
+  config.username     = "root"
+end
+
+# SQLite
+require "hakumi_orm/adapter/sqlite"
+HakumiORM.configure do |config|
+  config.adapter_name = :sqlite
+  config.database     = "db/myapp.sqlite3"
 end
 ```
 
 | Option | Default | Description |
 |---|---|---|
-| `adapter_name` | `:postgresql` | Which database adapter to use. Currently: `:postgresql`. Planned: `:mysql`, `:sqlite`. |
+| `adapter_name` | `:postgresql` | Which database adapter to use: `:postgresql`, `:mysql`, or `:sqlite`. |
 | `database` | `nil` | Database name. When set, the adapter is built lazily from connection params. |
 | `host` | `nil` | Database host. `nil` uses the default (local socket / localhost). |
 | `port` | `nil` | Database port. `nil` uses the default (5432 for PostgreSQL). |
@@ -758,6 +775,22 @@ HakumiORM.configure do |config|
   config.adapter = HakumiORM::Adapter::ConnectionPool.new(size: 10, timeout: 5.0) do
     HakumiORM::Adapter::Postgresql.connect(dbname: "myapp")
   end
+end
+```
+
+Works with any adapter:
+
+```ruby
+# MySQL
+require "hakumi_orm/adapter/mysql"
+HakumiORM.configure do |config|
+  config.adapter = HakumiORM::Adapter::Mysql.connect(database: "myapp", host: "localhost", username: "root")
+end
+
+# SQLite
+require "hakumi_orm/adapter/sqlite"
+HakumiORM.configure do |config|
+  config.adapter = HakumiORM::Adapter::Sqlite.connect("db/myapp.sqlite3")
 end
 ```
 

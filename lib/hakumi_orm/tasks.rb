@@ -13,13 +13,17 @@ module HakumiORM
         require "hakumi_orm"
         require "hakumi_orm/codegen"
 
+        HakumiORM::Tasks.run_generate
+      end
+    end
+
+    class << self
+      def run_generate
         config = HakumiORM.config
         adapter = config.adapter
         raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
 
-        schema = config.adapter_name == :postgresql ? "public" : nil
-        reader = HakumiORM::Codegen::SchemaReader.new(adapter)
-        tables = reader.read_tables(schema: schema)
+        tables = read_schema(config, adapter)
 
         generator = HakumiORM::Codegen::Generator.new(
           tables,
@@ -32,6 +36,22 @@ module HakumiORM
         generator.generate!
 
         puts "HakumiORM: Generated #{tables.size} table(s) into #{config.output_dir}"
+      end
+
+      def read_schema(config, adapter)
+        case config.adapter_name
+        when :postgresql
+          HakumiORM::Codegen::SchemaReader.new(adapter).read_tables(schema: "public")
+        when :mysql
+          schema = config.database
+          raise HakumiORM::Error, "config.database is required for MySQL codegen" unless schema
+
+          HakumiORM::Codegen::MysqlSchemaReader.new(adapter).read_tables(schema: schema)
+        when :sqlite
+          HakumiORM::Codegen::SqliteSchemaReader.new(adapter).read_tables
+        else
+          raise HakumiORM::Error, "Unknown adapter_name: #{config.adapter_name}"
+        end
       end
     end
   end

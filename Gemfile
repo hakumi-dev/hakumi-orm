@@ -12,7 +12,9 @@ gem "rubocop", "~> 1.21", require: false
 gem "rubocop-minitest", require: false
 
 # Database drivers (optional at runtime, needed for tests/codegen)
+gem "mysql2", require: false
 gem "pg", require: false
+gem "sqlite3", require: false
 
 # Sorbet static analysis
 gem "sorbet", require: false

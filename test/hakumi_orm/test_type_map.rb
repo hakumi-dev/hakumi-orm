@@ -54,6 +54,80 @@ class TestTypeMap < HakumiORM::TestCase
     assert_equal HT::String, TM.hakumi_type(:postgresql, "my_custom_type")
   end
 
+  # --- MySQL type map ---
+
+  test "MySQL integer types resolve correctly" do
+    %w[int bigint smallint mediumint tinyint].each do |t|
+      assert_equal HT::Integer, TM.hakumi_type(:mysql, t),
+                   "Expected #{t} to map to Integer"
+    end
+  end
+
+  test "MySQL string types resolve correctly" do
+    %w[varchar char text mediumtext longtext tinytext].each do |t|
+      assert_equal HT::String, TM.hakumi_type(:mysql, t),
+                   "Expected #{t} to map to String"
+    end
+  end
+
+  test "MySQL tinyint(1) resolves to Boolean" do
+    assert_equal HT::Boolean, TM.hakumi_type(:mysql, "tinyint(1)")
+  end
+
+  test "MySQL json resolves to Json" do
+    assert_equal HT::Json, TM.hakumi_type(:mysql, "json")
+  end
+
+  test "MySQL datetime/timestamp resolve to Timestamp" do
+    %w[datetime timestamp].each do |t|
+      assert_equal HT::Timestamp, TM.hakumi_type(:mysql, t),
+                   "Expected #{t} to map to Timestamp"
+    end
+  end
+
+  test "MySQL decimal resolves to Decimal" do
+    assert_equal HT::Decimal, TM.hakumi_type(:mysql, "decimal")
+  end
+
+  test "MySQL float/double resolve to Float" do
+    %w[float double].each do |t|
+      assert_equal HT::Float, TM.hakumi_type(:mysql, t),
+                   "Expected #{t} to map to Float"
+    end
+  end
+
+  # --- SQLite type map ---
+
+  test "SQLite INTEGER resolves to Integer" do
+    assert_equal HT::Integer, TM.hakumi_type(:sqlite, "INTEGER")
+  end
+
+  test "SQLite TEXT resolves to String" do
+    assert_equal HT::String, TM.hakumi_type(:sqlite, "TEXT")
+  end
+
+  test "SQLite REAL resolves to Float" do
+    assert_equal HT::Float, TM.hakumi_type(:sqlite, "REAL")
+  end
+
+  test "SQLite BOOLEAN resolves to Boolean" do
+    assert_equal HT::Boolean, TM.hakumi_type(:sqlite, "BOOLEAN")
+  end
+
+  test "SQLite NUMERIC resolves to Decimal" do
+    assert_equal HT::Decimal, TM.hakumi_type(:sqlite, "NUMERIC")
+  end
+
+  test "SQLite DATE resolves to Date" do
+    assert_equal HT::Date, TM.hakumi_type(:sqlite, "DATE")
+  end
+
+  test "SQLite DATETIME resolves to Timestamp" do
+    assert_equal HT::Timestamp, TM.hakumi_type(:sqlite, "DATETIME")
+  end
+
+  # --- General ---
+
   test "raises on unknown dialect" do
     assert_raises(ArgumentError) { TM.hakumi_type(:oracle, "varchar2") }
   end

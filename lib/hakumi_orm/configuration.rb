@@ -5,7 +5,7 @@ module HakumiORM
   class Configuration
     extend T::Sig
 
-    SUPPORTED_ADAPTERS = T.let(%i[postgresql].freeze, T::Array[Symbol])
+    SUPPORTED_ADAPTERS = T.let(%i[postgresql mysql sqlite].freeze, T::Array[Symbol])
 
     sig { returns(Symbol) }
     attr_accessor :adapter_name
@@ -87,7 +87,14 @@ module HakumiORM
     def connect_adapter(name, database)
       case name
       when :postgresql
+        require_relative "adapter/postgresql"
         Adapter::Postgresql.connect(build_connection_params(database))
+      when :mysql
+        require_relative "adapter/mysql"
+        Adapter::Mysql.connect(build_mysql_params(database))
+      when :sqlite
+        require_relative "adapter/sqlite"
+        Adapter::Sqlite.connect(database)
       else
         raise HakumiORM::Error, "Adapter #{name.inspect} is not yet implemented"
       end
@@ -102,6 +109,20 @@ module HakumiORM
       params[:port] = p if p
       u = @username
       params[:user] = u if u
+      pw = @password
+      params[:password] = pw if pw
+      params
+    end
+
+    sig { params(database: String).returns(T::Hash[Symbol, T.any(String, Integer)]) }
+    def build_mysql_params(database)
+      params = T.let({ database: database }, T::Hash[Symbol, T.any(String, Integer)])
+      h = @host
+      params[:host] = h if h
+      p = @port
+      params[:port] = p if p
+      u = @username
+      params[:username] = u if u
       pw = @password
       params[:password] = pw if pw
       params
