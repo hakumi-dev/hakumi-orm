@@ -179,6 +179,31 @@ module HakumiORM
         types.length == 1 ? types.fetch(0) : "T.any(#{types.join(", ")})"
       end
 
+      sig { params(col: ColumnInfo).returns(String) }
+      def json_expr(col)
+        hakumi_type_for(col).as_json_expr("@#{col.name}", nullable: col.nullable)
+      end
+
+      sig { params(table: TableInfo).returns(String) }
+      def as_json_value_type(table)
+        types = table.columns.map { |c| json_ruby_type(c) }.uniq.sort
+        types.length == 1 ? types.fetch(0) : "T.nilable(T.any(#{types.join(", ")}))"
+      end
+
+      sig { params(col: ColumnInfo).returns(String) }
+      def json_ruby_type(col)
+        ht = hakumi_type_for(col)
+        case ht
+        when HakumiType::Integer                then "Integer"
+        when HakumiType::Float                  then "Float"
+        when HakumiType::Boolean                then "T::Boolean"
+        when HakumiType::String, HakumiType::Uuid,
+             HakumiType::Decimal, HakumiType::Timestamp,
+             HakumiType::Date, HakumiType::Json then "String"
+        else T.absurd(ht)
+        end
+      end
+
       sig { params(table: TableInfo).returns(String) }
       def build_variant_base(table)
         cls = classify(table.name)
@@ -188,6 +213,8 @@ module HakumiORM
                module_name: @module_name,
                ind: indent,
                record_class_name: qualify(record_cls),
+               to_h_value_type: to_h_value_type(table),
+               as_json_value_type: as_json_value_type(table),
                all_columns: table.columns.map { |c| { name: c.name, ruby_type: ruby_type(c) } })
       end
     end

@@ -111,6 +111,15 @@ module <%= module_name %>
 <%- end -%>
 <%= ind %>    }
 <%= ind %>  end
+
+<%= ind %>  sig { params(only: T.nilable(T::Array[Symbol]), except: T.nilable(T::Array[Symbol])).returns(T::Hash[String, <%= as_json_value_type %>]) }
+<%= ind %>  def as_json(only: nil, except: nil)
+<%= ind %>    h = T.let({}, T::Hash[String, <%= as_json_value_type %>])
+<%- columns.each do |col| -%>
+<%= ind %>    h["<%= col[:name] %>"] = <%= col[:json_expr] %> unless (only && !only.include?(:<%= col[:name] %>)) || (except&.include?(:<%= col[:name] %>))
+<%- end -%>
+<%= ind %>    h
+<%= ind %>  end
 <%- if delete_sql -%>
 <%= ind %>  SQL_DELETE_BY_PK = T.let('<%= delete_sql %>', String)
 <%- (has_many + has_one).each do |assoc| -%>
@@ -281,6 +290,19 @@ module <%= module_name %>
 <%= ind %>  end
 <%- end -%>
 <%- has_many_through.each do |assoc| -%>
+<%- if assoc[:singular] == "true" -%>
+
+<%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).returns(T.nilable(<%= assoc[:target_record] %>)) }
+<%= ind %>  def <%= assoc[:method_name] %>(adapter: ::HakumiORM.adapter)
+<%= ind %>    sub = <%= assoc[:join_relation] %>.new
+<%= ind %>      .where(<%= assoc[:join_schema] %>::<%= assoc[:join_fk_const] %>.eq(@<%= assoc[:pk_attr] %>))
+<%= ind %>      .select(<%= assoc[:join_schema] %>::<%= assoc[:join_select_const] %>)
+<%= ind %>      .compile(adapter.dialect)
+<%= ind %>    <%= assoc[:target_relation] %>.new.where(
+<%= ind %>      ::HakumiORM::SubqueryExpr.new(<%= assoc[:target_schema] %>::<%= assoc[:target_match_const] %>, :in, sub)
+<%= ind %>    ).first(adapter: adapter)
+<%= ind %>  end
+<%- else -%>
 
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).returns(<%= assoc[:target_relation] %>) }
 <%= ind %>  def <%= assoc[:method_name] %>(adapter: ::HakumiORM.adapter)
@@ -292,6 +314,7 @@ module <%= module_name %>
 <%= ind %>      ::HakumiORM::SubqueryExpr.new(<%= assoc[:target_schema] %>::<%= assoc[:target_match_const] %>, :in, sub)
 <%= ind %>    )
 <%= ind %>  end
+<%- end -%>
 <%- end -%>
 <%- belongs_to.each do |assoc| -%>
 

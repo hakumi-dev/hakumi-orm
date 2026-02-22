@@ -19,6 +19,12 @@ module <%= module_name %>
 <%= ind %>      @record = T.let(record, <%= record_class_name %>)
 <%= ind %>    end
 
+<%= ind %>    sig { returns(T::Hash[Symbol, <%= to_h_value_type %>]) }
+<%= ind %>    def to_h = @record.to_h
+
+<%= ind %>    sig { params(only: T.nilable(T::Array[Symbol]), except: T.nilable(T::Array[Symbol])).returns(T::Hash[String, <%= as_json_value_type %>]) }
+<%= ind %>    def as_json(only: nil, except: nil) = @record.as_json(only: only, except: except)
+
 <%= ind %>    protected
 
 <%= ind %>    sig { returns(<%= record_class_name %>) }

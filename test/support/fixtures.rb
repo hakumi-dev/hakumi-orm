@@ -132,6 +132,17 @@ class UserRecord
     }
   end
 
+  sig { params(only: T.nilable(T::Array[Symbol]), except: T.nilable(T::Array[Symbol])).returns(T::Hash[String, T.nilable(T.any(String, Integer, T::Boolean))]) }
+  def as_json(only: nil, except: nil)
+    h = T.let({}, T::Hash[String, T.nilable(T.any(String, Integer, T::Boolean))])
+    h["id"] = @id unless (only && !only.include?(:id)) || except&.include?(:id)
+    h["name"] = @name unless (only && !only.include?(:name)) || except&.include?(:name)
+    h["email"] = @email unless (only && !only.include?(:email)) || except&.include?(:email)
+    h["age"] = @age unless (only && !only.include?(:age)) || except&.include?(:age)
+    h["active"] = @active unless (only && !only.include?(:active)) || except&.include?(:active)
+    h
+  end
+
   sig { params(expr: HakumiORM::Expr).returns(UserRelation) }
   def self.where(expr)
     UserRelation.new.where(expr)
@@ -282,6 +293,12 @@ class UserRecord
       @record = T.let(record, UserRecord)
     end
 
+    sig { returns(T::Hash[Symbol, T.any(Integer, String, T.nilable(Integer), T::Boolean)]) }
+    def to_h = @record.to_h
+
+    sig { params(only: T.nilable(T::Array[Symbol]), except: T.nilable(T::Array[Symbol])).returns(T::Hash[String, T.nilable(T.any(String, Integer, T::Boolean))]) }
+    def as_json(only: nil, except: nil) = @record.as_json(only: only, except: except)
+
     protected
 
     sig { returns(UserRecord) }
@@ -328,4 +345,10 @@ class UserRelation < HakumiORM::Relation
 
   sig { override.params(records: T::Array[UserRecord], nodes: T::Array[HakumiORM::PreloadNode], adapter: HakumiORM::Adapter::Base).void }
   def run_preloads(records, nodes, adapter); end
+
+  sig { returns(T.self_type) }
+  def active = where(UserSchema::ACTIVE.eq(true))
+
+  sig { params(min_age: Integer).returns(T.self_type) }
+  def older_than(min_age) = where(UserSchema::AGE.gte(min_age))
 end

@@ -70,6 +70,23 @@ module HakumiORM
         end
       end
 
+      sig { params(ivar: ::String, nullable: T::Boolean).returns(::String) }
+      def as_json_expr(ivar, nullable:)
+        case self
+        when Integer, Float, String, Boolean, Uuid
+          ivar
+        when Decimal
+          nullable ? "#{ivar}&.to_s(\"F\")" : "#{ivar}.to_s(\"F\")"
+        when Timestamp
+          nullable ? "#{ivar}&.iso8601(6)" : "#{ivar}.iso8601(6)"
+        when Date
+          nullable ? "#{ivar}&.iso8601" : "#{ivar}.iso8601"
+        when Json
+          nullable ? "#{ivar}&.raw_json" : "#{ivar}.raw_json"
+        else T.absurd(self)
+        end
+      end
+
       sig { returns(::String) }
       def bind_class
         case self

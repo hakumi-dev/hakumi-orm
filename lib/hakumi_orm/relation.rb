@@ -107,6 +107,24 @@ module HakumiORM
       self
     end
 
+    sig { params(other: Relation[ModelType]).returns(T.self_type) }
+    def or(other)
+      left = combined_where
+      right = other.where_expression
+      if left && right
+        @where_exprs = [left.or(right)]
+      elsif right
+        @where_exprs = [right]
+      end
+      self
+    end
+
+    sig { params(expr: Expr).returns(T.self_type) }
+    def where_not(expr)
+      @where_exprs << NotExpr.new(expr)
+      self
+    end
+
     sig { params(results: T::Array[ModelType]).returns(T.self_type) }
     def _set_preloaded(results)
       @_preloaded_results = results
@@ -240,6 +258,11 @@ module HakumiORM
 
     sig { overridable.params(records: T::Array[ModelType], nodes: T::Array[PreloadNode], adapter: Adapter::Base).void }
     def run_preloads(records, nodes, adapter); end
+
+    protected
+
+    sig { returns(T.nilable(Expr)) }
+    def where_expression = combined_where
 
     private
 

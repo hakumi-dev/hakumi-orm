@@ -161,7 +161,8 @@ module HakumiORM
                ind: indent,
                record_class_name: qualify(record_cls),
                to_h_value_type: to_h_value_type(table),
-               columns: table.columns.map { |c| { name: c.name, ruby_type: ruby_type(c) } },
+               as_json_value_type: as_json_value_type(table),
+               columns: table.columns.map { |c| { name: c.name, ruby_type: ruby_type(c), json_expr: json_expr(c) } },
                init_sig_params: table.columns.map { |c| "#{c.name}: #{ruby_type(c)}" }.join(", "),
                init_args: table.columns.map { |c| "#{c.name}:" }.join(", "),
                cast_lines: build_cast_lines(table),
@@ -287,7 +288,9 @@ module HakumiORM
                module_name: @module_name,
                ind: indent,
                model_class_name: qualify(cls),
-               record_class_name: qualify("#{cls}Record"))
+               record_class_name: qualify("#{cls}Record"),
+               relation_class_name: qualify("#{cls}Relation"),
+               schema_module: qualify("#{cls}Schema"))
       end
 
       sig { returns(String) }

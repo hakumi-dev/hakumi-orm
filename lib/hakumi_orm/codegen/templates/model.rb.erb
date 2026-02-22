@@ -9,3 +9,22 @@ module <%= module_name %>
 <%- if module_name -%>
 end
 <%- end -%>
+
+# Scopes — reopen the Relation to add chainable, typed query shortcuts.
+#
+# <%- if module_name -%>
+# class <%= module_name %>::<%= relation_class_name %>
+# <%- else -%>
+# class <%= relation_class_name %>
+# <%- end -%>
+#   extend T::Sig
+#
+#   sig { returns(T.self_type) }
+#   def active = where(<%= schema_module %>::ACTIVE.eq(true))
+#
+#   sig { params(min: Integer).returns(T.self_type) }
+#   def older_than(min) = where(<%= schema_module %>::AGE.gte(min))
+# end
+#
+# Usage:
+#   <%= model_class_name %>.all.active.older_than(18).to_a

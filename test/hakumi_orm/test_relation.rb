@@ -452,4 +452,147 @@ class TestRelation < HakumiORM::TestCase
 
     assert_instance_of UserRelation, rel
   end
+
+  test "or merges two relations WHERE clauses with OR" do
+    left = UserRecord.where(UserSchema::ACTIVE.eq(true))
+    right = UserRecord.where(UserSchema::AGE.gt(65))
+
+    left.or(right).to_a(adapter: @adapter)
+
+    sql = @adapter.last_sql
+
+    assert_includes sql, "OR"
+    assert_includes sql, '"users"."active"'
+    assert_includes sql, '"users"."age"'
+    assert_equal ["t", 65], @adapter.last_params
+  end
+
+  test "or with empty left uses right WHERE" do
+    left = UserRecord.all
+    right = UserRecord.where(UserSchema::ACTIVE.eq(true))
+
+    left.or(right).to_a(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, "WHERE"
+    assert_includes @adapter.last_sql, '"users"."active"'
+    refute_includes @adapter.last_sql, "OR"
+  end
+
+  test "or with empty right keeps left WHERE" do
+    left = UserRecord.where(UserSchema::ACTIVE.eq(true))
+    right = UserRecord.all
+
+    left.or(right).to_a(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, "WHERE"
+    refute_includes @adapter.last_sql, "OR"
+  end
+
+  test "or is chainable with further where" do
+    UserRecord
+      .where(UserSchema::ACTIVE.eq(true))
+      .or(UserRecord.where(UserSchema::AGE.gt(65)))
+      .where(UserSchema::NAME.like("A%"))
+      .to_a(adapter: @adapter)
+
+    sql = @adapter.last_sql
+
+    assert_includes sql, "OR"
+    assert_includes sql, "AND"
+  end
+
+  test "where_not negates the expression" do
+    UserRecord.all.where_not(UserSchema::ACTIVE.eq(true)).to_a(adapter: @adapter)
+
+    sql = @adapter.last_sql
+
+    assert_includes sql, "NOT"
+    assert_includes sql, '"users"."active"'
+  end
+
+  test "where_not chains with where using AND" do
+    UserRecord
+      .where(UserSchema::AGE.gt(18))
+      .where_not(UserSchema::ACTIVE.eq(false))
+      .to_a(adapter: @adapter)
+
+    sql = @adapter.last_sql
+
+    assert_includes sql, "AND"
+    assert_includes sql, "NOT"
+  end
+
+  test "as_json returns hash with string keys" do
+    user = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+    h = user.as_json
+
+    assert_equal "Alice", h["name"]
+    assert_equal 1, h["id"]
+    assert_equal 25, h["age"]
+    assert h["active"]
+    assert_equal 5, h.keys.length
+  end
+
+  test "as_json only filters to specified columns" do
+    user = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+    h = user.as_json(only: %i[id name])
+
+    assert_equal({ "id" => 1, "name" => "Alice" }, h)
+  end
+
+  test "as_json except excludes specified columns" do
+    user = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+    h = user.as_json(except: %i[age active])
+
+    assert_equal %w[email id name], h.keys.sort
+  end
+
+  test "as_json preserves nil for nullable columns" do
+    user = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: nil, active: true)
+    h = user.as_json
+
+    assert_nil h["age"]
+  end
+
+  test "scope method on Relation generates correct WHERE" do
+    UserRecord.all.active.to_a(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, '"users"."active"'
+    assert_equal ["t"], @adapter.last_params
+  end
+
+  test "scopes chain together producing AND" do
+    UserRecord.all.active.older_than(18).to_a(adapter: @adapter)
+
+    sql = @adapter.last_sql
+
+    assert_includes sql, "AND"
+    assert_includes sql, '"users"."active"'
+    assert_includes sql, '"users"."age"'
+    assert_equal ["t", 18], @adapter.last_params
+  end
+
+  test "scopes chain with where and order" do
+    UserRecord
+      .where(UserSchema::NAME.like("A%"))
+      .active
+      .older_than(21)
+      .order(UserSchema::NAME.asc)
+      .limit(10)
+      .to_a(adapter: @adapter)
+
+    sql = @adapter.last_sql
+
+    assert_includes sql, '"users"."name" LIKE'
+    assert_includes sql, '"users"."active"'
+    assert_includes sql, '"users"."age"'
+    assert_includes sql, "ORDER BY"
+    assert_includes sql, "LIMIT 10"
+  end
+
+  test "scope returns same relation type for continued chaining" do
+    rel = UserRecord.all.active
+
+    assert_instance_of UserRelation, rel
+  end
 end

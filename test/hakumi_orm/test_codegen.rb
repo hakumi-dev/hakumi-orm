@@ -655,6 +655,38 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
+  test "has_one through generates singular method with first" do
+    tables = build_users_profiles_avatars_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      user_code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes user_code, "def avatar"
+      assert_includes user_code, "SubqueryExpr"
+      assert_includes user_code, "ProfileRelation"
+      assert_includes user_code, "ProfileSchema::USER_ID"
+      assert_includes user_code, ".first(adapter: adapter)"
+      assert_includes user_code, "returns(T.nilable(AvatarRecord))"
+      refute_includes user_code, "returns(AvatarRelation)"
+    end
+  end
+
+  test "has_many through remains plural without unique constraints" do
+    tables = build_users_roles_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      user_code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes user_code, "def roles"
+      assert_includes user_code, "returns(RoleRelation)"
+      refute_includes user_code, "returns(T.nilable(RoleRecord))"
+    end
+  end
+
   test "optimistic locking adds lock_version to UPDATE WHERE clause" do
     tables = build_table_with_lock_version
     Dir.mktmpdir do |dir|
@@ -780,6 +812,106 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
+  test "as_json generates hash with string keys and JSON-safe values" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes code, "def as_json(only: nil, except: nil)"
+      assert_includes code, 'h["id"]'
+      assert_includes code, 'h["name"]'
+      assert_includes code, 'h["active"]'
+      assert_includes code, "T::Hash[String,"
+      assert_includes code, "only && !only.include?"
+      assert_includes code, "except&.include?"
+    end
+  end
+
+  test "as_json converts timestamps to iso8601" do
+    col_id = HakumiORM::Codegen::ColumnInfo.new(
+      name: "id", data_type: "integer", udt_name: "int4",
+      nullable: false, default: "nextval('events_id_seq'::regclass)", max_length: nil
+    )
+    col_created = HakumiORM::Codegen::ColumnInfo.new(
+      name: "created_at", data_type: "timestamp with time zone", udt_name: "timestamptz",
+      nullable: false, default: nil, max_length: nil
+    )
+    col_deleted = HakumiORM::Codegen::ColumnInfo.new(
+      name: "deleted_at", data_type: "timestamp with time zone", udt_name: "timestamptz",
+      nullable: true, default: nil, max_length: nil
+    )
+
+    table = HakumiORM::Codegen::TableInfo.new("events")
+    table.columns << col_id << col_created << col_deleted
+    table.primary_key = "id"
+
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new({ "events" => table }, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "event/record.rb"))
+
+      assert_includes code, "@created_at.iso8601(6)"
+      assert_includes code, "@deleted_at&.iso8601(6)"
+    end
+  end
+
+  test "as_json converts decimal to string and json to raw_json" do
+    col_id = HakumiORM::Codegen::ColumnInfo.new(
+      name: "id", data_type: "integer", udt_name: "int4",
+      nullable: false, default: "nextval('items_id_seq'::regclass)", max_length: nil
+    )
+    col_price = HakumiORM::Codegen::ColumnInfo.new(
+      name: "price", data_type: "numeric", udt_name: "numeric",
+      nullable: false, default: nil, max_length: nil
+    )
+    col_meta = HakumiORM::Codegen::ColumnInfo.new(
+      name: "meta", data_type: "jsonb", udt_name: "jsonb",
+      nullable: true, default: nil, max_length: nil
+    )
+
+    table = HakumiORM::Codegen::TableInfo.new("items")
+    table.columns << col_id << col_price << col_meta
+    table.primary_key = "id"
+
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new({ "items" => table }, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "item/record.rb"))
+
+      assert_includes code, '@price.to_s("F")'
+      assert_includes code, "@meta&.raw_json"
+    end
+  end
+
+  test "as_json has zero T.untyped, T.unsafe, T.must" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/record.rb"))
+
+      refute_includes code, "T.untyped"
+      refute_includes code, "T.unsafe"
+      refute_includes code, "T.must"
+    end
+  end
+
+  test "variant_base delegates as_json and to_h" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/variant_base.rb"))
+
+      assert_includes code, "def to_h = @record.to_h"
+      assert_includes code, "def as_json(only: nil, except: nil) = @record.as_json(only: only, except: except)"
+    end
+  end
+
   test "uuid column generates StrField" do
     tables = build_table_with_uuid
     Dir.mktmpdir do |dir|
@@ -876,6 +1008,19 @@ class TestCodegen < HakumiORM::TestCase
                         columns: [pk_col("tokens"),
                                   col("token_id", type: "uuid", udt: "uuid")])
     { "tokens" => tokens }
+  end
+
+  def build_users_profiles_avatars_tables
+    users = make_table("users", columns: [pk_col("users"), str_col("name")])
+    profiles = make_table("profiles",
+                          columns: [pk_col("profiles"), fk_col("user_id"), str_col("bio")],
+                          fks: [fk("user_id", "users")],
+                          unique: ["user_id"])
+    avatars = make_table("avatars",
+                         columns: [pk_col("avatars"), fk_col("profile_id"), str_col("url")],
+                         fks: [fk("profile_id", "profiles")],
+                         unique: ["profile_id"])
+    { "users" => users, "profiles" => profiles, "avatars" => avatars }
   end
 
   def build_users_posts_comments_tables

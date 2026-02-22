@@ -138,14 +138,18 @@ module HakumiORM
           target_table = @tables[fk.foreign_table]
           next unless target_table
 
+          is_singular = int_table.unique_columns.include?(int_info.fetch(:fk_column)) &&
+                        int_table.unique_columns.include?(fk.column_name)
+
           throughs << {
-            method_name: fk.foreign_table,
+            method_name: is_singular ? singularize(fk.foreign_table) : fk.foreign_table,
             join_table: int_table.name,
             join_fk_to_source: int_info.fetch(:fk_column),
             join_select_field: fk.column_name,
             target_table: fk.foreign_table,
             target_match_field: target_table.primary_key || "id",
-            pk_attr: source.primary_key || "id"
+            pk_attr: source.primary_key || "id",
+            singular: is_singular ? "true" : "false"
           }
         end
       end
@@ -167,14 +171,18 @@ module HakumiORM
           target_table = @tables[chain_info.fetch(:source_table)]
           next unless target_table
 
+          is_singular = int_table.unique_columns.include?(int_info.fetch(:fk_column)) &&
+                        target_table.unique_columns.include?(chain_info.fetch(:fk_column))
+
           throughs << {
-            method_name: chain_info.fetch(:source_table),
+            method_name: is_singular ? singularize(chain_info.fetch(:source_table)) : chain_info.fetch(:source_table),
             join_table: int_table.name,
             join_fk_to_source: int_info.fetch(:fk_column),
             join_select_field: int_table.primary_key || "id",
             target_table: chain_info.fetch(:source_table),
             target_match_field: chain_info.fetch(:fk_column),
-            pk_attr: source.primary_key || "id"
+            pk_attr: source.primary_key || "id",
+            singular: is_singular ? "true" : "false"
           }
         end
       end
@@ -194,7 +202,8 @@ module HakumiORM
             target_schema: qualify("#{target_cls}Schema"),
             target_match_const: info.fetch(:target_match_field).upcase,
             target_record: qualify("#{target_cls}Record"),
-            pk_attr: info.fetch(:pk_attr)
+            pk_attr: info.fetch(:pk_attr),
+            singular: info.fetch(:singular, "false")
           }
         end
       end
