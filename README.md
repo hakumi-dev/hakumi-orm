@@ -88,13 +88,21 @@ app/db/generated/          <-- always overwritten by codegen
     base_contract.rb       # UserRecord::BaseContract -- overridable validation hooks
     variant_base.rb        # UserRecord::VariantBase -- delegation base for user-defined variants
     relation.rb            # UserRelation -- typed query builder
-  post/
+  performance_review/
     ...
+    variant_base.rb        # PerformanceReviewRecord::VariantBase
   manifest.rb              # require_relative for all files
 
-app/models/                <-- generated once, never overwritten
+app/models/                <-- generated once, never overwritten; yours to edit
   user.rb                  # class User < UserRecord
   post.rb                  # class Post < PostRecord
+  performance_review.rb    # class PerformanceReview < PerformanceReviewRecord
+  performance_review/      # variant subclasses (user-defined, not codegen)
+    draft.rb               # PerformanceReview::Draft < PerformanceReviewRecord::VariantBase
+    started.rb             # PerformanceReview::Started < PerformanceReview::Draft
+    completed.rb           # PerformanceReview::Completed < PerformanceReview::Started
+    cancelled.rb           # PerformanceReview::Cancelled < PerformanceReview::Started
+    rejected.rb            # PerformanceReview::Rejected < PerformanceReview::Draft
 
 app/contracts/             <-- generated once, never overwritten
   user_contract.rb         # UserRecord::Contract < UserRecord::BaseContract
