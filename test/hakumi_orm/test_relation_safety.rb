@@ -82,8 +82,6 @@ class TestRelationSafety < HakumiORM::TestCase
     assert_includes @adapter.last_sql, "IS NULL"
   end
 
-  # --- find_in_batches multi-db ---
-
   test "find_in_batches on PostgreSQL uses DECLARE CURSOR" do
     pg_adapter = HakumiORM::Test::MockAdapter.new(dialect: HakumiORM::Dialect::Postgresql.new)
 

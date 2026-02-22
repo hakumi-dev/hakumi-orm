@@ -18,7 +18,7 @@ module HakumiORM
           map = DIALECT_MAPS.fetch(dialect) do
             raise ArgumentError, "Unknown dialect: #{dialect}"
           end
-          map[data_type] || (udt_name && map[udt_name]) || HakumiType::String
+          (udt_name && map[udt_name]) || map[data_type] || HakumiType::String
         end
 
         sig { params(hakumi_type: HakumiType, raw_expr: String, nullable: T::Boolean).returns(String) }
@@ -33,7 +33,11 @@ module HakumiORM
           when HakumiType::Decimal   then nullable_cast("BigDecimal", raw_expr, nullable)
           when HakumiType::Timestamp then nullable_cast("::HakumiORM::Cast.to_time", raw_expr, nullable)
           when HakumiType::Date      then nullable_cast("::HakumiORM::Cast.to_date", raw_expr, nullable)
-          when HakumiType::Json      then nullable_cast("::HakumiORM::Cast.to_json", raw_expr, nullable)
+          when HakumiType::Json         then nullable_cast("::HakumiORM::Cast.to_json", raw_expr, nullable)
+          when HakumiType::IntegerArray then nullable_cast("::HakumiORM::Cast.to_int_array", raw_expr, nullable)
+          when HakumiType::StringArray  then nullable_cast("::HakumiORM::Cast.to_str_array", raw_expr, nullable)
+          when HakumiType::FloatArray   then nullable_cast("::HakumiORM::Cast.to_float_array", raw_expr, nullable)
+          when HakumiType::BooleanArray then nullable_cast("::HakumiORM::Cast.to_bool_array", raw_expr, nullable)
           else raw_expr
           end
         end

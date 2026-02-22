@@ -15,6 +15,19 @@ module HakumiORM
 
         HakumiORM::Tasks.run_generate
       end
+
+      desc "Scaffold a custom type (usage: rake hakumi:type[money])"
+      task :type, [:name] do |_t, args|
+        require "hakumi_orm"
+        require "hakumi_orm/codegen"
+
+        name = args[:name]
+        raise ArgumentError, "Usage: rake hakumi:type[name]" unless name
+
+        output_dir = HakumiORM.config.output_dir || "lib/types"
+        HakumiORM::Codegen::TypeScaffold.generate(name: name, output_dir: output_dir)
+        puts "HakumiORM: Scaffolded custom type '#{name}' in #{output_dir}"
+      end
     end
 
     class << self

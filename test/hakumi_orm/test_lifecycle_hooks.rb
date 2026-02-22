@@ -47,8 +47,6 @@ class TestLifecycleHooks < HakumiORM::TestCase
     end
   end
 
-  # --- on_destroy (before delete) ---
-
   test "on_destroy is called before delete!" do
     user = UserRecord.new(id: 1, name: "Alice", email: "alice@test.com", age: nil, active: true)
     user.delete!(adapter: @adapter)
@@ -71,8 +69,6 @@ class TestLifecycleHooks < HakumiORM::TestCase
 
     assert_includes HookTracker.calls, [:on_destroy, 42]
   end
-
-  # --- after_destroy ---
 
   test "after_destroy is called after successful delete!" do
     user = UserRecord.new(id: 1, name: "Alice", email: "alice@test.com", age: nil, active: true)
@@ -108,8 +104,6 @@ class TestLifecycleHooks < HakumiORM::TestCase
     assert_operator on_idx, :<, after_idx
   end
 
-  # --- after_create ---
-
   test "after_create is called after successful save!" do
     new_user = UserRecord.build(name: "Alice", email: "alice@test.com", active: true)
     validated = new_user.validate!
@@ -125,8 +119,6 @@ class TestLifecycleHooks < HakumiORM::TestCase
 
     refute(HookTracker.calls.any? { |c| c[0] == :after_create })
   end
-
-  # --- after_update ---
 
   test "after_update is called after successful update!" do
     user = UserRecord.new(id: 1, name: "Alice", email: "alice@test.com", age: nil, active: true)
@@ -161,8 +153,6 @@ class TestLifecycleHooks < HakumiORM::TestCase
 
     refute(HookTracker.calls.any? { |c| c[0] == :after_create })
   end
-
-  # --- after_commit / after_rollback ---
 
   test "after_commit fires after successful transaction" do
     committed = false

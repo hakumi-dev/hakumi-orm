@@ -52,12 +52,31 @@ module HakumiORM
           "inet" => HakumiType::String,
           "cidr" => HakumiType::String,
           "macaddr" => HakumiType::String,
+          "hstore" => HakumiType::String,
           "interval" => HakumiType::String,
           "xml" => HakumiType::String,
           "tsvector" => HakumiType::String,
           "tsquery" => HakumiType::String,
           "time without time zone" => HakumiType::String,
-          "time with time zone" => HakumiType::String
+          "time with time zone" => HakumiType::String,
+
+          "ARRAY" => HakumiType::StringArray,
+
+          "_int2" => HakumiType::IntegerArray,
+          "_int4" => HakumiType::IntegerArray,
+          "_int8" => HakumiType::IntegerArray,
+          "_integer" => HakumiType::IntegerArray,
+
+          "_text" => HakumiType::StringArray,
+          "_varchar" => HakumiType::StringArray,
+          "_bpchar" => HakumiType::StringArray,
+          "_name" => HakumiType::StringArray,
+
+          "_float4" => HakumiType::FloatArray,
+          "_float8" => HakumiType::FloatArray,
+          "_numeric" => HakumiType::FloatArray,
+
+          "_bool" => HakumiType::BooleanArray
         }.freeze, T::Hash[::String, HakumiType])
       end
     end

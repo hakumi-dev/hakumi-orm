@@ -54,8 +54,6 @@ class TestTypeMap < HakumiORM::TestCase
     assert_equal HT::String, TM.hakumi_type(:postgresql, "my_custom_type")
   end
 
-  # --- MySQL type map ---
-
   test "MySQL integer types resolve correctly" do
     %w[int bigint smallint mediumint tinyint].each do |t|
       assert_equal HT::Integer, TM.hakumi_type(:mysql, t),
@@ -96,8 +94,6 @@ class TestTypeMap < HakumiORM::TestCase
     end
   end
 
-  # --- SQLite type map ---
-
   test "SQLite INTEGER resolves to Integer" do
     assert_equal HT::Integer, TM.hakumi_type(:sqlite, "INTEGER")
   end
@@ -125,8 +121,6 @@ class TestTypeMap < HakumiORM::TestCase
   test "SQLite DATETIME resolves to Timestamp" do
     assert_equal HT::Timestamp, TM.hakumi_type(:sqlite, "DATETIME")
   end
-
-  # --- General ---
 
   test "raises on unknown dialect" do
     assert_raises(ArgumentError) { TM.hakumi_type(:oracle, "varchar2") }

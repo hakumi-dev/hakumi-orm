@@ -16,6 +16,10 @@ module HakumiORM
         Decimal = new
         Json = new
         Uuid = new
+        IntegerArray = new
+        StringArray = new
+        FloatArray = new
+        BooleanArray = new
       end
 
       sig { returns(::String) }
@@ -29,6 +33,10 @@ module HakumiORM
         when Float        then "Float"
         when Decimal      then "BigDecimal"
         when Json         then "::HakumiORM::Json"
+        when IntegerArray then "T::Array[T.nilable(Integer)]"
+        when StringArray  then "T::Array[T.nilable(String)]"
+        when FloatArray   then "T::Array[T.nilable(Float)]"
+        when BooleanArray then "T::Array[T.nilable(T::Boolean)]"
         else T.absurd(self)
         end
       end
@@ -42,14 +50,18 @@ module HakumiORM
       sig { returns(::String) }
       def field_class
         case self
-        when Integer   then "::HakumiORM::IntField"
-        when Float     then "::HakumiORM::FloatField"
-        when Decimal   then "::HakumiORM::DecimalField"
-        when Timestamp then "::HakumiORM::TimeField"
-        when Date      then "::HakumiORM::DateField"
+        when Integer      then "::HakumiORM::IntField"
+        when Float        then "::HakumiORM::FloatField"
+        when Decimal      then "::HakumiORM::DecimalField"
+        when Timestamp    then "::HakumiORM::TimeField"
+        when Date         then "::HakumiORM::DateField"
         when String, Uuid then "::HakumiORM::StrField"
         when Boolean      then "::HakumiORM::BoolField"
         when Json         then "::HakumiORM::JsonField"
+        when IntegerArray then "::HakumiORM::IntArrayField"
+        when StringArray  then "::HakumiORM::StrArrayField"
+        when FloatArray   then "::HakumiORM::FloatArrayField"
+        when BooleanArray then "::HakumiORM::BoolArrayField"
         else T.absurd(self)
         end
       end
@@ -70,10 +82,19 @@ module HakumiORM
         end
       end
 
+      sig { returns(T::Boolean) }
+      def array_type?
+        case self
+        when IntegerArray, StringArray, FloatArray, BooleanArray then true
+        else false
+        end
+      end
+
       sig { params(ivar: ::String, nullable: T::Boolean).returns(::String) }
       def as_json_expr(ivar, nullable:)
         case self
-        when Integer, Float, String, Boolean, Uuid
+        when Integer, Float, String, Boolean, Uuid,
+             IntegerArray, StringArray, FloatArray, BooleanArray
           ivar
         when Decimal
           nullable ? "#{ivar}&.to_s(\"F\")" : "#{ivar}.to_s(\"F\")"
@@ -90,14 +111,18 @@ module HakumiORM
       sig { returns(::String) }
       def bind_class
         case self
-        when Integer   then "::HakumiORM::IntBind"
-        when Float     then "::HakumiORM::FloatBind"
-        when Decimal   then "::HakumiORM::DecimalBind"
-        when Timestamp then "::HakumiORM::TimeBind"
-        when Date      then "::HakumiORM::DateBind"
+        when Integer      then "::HakumiORM::IntBind"
+        when Float        then "::HakumiORM::FloatBind"
+        when Decimal      then "::HakumiORM::DecimalBind"
+        when Timestamp    then "::HakumiORM::TimeBind"
+        when Date         then "::HakumiORM::DateBind"
         when String, Uuid then "::HakumiORM::StrBind"
         when Boolean      then "::HakumiORM::BoolBind"
         when Json         then "::HakumiORM::JsonBind"
+        when IntegerArray then "::HakumiORM::IntArrayBind"
+        when StringArray  then "::HakumiORM::StrArrayBind"
+        when FloatArray   then "::HakumiORM::FloatArrayBind"
+        when BooleanArray then "::HakumiORM::BoolArrayBind"
         else T.absurd(self)
         end
       end

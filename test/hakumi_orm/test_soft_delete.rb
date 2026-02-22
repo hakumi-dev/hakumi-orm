@@ -97,8 +97,6 @@ class TestSoftDelete < HakumiORM::TestCase
     assert_includes @adapter.last_sql, ">"
   end
 
-  # --- delete_all on soft-delete tables ---
-
   test "delete_all on soft-delete table generates UPDATE SET deleted_at" do
     @adapter.stub_default([], affected: 3)
 

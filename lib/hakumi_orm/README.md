@@ -19,7 +19,7 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 
 | File | Module / Class | Description |
 |---|---|---|
-| "bind.rb" | "Bind" (abstract, sealed) | Base class for typed bind parameters. All subclasses co-located in this file for "sealed!": "IntBind", "StrBind", "FloatBind", "DecimalBind", "BoolBind", "TimeBind", "DateBind", "JsonBind", "NullBind". Each implements "pg_value" to serialize its value for the wire protocol. |
+| "bind.rb" | "Bind" (abstract, sealed) | Base class for typed bind parameters. All subclasses co-located in this file for "sealed!": "IntBind", "StrBind", "FloatBind", "DecimalBind", "BoolBind", "TimeBind", "DateBind", "JsonBind", "NullBind", "IntArrayBind", "StrArrayBind", "FloatArrayBind", "BoolArrayBind". Zero "T.untyped" -- custom types reuse existing Bind subclasses (e.g., Money -> "DecimalBind"). Array binds serialize to PG array literal format ("{1,2,3}") with proper quoting. |
 | "field_ref.rb" | "FieldRef" | Holds column metadata ("name", "table_name", "column_name", "qualified_name"). Provides "asc"/"desc" for ordering. |
 | "order_clause.rb" | "OrderClause" | Value object: "FieldRef" + ":asc" / ":desc" direction. |
 | "join_clause.rb" | "JoinClause" | Value object: "join_type" (":inner", ":left", ":right", ":cross") + "target_table" + "source_field" + "target_field". |
@@ -35,8 +35,12 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "field/time_field.rb" | "TimeField" | Time/timestamp field ("ComparableField"). |
 | "field/date_field.rb" | "DateField" | Date field ("ComparableField"). |
 | "field/json_field.rb" | "JsonField" | JSON/JSONB field (base "Field"). |
+| "field/int_array_field.rb" | "IntArrayField" | Integer array field (base "Field"). Supports "eq", "is_null", "is_not_null". |
+| "field/str_array_field.rb" | "StrArrayField" | String array field (base "Field"). |
+| "field/float_array_field.rb" | "FloatArrayField" | Float array field (base "Field"). |
+| "field/bool_array_field.rb" | "BoolArrayField" | Boolean array field (base "Field"). |
 | "expr.rb" | "Expr" (abstract, sealed) | Expression tree for WHERE clauses. All subclasses co-located in this file for "sealed!": "Predicate" (leaf node with field + operator + binds), "AndExpr", "OrExpr", "NotExpr", "RawExpr" (raw SQL fragment with "?" placeholders), "SubqueryExpr" (field + ":in"/":not_in" + "CompiledQuery"). Supports "and", "or", "not" composition. Operator aliases: "&" ("and"), "|" ("or"), "!" ("not"). |
-| "cast.rb" | "Cast" | Converts raw database strings to Ruby types: "to_integer", "to_float", "to_decimal", "to_boolean", "to_time", "to_date", "to_string", "to_json". |
+| "cast.rb" | "Cast" | Converts raw database strings to Ruby types: "to_integer", "to_float", "to_decimal", "to_boolean", "to_time", "to_date", "to_string", "to_json", "to_int_array", "to_str_array", "to_float_array", "to_bool_array". Array methods parse PG array literal format ("{1,2,NULL,3}") with proper handling of quoted strings and NULL elements. |
 | "compiled_query.rb" | "CompiledQuery" | Immutable container holding a SQL string and its associated "T::Array[Bind]". Provides "pg_params" to extract serialized values. |
 | "sql_compiler.rb" | "SqlCompiler" | Compiles "Expr" trees, ordering, joins, limit/offset, DISTINCT, GROUP BY, HAVING, LOCK, and aggregate functions into parameterized SQL. Generates "SELECT", "INSERT", "UPDATE", "DELETE", "EXISTS", "AGGREGATE" with sequential bind markers. All values go through bind parameters, never interpolated. |
 | "sql_compiler_expr.rb" | "SqlCompiler" (reopened) | Expression compilation methods extracted for ClassLength: "compile_expr", "compile_binary", "compile_predicate", "compile_simple_op", "compile_list_op", "compile_between", "compile_raw_expr", "compile_subquery_expr", "rebase_binds". |
@@ -74,8 +78,10 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | File | Module / Class | Description |
 |---|---|---|
 | "codegen.rb" | *(barrel)* | Requires all codegen modules. |
-| "codegen/hakumi_type.rb" | "Codegen::HakumiType" | "T::Enum" representing the internal type system: "Integer", "String", "Boolean", "Timestamp", "Date", "Float", "Decimal", "Json", "Uuid". Methods: "ruby_type", "ruby_type_string(nullable:)", "field_class", "comparable?", "text?", "bind_class". All branches use "T.absurd" for exhaustiveness. |
-| "codegen/type_map.rb" | "Codegen::TypeMap" | Resolves a database column type (e.g. ""varchar"", ""int4"") to a "HakumiType" using dialect-specific maps. Also generates cast expressions for code generation. |
+| "codegen/hakumi_type.rb" | "Codegen::HakumiType" | "T::Enum" representing the internal type system: "Integer", "String", "Boolean", "Timestamp", "Date", "Float", "Decimal", "Json", "Uuid", "IntegerArray", "StringArray", "FloatArray", "BooleanArray". Methods: "ruby_type", "ruby_type_string(nullable:)", "field_class", "comparable?", "text?", "array_type?", "bind_class". All branches use "T.absurd" for exhaustiveness. |
+| "codegen/type_map.rb" | "Codegen::TypeMap" | Resolves a database column type (e.g. ""varchar"", ""int4"", ""_int4"") to a "HakumiType" using dialect-specific maps. Lookup priority: "udt_name" first, then "data_type", then "String" fallback. Also generates cast expressions for code generation. |
+| "codegen/type_registry.rb" | "Codegen::TypeRegistry" | User-defined custom type registration. "register(name:, ruby_type:, cast_expression:, field_class:, bind_class:)" to define a type. "map_pg_type(udt_name, name)" to link PG types. "resolve_pg(udt_name)" to look up. "reset!" for test isolation. Raises "ArgumentError" on duplicate registration. |
+| "codegen/type_scaffold.rb" | "Codegen::TypeScaffold" | Generates boilerplate files for custom types: a Field subclass (using existing Bind subclasses, zero "T.untyped") and a TypeRegistry registration file. Does not overwrite existing files. Invoked via "rake hakumi:type[name]". |
 | "codegen/type_maps/postgresql.rb" | "Codegen::TypeMaps::Postgresql" | Maps PostgreSQL data types ("int4", "text", "bool", "timestamptz", ...) to "HakumiType". |
 | "codegen/type_maps/mysql.rb" | "Codegen::TypeMaps::Mysql" | Maps MySQL data types ("int", "varchar", "tinyint", "datetime", ...) to "HakumiType". |
 | "codegen/type_maps/sqlite.rb" | "Codegen::TypeMaps::Sqlite" | Maps SQLite data types ("INTEGER", "TEXT", "REAL", ...) to "HakumiType". |

@@ -49,6 +49,62 @@ module HakumiORM
       def to_json(raw)
         Json.parse(raw)
       end
+
+      sig { params(raw: String).returns(T::Array[T.nilable(Integer)]) }
+      def to_int_array(raw)
+        parse_pg_array(raw).map { |v| v&.to_i }
+      end
+
+      sig { params(raw: String).returns(T::Array[T.nilable(String)]) }
+      def to_str_array(raw)
+        parse_pg_array(raw)
+      end
+
+      sig { params(raw: String).returns(T::Array[T.nilable(Float)]) }
+      def to_float_array(raw)
+        parse_pg_array(raw).map { |v| v&.to_f }
+      end
+
+      sig { params(raw: String).returns(T::Array[T.nilable(T::Boolean)]) }
+      def to_bool_array(raw)
+        parse_pg_array(raw).map { |v| v.nil? ? nil : v == "t" }
+      end
+
+      private
+
+      sig { params(raw: String).returns(T::Array[T.nilable(String)]) }
+      def parse_pg_array(raw)
+        inner = raw[1...-1]
+        return [] if inner.nil? || inner.empty?
+
+        elements = T.let([], T::Array[T.nilable(String)])
+        current = +""
+        in_quotes = T.let(false, T::Boolean)
+        escaped = T.let(false, T::Boolean)
+
+        inner.each_char do |ch|
+          if escaped
+            current << ch
+            escaped = false
+          elsif ch == "\\"
+            escaped = true
+          elsif ch == '"'
+            in_quotes = !in_quotes
+          elsif ch == "," && !in_quotes
+            elements << resolve_element(current)
+            current = +""
+          else
+            current << ch
+          end
+        end
+        elements << resolve_element(current)
+        elements
+      end
+
+      sig { params(element: String).returns(T.nilable(String)) }
+      def resolve_element(element)
+        element == "NULL" ? nil : element
+      end
     end
   end
 end

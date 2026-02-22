@@ -162,4 +162,87 @@ module HakumiORM
       nil
     end
   end
+
+  class IntArrayBind < Bind
+    extend T::Sig
+
+    sig { returns(T::Array[T.nilable(Integer)]) }
+    attr_reader :value
+
+    sig { params(value: T::Array[T.nilable(Integer)]).void }
+    def initialize(value)
+      @value = T.let(value, T::Array[T.nilable(Integer)])
+    end
+
+    sig { override.returns(String) }
+    def pg_value
+      "{#{@value.map { |v| v.nil? ? "NULL" : v.to_s }.join(",")}}"
+    end
+  end
+
+  class StrArrayBind < Bind
+    extend T::Sig
+
+    sig { returns(T::Array[T.nilable(String)]) }
+    attr_reader :value
+
+    sig { params(value: T::Array[T.nilable(String)]).void }
+    def initialize(value)
+      @value = T.let(value, T::Array[T.nilable(String)])
+    end
+
+    sig { override.returns(String) }
+    def pg_value
+      inner = @value.map do |v|
+        if v.nil?
+          "NULL"
+        elsif v.include?(",") || v.include?('"') || v.include?("\\") || v.include?(" ")
+          "\"#{v.gsub("\\", "\\\\\\\\").gsub('"', '\\"')}\""
+        else
+          v
+        end
+      end
+      "{#{inner.join(",")}}"
+    end
+  end
+
+  class FloatArrayBind < Bind
+    extend T::Sig
+
+    sig { returns(T::Array[T.nilable(Float)]) }
+    attr_reader :value
+
+    sig { params(value: T::Array[T.nilable(Float)]).void }
+    def initialize(value)
+      @value = T.let(value, T::Array[T.nilable(Float)])
+    end
+
+    sig { override.returns(String) }
+    def pg_value
+      "{#{@value.map { |v| v.nil? ? "NULL" : v.to_s }.join(",")}}"
+    end
+  end
+
+  class BoolArrayBind < Bind
+    extend T::Sig
+
+    sig { returns(T::Array[T.nilable(T::Boolean)]) }
+    attr_reader :value
+
+    sig { params(value: T::Array[T.nilable(T::Boolean)]).void }
+    def initialize(value)
+      @value = T.let(value, T::Array[T.nilable(T::Boolean)])
+    end
+
+    sig { override.returns(String) }
+    def pg_value
+      inner = @value.map do |v|
+        if v.nil? then "NULL"
+        elsif v then "t"
+        else "f"
+        end
+      end
+      "{#{inner.join(",")}}"
+    end
+  end
 end

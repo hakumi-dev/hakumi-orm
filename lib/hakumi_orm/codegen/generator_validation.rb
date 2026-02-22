@@ -225,7 +225,9 @@ module HakumiORM
         when HakumiType::Boolean                then "T::Boolean"
         when HakumiType::String, HakumiType::Uuid,
              HakumiType::Decimal, HakumiType::Timestamp,
-             HakumiType::Date, HakumiType::Json then "String"
+             HakumiType::Date, HakumiType::Json,
+             HakumiType::IntegerArray, HakumiType::StringArray,
+             HakumiType::FloatArray, HakumiType::BooleanArray then "String"
         else T.absurd(ht)
         end
       end

@@ -231,6 +231,8 @@ Associations are generated automatically from foreign keys. "has_many" returns a
 | Transactions | "transaction { }" + nested | "transaction(requires_new: true)" + savepoints |
 | JSON/JSONB | Automatic hash/array | "HakumiORM::Json" opaque wrapper with typed extractors |
 | UUID | String column | "HakumiType::Uuid", "StrField", LIKE/ILIKE support |
+| Array columns | "serialize :tags, Array" | "IntArrayField", "StrArrayField", PG array literal format |
+| Custom types | "attribute :price, :money" | "TypeRegistry.register" with cast, field, and bind |
 | Rake task | "rails db:migrate" etc. | "rake hakumi:generate" |
 | Dirty tracking | Automatic (mutable) | "diff(other)" / "changed_from?(other)" (immutable snapshots) |
 | Timestamps | Automatic "created_at"/"updated_at" | Configurable via "created_at_column" / "updated_at_column" |
@@ -914,6 +916,107 @@ token.token_id           # => String ("550e8400-e29b-41d4-a716-446655440000")
 Token.where(TokenSchema::TOKEN_ID.eq("550e8400-..."))
 ```
 
+### Array Columns
+
+PostgreSQL array columns ("integer[]", "text[]", "float8[]", "bool[]") are automatically mapped:
+
+```ruby
+post = Post.find(1)
+post.tag_ids         # => T::Array[T.nilable(Integer)]
+
+Post.where(PostSchema::TAG_IDS.eq([1, 2, 3]))
+Post.where(PostSchema::TAG_IDS.is_null)
+```
+
+Array values are serialized as PG array literals ("{1,2,3}") and parsed back with proper handling of NULLs, quoted strings, and commas inside values. Supported array predicates: "eq", "neq", "is_null", "is_not_null".
+
+### Custom Types
+
+Scaffold a custom type with the rake task:
+
+```bash
+bundle exec rake hakumi:type[money]
+```
+
+This generates two files that you edit to fit your domain:
+
+- "money_field.rb" -- Field subclass with "to_bind" returning an existing Bind
+- "money_type.rb" -- TypeRegistry registration (ruby_type, cast, field_class)
+
+A custom type has three pieces, each handling one direction of the data flow:
+
+| Piece | Direction | When it runs | What it does |
+|---|---|---|---|
+| "Field.to_bind" | Ruby -> DB | Runtime (queries, inserts) | Converts your Ruby object to an existing Bind ("DecimalBind", "StrBind", etc.) |
+| "cast_expression" | DB -> Ruby | **Codegen time** (not runtime) | Produces a line of Ruby code that the generator writes into the hydrator file |
+| "TypeRegistry" | Wiring | Codegen time | Tells the generator which Field, Bind, and cast to use for a given column type |
+
+#### Step 1: Define the Ruby type
+
+```ruby
+Money = Struct.new(:cents) do
+  def to_d = BigDecimal(cents, 10) / 100
+  def self.from_decimal(raw) = new((BigDecimal(raw) * 100).to_i)
+end
+```
+
+#### Step 2: Create the Field (Ruby -> DB)
+
+The Field converts your Ruby type to a Bind that the DB understands. Zero "T.untyped" -- the custom type is a Ruby abstraction; the DB wire always carries a typed scalar:
+
+```ruby
+class MoneyField < ::HakumiORM::Field
+  extend T::Sig
+  ValueType = type_member { { fixed: Money } }
+
+  sig { override.params(value: Money).returns(::HakumiORM::Bind) }
+  def to_bind(value)
+    ::HakumiORM::DecimalBind.new(value.to_d)
+  end
+end
+```
+
+#### Step 3: Register for codegen (DB -> Ruby)
+
+"cast_expression" is a lambda that produces Ruby source code. It does not run at runtime -- it runs once during "rake hakumi:generate" and the string it returns is written directly into the generated file.
+
+```ruby
+HakumiORM::Codegen::TypeRegistry.register(
+  name: :money,
+  ruby_type: "Money",
+  cast_expression: lambda { |raw_expr, nullable|
+    nullable ? "((_hv = #{raw_expr}).nil? ? nil : Money.from_decimal(_hv))" : "Money.from_decimal(#{raw_expr})"
+  },
+  field_class: "::MoneyField",
+  bind_class: "::HakumiORM::DecimalBind"
+)
+
+HakumiORM::Codegen::TypeRegistry.map_pg_type("money_col", :money)
+```
+
+When the generator finds a column "price" of type "money_col", it calls your lambda with the raw expression (e.g. "row[3]") and writes the result into the generated record:
+
+```ruby
+# generated record.rb (non-nullable column)
+obj.instance_variable_set(:@price, Money.from_decimal(row[3]))
+
+# generated record.rb (nullable column)
+obj.instance_variable_set(:@price, ((_hv = row[3]).nil? ? nil : Money.from_decimal(_hv)))
+```
+
+#### Full round-trip
+
+```ruby
+product = Product.find(1)
+product.price  # => Money -- hydrated by the generated code above
+
+Product.where(ProductSchema::PRICE.eq(Money.new(9995)))
+# MoneyField#to_bind returns DecimalBind(99.95)
+# SQL: SELECT ... WHERE "products"."price" = $1   binds: ["99.95"]
+```
+
+Network types ("inet", "cidr", "macaddr") and "hstore" are mapped to "String" by default. Override with "TypeRegistry" for richer types.
+
 ### Rake Task
 
 Add to your "Rakefile":
@@ -1390,14 +1493,16 @@ lib/hakumi_orm/
 │   ├── comparable_field.rb#  gt/gte/lt/lte/between
 │   ├── text_field.rb     #   like/ilike
 │   ├── int_field.rb, float_field.rb, decimal_field.rb, ...
-│   └── json_field.rb     #   JSON/JSONB field
+│   ├── json_field.rb     #   JSON/JSONB field
+│   └── *_array_field.rb  #   Array fields (int, str, float, bool)
 ├── codegen/              # Code generation from live schema
 │   ├── generator.rb      #   ERB template engine
 │   ├── schema_reader.rb  #   PostgreSQL schema reader
 │   ├── mysql_schema_reader.rb  # MySQL schema reader
 │   ├── sqlite_schema_reader.rb # SQLite schema reader
+│   ├── type_registry.rb  #   Custom type registration
 │   └── type_maps/        #   DB type → HakumiType per dialect
-├── bind.rb               # Sealed bind hierarchy (9 subclasses)
+├── bind.rb               # Sealed bind hierarchy (13 subclasses, includes array binds)
 ├── expr.rb               # Sealed expression tree (6 subclasses)
 ├── sql_compiler.rb       # Expr → parameterized SQL
 ├── relation.rb           # Fluent query builder

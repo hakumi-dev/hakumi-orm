@@ -418,8 +418,6 @@ class UserRelation < HakumiORM::Relation
   def older_than(min_age) = where(UserSchema::AGE.gte(min_age))
 end
 
-# --- Soft-delete fixture: articles table with deleted_at ---
-
 module ArticleSchema
   ID = HakumiORM::IntField.new(:id, "articles", "id", '"articles"."id"').freeze
   TITLE = HakumiORM::StrField.new(:title, "articles", "title", '"articles"."title"').freeze
