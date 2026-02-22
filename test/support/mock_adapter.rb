@@ -43,13 +43,19 @@ module HakumiORM
       end
 
       def exec_params(sql, params)
+        start = log_query_start
         @executed_queries << { sql: sql, params: params }
-        find_result(sql)
+        r = find_result(sql)
+        log_query_done(sql, params, start)
+        r
       end
 
       def exec(sql)
+        start = log_query_start
         @executed_queries << { sql: sql, params: [] }
-        find_result(sql)
+        r = find_result(sql)
+        log_query_done(sql, [], start)
+        r
       end
 
       def prepare(name, sql)
@@ -59,8 +65,11 @@ module HakumiORM
 
       def exec_prepared(name, params)
         sql = (@prepared || {})[name] || ""
+        start = log_query_start
         @executed_queries << { sql: sql, params: params }
-        find_result(sql)
+        r = find_result(sql)
+        log_query_done(sql, params, start)
+        r
       end
 
       def close = nil

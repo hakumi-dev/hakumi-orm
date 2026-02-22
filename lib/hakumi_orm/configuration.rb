@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require "logger"
+
 module HakumiORM
   class Configuration
     extend T::Sig
@@ -43,6 +45,9 @@ module HakumiORM
     sig { returns(Float) }
     attr_accessor :pool_timeout
 
+    sig { returns(T.nilable(::Logger)) }
+    attr_accessor :logger
+
     sig { void }
     def initialize
       @adapter = T.let(nil, T.nilable(Adapter::Base))
@@ -58,6 +63,7 @@ module HakumiORM
       @module_name = T.let(nil, T.nilable(String))
       @pool_size = T.let(5, Integer)
       @pool_timeout = T.let(5.0, Float)
+      @logger = T.let(nil, T.nilable(::Logger))
     end
 
     sig { params(adapter: T.nilable(Adapter::Base)).void }

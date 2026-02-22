@@ -26,19 +26,25 @@ module HakumiORM
 
       sig { override.params(sql: String, params: T::Array[PGValue]).returns(MysqlResult) }
       def exec_params(sql, params)
+        start = log_query_start
         stmt = @client.prepare(sql)
         result = T.unsafe(stmt).execute(*params, as: :array, cast: false)
         rows = result_to_rows(result)
-        MysqlResult.new(rows, @client.affected_rows)
+        r = MysqlResult.new(rows, @client.affected_rows)
+        log_query_done(sql, params, start)
+        r
       ensure
         stmt&.close
       end
 
       sig { override.params(sql: String).returns(MysqlResult) }
       def exec(sql)
+        start = log_query_start
         result = @client.query(sql, as: :array, cast: false)
         rows = result_to_rows(result)
-        MysqlResult.new(rows, @client.affected_rows)
+        r = MysqlResult.new(rows, @client.affected_rows)
+        log_query_done(sql, [], start)
+        r
       end
 
       sig { override.params(name: String, sql: String).void }
@@ -50,12 +56,15 @@ module HakumiORM
 
       sig { override.params(name: String, params: T::Array[PGValue]).returns(MysqlResult) }
       def exec_prepared(name, params)
+        start = log_query_start
         stmt = @prepared[name]
         raise HakumiORM::Error, "Statement #{name.inspect} not prepared" unless stmt
 
         result = T.unsafe(stmt).execute(*params, as: :array, cast: false)
         rows = result_to_rows(result)
-        MysqlResult.new(rows, @client.affected_rows)
+        r = MysqlResult.new(rows, @client.affected_rows)
+        log_query_done(name, params, start)
+        r
       end
 
       sig { override.void }

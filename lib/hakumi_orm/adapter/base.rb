@@ -43,6 +43,24 @@ module HakumiORM
 
       private
 
+      sig { returns(T.nilable(Float)) }
+      def log_query_start
+        return nil unless HakumiORM.config.logger
+
+        T.cast(Process.clock_gettime(Process::CLOCK_MONOTONIC), Float)
+      end
+
+      sig { params(sql: String, params: T::Array[PGValue], start: T.nilable(Float)).void }
+      def log_query_done(sql, params, start)
+        return unless start
+
+        logger = HakumiORM.config.logger
+        return unless logger
+
+        elapsed = ((T.cast(Process.clock_gettime(Process::CLOCK_MONOTONIC), Float) - start) * 1000).round(2)
+        logger.debug { params.empty? ? "[HakumiORM] (#{elapsed}ms) #{sql}" : "[HakumiORM] (#{elapsed}ms) #{sql} #{params.inspect}" }
+      end
+
       sig { params(blk: T.proc.params(adapter: Base).void).void }
       def run_top_level_transaction(&blk)
         exec("BEGIN")

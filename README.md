@@ -314,12 +314,31 @@ end
 | `username` | `nil` | Database user. `nil` uses the current system user. |
 | `password` | `nil` | Database password. `nil` for passwordless / peer auth. |
 | `adapter` | auto | Set directly to skip lazy building. Takes precedence over connection params. |
+| `logger` | `nil` | `Logger` instance for SQL query logging. Logs SQL, binds, and execution time at `DEBUG` level. `nil` = no logging, zero overhead. |
 | `output_dir` | `"app/db/generated"` | Directory for generated schemas, records, and relations (always overwritten). |
 | `models_dir` | `nil` | Directory for model stubs (`User < UserRecord`). Generated **once**, never overwritten. `nil` = skip. |
 | `contracts_dir` | `nil` | Directory for contract stubs (`UserRecord::Contract`). Generated **once**, never overwritten. `nil` = skip. |
 | `module_name` | `nil` | Wraps all generated code in a namespace (`App::User`, `App::UserRecord`, etc.). |
 
 All generated methods (`find`, `where`, `save!`, associations, etc.) default to `HakumiORM.adapter`, so you never pass the adapter manually.
+
+### Query Logging
+
+Enable SQL logging to see every query, its bind parameters, and execution time:
+
+```ruby
+HakumiORM.configure do |config|
+  config.logger = Logger.new($stdout)
+end
+```
+
+Output:
+
+```
+D, [2026-02-22] DEBUG -- : [HakumiORM] (0.42ms) SELECT "users".* FROM "users" WHERE "users"."active" = $1 ["t"]
+```
+
+Set to `nil` (default) to disable logging entirely with zero overhead. Uses `Logger#debug` level, so in production you can set `logger.level = Logger::INFO` to silence query logs without removing the logger.
 
 ### Code Generation
 
