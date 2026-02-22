@@ -189,7 +189,7 @@ post = Post.find(1)
 post.user                # => T.nilable(UserRecord)
 ```
 
-Associations are generated automatically from foreign keys. `has_many` returns a typed `Relation`, `belongs_to` returns the related record.
+Associations are generated automatically from foreign keys. `has_many` returns a typed `Relation`, `has_one` returns `T.nilable(Record)` (detected via UNIQUE constraints), `belongs_to` returns the related record. `has_many :through` is generated for FK chains and join tables using subqueries.
 
 ### Full comparison table
 
@@ -209,8 +209,12 @@ Associations are generated automatically from foreign keys. `has_many` returns a
 | SQL generation | Arel (dynamic AST) | `SqlCompiler` with sequential bind markers |
 | Hydration | Reflection + type coercion | Generated positional `fetch_value` |
 | New vs persisted | Same class, `id` is nilable | Type-state: `Record::New` -> `Record::Validated` -> `Record` |
-| Associations | Declared via DSL macros | Generated from foreign keys |
-| Eager loading | `includes` / `preload` / `eager_load` | `.preload(:assoc)` on Relation (batch query) |
+| `has_many` | `has_many :posts` (DSL) | Generated from FK (returns typed Relation) |
+| `has_one` | `has_one :profile` (DSL) | Generated when FK has UNIQUE constraint |
+| `has_many :through` | `has_many :tags, through: :taggings` | Generated from FK chains and join tables (subquery) |
+| `belongs_to` | `belongs_to :user` (DSL) | Generated from FK |
+| Eager loading | `includes` / `preload` / `eager_load` | `.preload(:assoc)` with nested: `.preload(posts: :comments)` |
+| Dependent destroy | `dependent: :destroy` | `delete!(dependent: :destroy)` or `:delete_all` |
 | Single-record update | `user.update!(name: "Bob")` | `user.update!(name: "Bob")` -- typed kwargs, validated |
 | Single-record delete | `user.destroy!` | `user.delete!` |
 | Callbacks | Before/after hooks | Contract hooks: `on_all`, `on_create`, `on_update`, `on_persist` |
@@ -658,6 +662,15 @@ alice.posts
   .to_a
 ```
 
+#### `has_one` (one-to-one)
+
+Generated when the FK column on the child table has a UNIQUE constraint. Returns `T.nilable(Record)`.
+
+```ruby
+alice = User.find(1)
+alice.profile                # => T.nilable(ProfileRecord) (executes SELECT ... LIMIT 1)
+```
+
 #### `belongs_to` (many-to-one)
 
 Returns the related record by executing a `find` on the foreign key value.
@@ -667,16 +680,22 @@ post = Post.find(1)
 post.user                    # => T.nilable(UserRecord) (executes SELECT)
 ```
 
-#### Preloading (eager loading)
+#### `has_many :through` (transitive associations)
 
-By default, associations are lazy-loaded (N+1):
+Generated automatically for FK chains and join tables. Uses `SubqueryExpr` internally.
 
 ```ruby
-users = User.all.to_a           # 1 query
-users.each do |u|
-  puts u.posts.count             # 1 query per user (N+1)
-end
+# Join table: users_roles (user_id, role_id) -> User has_many :roles through :users_roles
+alice = User.find(1)
+alice.roles                  # => RoleRelation (subquery: WHERE id IN (SELECT role_id FROM users_roles WHERE user_id = ?))
+alice.roles.to_a             # => T::Array[RoleRecord]
+
+# Chain pattern: users -> posts -> comments -> User has_many :comments through :posts
+alice.comments               # => CommentRelation (subquery)
+alice.comments.where(CommentSchema::APPROVED.eq(true)).to_a
 ```
+
+#### Preloading (eager loading)
 
 Use `preload` to batch-load associations in a single extra query:
 
@@ -686,19 +705,43 @@ users = User.all.preload(:posts).to_a
 
 users.each do |u|
   puts u.posts.count             # no query -- data is already loaded
-  puts u.posts.to_a.size         # no query
 end
 ```
 
-`preload` works for both `has_many` and `belongs_to`:
+Nested preloads load associations recursively:
 
 ```ruby
-# Preload the author for each post (2 queries)
-posts = Post.all.preload(:user).to_a
-posts.each { |p| puts p.user&.name }   # no N+1
+# 3 queries: users, posts, comments
+users = User.all.preload(posts: :comments).to_a
+
+users.each do |u|
+  u.posts.to_a.each do |p|
+    p.comments.to_a              # no query -- already loaded
+  end
+end
+
+# Multiple nested
+User.all.preload(:profile, posts: [:comments, :tags]).to_a
 ```
 
-Preloaded associations still return a `Relation`, so `.to_a`, `.first`, and `.count` all work without hitting the database. If you chain `.where(...)` on a preloaded relation, it falls back to a real query.
+`preload` works for `has_many`, `has_one`, and `belongs_to`.
+
+#### Dependent delete/destroy
+
+When deleting a parent record, you can cascade to associated records:
+
+```ruby
+# :delete_all -- batch SQL DELETE on children (no callbacks)
+user.delete!(dependent: :delete_all)
+
+# :destroy -- loads children and calls delete! on each (cascades recursively)
+user.delete!(dependent: :destroy)
+
+# :none (default) -- no cascade, relies on DB constraints
+user.delete!
+```
+
+The `dependent` parameter is only generated when the record has `has_many` or `has_one` associations.
 
 ### Joins
 

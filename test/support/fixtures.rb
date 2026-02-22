@@ -325,4 +325,7 @@ class UserRelation < HakumiORM::Relation
   def hydrate(result)
     UserRecord.from_result(result)
   end
+
+  sig { override.params(records: T::Array[UserRecord], nodes: T::Array[HakumiORM::PreloadNode], adapter: HakumiORM::Adapter::Base).void }
+  def run_preloads(records, nodes, adapter); end
 end

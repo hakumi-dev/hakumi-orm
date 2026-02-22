@@ -408,4 +408,48 @@ class TestRelation < HakumiORM::TestCase
     assert_instance_of HakumiORM::CompiledQuery, compiled
     assert_includes compiled.sql, "$1"
   end
+
+  test "PreloadNode.from_specs converts flat symbols" do
+    nodes = HakumiORM::PreloadNode.from_specs(%i[posts comments])
+
+    assert_equal 2, nodes.length
+    assert_equal :posts, nodes[0].name
+    assert_empty nodes[0].children
+    assert_equal :comments, nodes[1].name
+  end
+
+  test "PreloadNode.from_specs converts hash with symbol value" do
+    nodes = HakumiORM::PreloadNode.from_specs([{ posts: :comments }])
+
+    assert_equal 1, nodes.length
+    assert_equal :posts, nodes[0].name
+    assert_equal 1, nodes[0].children.length
+    assert_equal :comments, nodes[0].children[0].name
+  end
+
+  test "PreloadNode.from_specs converts hash with array value" do
+    nodes = HakumiORM::PreloadNode.from_specs([{ posts: %i[comments tags] }])
+
+    assert_equal 1, nodes.length
+    assert_equal :posts, nodes[0].name
+    assert_equal 2, nodes[0].children.length
+    assert_equal :comments, nodes[0].children[0].name
+    assert_equal :tags, nodes[0].children[1].name
+  end
+
+  test "PreloadNode.from_specs handles mixed specs" do
+    nodes = HakumiORM::PreloadNode.from_specs([:author, { posts: :comments }])
+
+    assert_equal 2, nodes.length
+    assert_equal :author, nodes[0].name
+    assert_empty nodes[0].children
+    assert_equal :posts, nodes[1].name
+    assert_equal 1, nodes[1].children.length
+  end
+
+  test "preload accepts nested hash syntax" do
+    rel = UserRecord.all.preload(posts: :comments)
+
+    assert_instance_of UserRelation, rel
+  end
 end

@@ -15,6 +15,7 @@ require_relative "hakumi_orm/dialect/postgresql"
 require_relative "hakumi_orm/adapter"
 require_relative "hakumi_orm/adapter/postgresql"
 require_relative "hakumi_orm/sql_compiler"
+require_relative "hakumi_orm/preload_node"
 require_relative "hakumi_orm/relation"
 require_relative "hakumi_orm/configuration"
 

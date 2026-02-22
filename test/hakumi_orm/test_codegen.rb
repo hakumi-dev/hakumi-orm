@@ -479,4 +479,254 @@ class TestCodegen < HakumiORM::TestCase
       assert_includes code, "class App::User < App::UserRecord"
     end
   end
+
+  test "has_many generates association method and preload" do
+    tables = build_users_and_posts_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      user_code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes user_code, "def posts"
+      assert_includes user_code, "PostRelation"
+      assert_includes user_code, "def self.preload_posts"
+    end
+  end
+
+  test "has_one generates singular accessor when FK has unique constraint" do
+    tables = build_users_and_profile_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      user_code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes user_code, "def profile"
+      assert_includes user_code, "T.nilable(ProfileRecord)"
+      assert_includes user_code, "def self.preload_profile"
+      refute_includes user_code, "def profiles"
+    end
+  end
+
+  test "has_one preload indexes by FK and stores single record" do
+    tables = build_users_and_profile_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      user_code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes user_code, "related ? [related] : []"
+    end
+  end
+
+  test "belongs_to generates accessor and preload" do
+    tables = build_users_and_posts_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      post_code = File.read(File.join(dir, "post/record.rb"))
+
+      assert_includes post_code, "def user"
+      assert_includes post_code, "T.nilable(UserRecord)"
+      assert_includes post_code, "def self.preload_user"
+    end
+  end
+
+  test "relation includes has_one in preloadable assocs" do
+    tables = build_users_and_profile_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      rel_code = File.read(File.join(dir, "user/relation.rb"))
+
+      assert_includes rel_code, "when :profile"
+      assert_includes rel_code, "preload_profile"
+    end
+  end
+
+  test "relation run_preloads accepts PreloadNode and dispatches nested" do
+    tables = build_users_and_posts_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      rel_code = File.read(File.join(dir, "user/relation.rb"))
+
+      assert_includes rel_code, "PreloadNode"
+      assert_includes rel_code, "node.name"
+      assert_includes rel_code, "node.children"
+      assert_includes rel_code, "PostRelation.new.run_preloads"
+    end
+  end
+
+  test "has_many through join table generates subquery method" do
+    tables = build_users_roles_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      user_code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes user_code, "def roles"
+      assert_includes user_code, "SubqueryExpr"
+      assert_includes user_code, "UsersRoleRelation"
+      assert_includes user_code, "UsersRoleSchema::USER_ID"
+      assert_includes user_code, "UsersRoleSchema::ROLE_ID"
+      assert_includes user_code, "RoleSchema::ID"
+      assert_includes user_code, "returns(RoleRelation)"
+    end
+  end
+
+  test "delete! with dependent generates delete_all and destroy branches" do
+    tables = build_users_and_posts_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      user_code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes user_code, "SQL_DELETE_POSTS"
+      assert_includes user_code, "dependent: :none"
+      assert_includes user_code, "when :delete_all"
+      assert_includes user_code, "when :destroy"
+      assert_includes user_code, "posts.to_a(adapter: adapter).each"
+    end
+  end
+
+  test "delete! without associations has no dependent parameter" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      user_code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes user_code, "def delete!(adapter:"
+      refute_includes user_code, "dependent:"
+    end
+  end
+
+  test "delete! with has_one generates destroy with safe navigation" do
+    tables = build_users_and_profile_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      user_code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes user_code, "SQL_DELETE_PROFILE"
+      assert_includes user_code, "profile(adapter: adapter)&.delete!"
+    end
+  end
+
+  test "has_many through chain generates subquery method" do
+    tables = build_users_posts_comments_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      user_code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes user_code, "def comments"
+      assert_includes user_code, "SubqueryExpr"
+      assert_includes user_code, "PostRelation"
+      assert_includes user_code, "PostSchema::USER_ID"
+      assert_includes user_code, "PostSchema::ID"
+      assert_includes user_code, "CommentSchema::POST_ID"
+    end
+  end
+
+  test "has_many through generates both directions for join table" do
+    tables = build_users_roles_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      role_code = File.read(File.join(dir, "role/record.rb"))
+
+      assert_includes role_code, "def users"
+      assert_includes role_code, "SubqueryExpr"
+      assert_includes role_code, "UsersRoleSchema::ROLE_ID"
+      assert_includes role_code, "UsersRoleSchema::USER_ID"
+      assert_includes role_code, "UserSchema::ID"
+    end
+  end
+
+  private
+
+  def col(name, type: "integer", udt: "int4", nullable: false, default: nil, max_length: nil)
+    HakumiORM::Codegen::ColumnInfo.new(
+      name: name, data_type: type, udt_name: udt,
+      nullable: nullable, default: default, max_length: max_length
+    )
+  end
+
+  def pk_col(table_name)
+    col("id", default: "nextval('#{table_name}_id_seq'::regclass)")
+  end
+
+  def str_col(name)
+    col(name, type: "character varying", udt: "varchar", max_length: 255)
+  end
+
+  def fk_col(name)
+    col(name)
+  end
+
+  def fk(column_name, foreign_table, foreign_column = "id")
+    HakumiORM::Codegen::ForeignKeyInfo.new(
+      column_name: column_name, foreign_table: foreign_table, foreign_column: foreign_column
+    )
+  end
+
+  def make_table(name, columns:, pk: "id", fks: [], unique: [])
+    table = HakumiORM::Codegen::TableInfo.new(name)
+    columns.each { |c| table.columns << c }
+    table.primary_key = pk
+    fks.each { |f| table.foreign_keys << f }
+    unique.each { |u| table.unique_columns << u }
+    table
+  end
+
+  def build_users_and_posts_tables
+    users = make_table("users", columns: [pk_col("users"), str_col("name")])
+    posts = make_table("posts",
+                       columns: [pk_col("posts"), fk_col("user_id"), str_col("title")],
+                       fks: [fk("user_id", "users")])
+    { "users" => users, "posts" => posts }
+  end
+
+  def build_users_and_profile_tables
+    users = make_table("users", columns: [pk_col("users"), str_col("name")])
+    profiles = make_table("profiles",
+                          columns: [pk_col("profiles"), fk_col("user_id"),
+                                    col("bio", type: "text", udt: "text", nullable: true)],
+                          fks: [fk("user_id", "users")],
+                          unique: ["user_id"])
+    { "users" => users, "profiles" => profiles }
+  end
+
+  def build_users_roles_tables
+    users = make_table("users", columns: [pk_col("users"), str_col("name")])
+    roles = make_table("roles", columns: [pk_col("roles"), str_col("name")])
+    users_roles = make_table("users_roles",
+                             columns: [pk_col("users_roles"), fk_col("user_id"), fk_col("role_id")],
+                             fks: [fk("user_id", "users"), fk("role_id", "roles")])
+    { "users" => users, "roles" => roles, "users_roles" => users_roles }
+  end
+
+  def build_users_posts_comments_tables
+    users = make_table("users", columns: [pk_col("users"), str_col("name")])
+    posts = make_table("posts",
+                       columns: [pk_col("posts"), fk_col("user_id"), str_col("title")],
+                       fks: [fk("user_id", "users")])
+    comments = make_table("comments",
+                          columns: [pk_col("comments"), fk_col("post_id"),
+                                    col("body", type: "text", udt: "text")],
+                          fks: [fk("post_id", "posts")])
+    { "users" => users, "posts" => posts, "comments" => comments }
+  end
 end

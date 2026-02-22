@@ -48,6 +48,8 @@ module HakumiORM
         FileUtils.mkdir_p(@output_dir)
 
         has_many_map = compute_has_many
+        has_one_map = compute_has_one
+        through_map = compute_has_many_through
 
         @tables.each_value do |table|
           table_dir = File.join(@output_dir, singularize(table.name))
@@ -55,12 +57,12 @@ module HakumiORM
 
           File.write(File.join(table_dir, "checkable.rb"), build_checkable(table))
           File.write(File.join(table_dir, "schema.rb"), build_schema(table))
-          File.write(File.join(table_dir, "record.rb"), build_record(table, has_many_map))
+          File.write(File.join(table_dir, "record.rb"), build_record(table, has_many_map, has_one_map, through_map))
           File.write(File.join(table_dir, "new_record.rb"), build_new_record(table))
           File.write(File.join(table_dir, "validated_record.rb"), build_validated_record(table))
           File.write(File.join(table_dir, "base_contract.rb"), build_base_contract(table))
           File.write(File.join(table_dir, "variant_base.rb"), build_variant_base(table))
-          File.write(File.join(table_dir, "relation.rb"), build_relation(table, has_many_map))
+          File.write(File.join(table_dir, "relation.rb"), build_relation(table, has_many_map, has_one_map))
         end
 
         File.write(File.join(@output_dir, "manifest.rb"), build_manifest)
@@ -92,6 +94,22 @@ module HakumiORM
         result = T.let({}, T::Hash[String, T::Array[T::Hash[Symbol, String]]])
         @tables.each_value do |table|
           table.foreign_keys.each do |fk|
+            next if table.unique_columns.include?(fk.column_name)
+
+            list = result[fk.foreign_table] ||= []
+            list << { source_table: table.name, fk_column: fk.column_name }
+          end
+        end
+        result
+      end
+
+      sig { returns(T::Hash[String, T::Array[T::Hash[Symbol, String]]]) }
+      def compute_has_one
+        result = T.let({}, T::Hash[String, T::Array[T::Hash[Symbol, String]]])
+        @tables.each_value do |table|
+          table.foreign_keys.each do |fk|
+            next unless table.unique_columns.include?(fk.column_name)
+
             list = result[fk.foreign_table] ||= []
             list << { source_table: table.name, fk_column: fk.column_name }
           end
@@ -122,8 +140,15 @@ module HakumiORM
                fields: fields)
       end
 
-      sig { params(table: TableInfo, has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]).returns(String) }
-      def build_record(table, has_many_map)
+      sig do
+        params(
+          table: TableInfo,
+          has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]],
+          has_one_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]],
+          through_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]
+        ).returns(String)
+      end
+      def build_record(table, has_many_map, has_one_map, through_map)
         cls = classify(table.name)
         record_cls = "#{cls}Record"
         ins_cols = insertable_columns(table)
@@ -143,6 +168,8 @@ module HakumiORM
                last_cast_index: table.columns.length - 1,
                qualified_relation: qualify("#{cls}Relation"),
                has_many: build_has_many_assocs(table, has_many_map),
+               has_one: build_has_one_assocs(table, has_one_map),
+               has_many_through: build_has_many_through_assocs(table, through_map),
                belongs_to: build_belongs_to_assocs(table),
                insert_all_prefix: "INSERT INTO #{@dialect.quote_id(table.name)} (#{col_list}) VALUES ",
                insert_all_columns: ins_cols.map { |c| { name: c.name } },
@@ -152,49 +179,6 @@ module HakumiORM
                **build_delete_locals(table),
                **build_update_locals(table, ins_cols),
                **build_build_locals(ins_cols, ins_cols.reject(&:nullable), ins_cols.select(&:nullable), record_cls))
-      end
-
-      sig { params(table: TableInfo, has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]).returns(T::Array[T::Hash[Symbol, String]]) }
-      def build_has_many_assocs(table, has_many_map)
-        pk_col = table.columns.find { |c| c.name == (table.primary_key || "id") }
-        pk_type = pk_col ? hakumi_type_for(pk_col).ruby_type_string(nullable: false) : "Integer"
-
-        (has_many_map[table.name] || []).map do |info|
-          target_cls = classify(info.fetch(:source_table))
-          {
-            method_name: info.fetch(:source_table),
-            relation_class: qualify("#{target_cls}Relation"),
-            record_class: qualify("#{target_cls}Record"),
-            schema_module: qualify("#{target_cls}Schema"),
-            fk_const: info.fetch(:fk_column).upcase,
-            fk_attr: info.fetch(:fk_column),
-            pk_attr: table.primary_key || "id",
-            pk_ruby_type: pk_type
-          }
-        end
-      end
-
-      sig { params(table: TableInfo).returns(T::Array[BelongsToEntry]) }
-      def build_belongs_to_assocs(table)
-        table.foreign_keys.map do |fk|
-          fk_col = table.columns.find { |c| c.name == fk.column_name }
-          target_cls = classify(fk.foreign_table)
-          target_table = @tables[fk.foreign_table]
-          target_pk = target_table&.primary_key || "id"
-          target_pk_col = target_table&.columns&.find { |c| c.name == target_pk }
-          target_pk_type = target_pk_col ? hakumi_type_for(target_pk_col).ruby_type_string(nullable: false) : "Integer"
-          {
-            method_name: singularize(fk.foreign_table),
-            record_class: qualify("#{target_cls}Record"),
-            target_relation: qualify("#{target_cls}Relation"),
-            target_schema: qualify("#{target_cls}Schema"),
-            target_pk_const: target_pk.upcase,
-            target_pk_attr: target_pk,
-            target_pk_type: target_pk_type,
-            fk_attr: fk.column_name,
-            nullable: fk_col&.nullable || false
-          }
-        end
       end
 
       sig do
@@ -266,13 +250,21 @@ module HakumiORM
                            optional_ins.map { |c| "#{c.name}: nil" }).join(", "))
       end
 
-      sig { params(table: TableInfo, has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]).returns(String) }
-      def build_relation(table, has_many_map)
+      sig do
+        params(
+          table: TableInfo,
+          has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]],
+          has_one_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]
+        ).returns(String)
+      end
+      def build_relation(table, has_many_map, has_one_map)
         cls = classify(table.name)
         hm = build_has_many_assocs(table, has_many_map)
+        ho = build_has_one_assocs(table, has_one_map)
         bt = build_belongs_to_assocs(table)
-        preloadable = hm.map { |a| { method_name: a[:method_name] } } +
-                      bt.map { |a| { method_name: a[:method_name] } }
+        preloadable = hm.map { |a| { method_name: a[:method_name], relation_class: a[:relation_class] } } +
+                      ho.map { |a| { method_name: a[:method_name], relation_class: a[:relation_class] } } +
+                      bt.map { |a| { method_name: a[:method_name], relation_class: a[:target_relation] } }
 
         count_sql = "SELECT COUNT(*) FROM #{@dialect.quote_id(table.name)}"
 

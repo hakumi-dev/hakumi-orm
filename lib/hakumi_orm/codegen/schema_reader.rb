@@ -30,6 +30,9 @@ module HakumiORM
       sig { returns(T::Array[ForeignKeyInfo]) }
       attr_reader :foreign_keys
 
+      sig { returns(T::Array[String]) }
+      attr_reader :unique_columns
+
       sig { returns(T.nilable(String)) }
       attr_accessor :primary_key
 
@@ -38,6 +41,7 @@ module HakumiORM
         @name = T.let(name, String)
         @columns = T.let([], T::Array[ColumnInfo])
         @foreign_keys = T.let([], T::Array[ForeignKeyInfo])
+        @unique_columns = T.let([], T::Array[String])
         @primary_key = T.let(nil, T.nilable(String))
       end
     end
@@ -69,6 +73,15 @@ module HakumiORM
         WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = $1
       SQL
 
+      PG_UNIQUE_COLUMNS_SQL = <<~SQL
+        SELECT tc.table_name, kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+         AND tc.table_schema = kcu.table_schema
+        WHERE tc.constraint_type = 'UNIQUE' AND tc.table_schema = $1
+      SQL
+
       PG_FOREIGN_KEYS_SQL = <<~SQL
         SELECT tc.table_name, kcu.column_name,
                ccu.table_name AS foreign_table_name,
@@ -95,6 +108,7 @@ module HakumiORM
         read_table_names(schema, tables)
         read_columns(schema, tables)
         read_primary_keys(schema, tables)
+        read_unique_columns(schema, tables)
         read_foreign_keys(schema, tables)
 
         tables
@@ -143,6 +157,18 @@ module HakumiORM
         while i < result.row_count
           tbl = tables[result.fetch_value(i, 0)]
           tbl.primary_key = result.fetch_value(i, 1) if tbl
+          i += 1
+        end
+        result.close
+      end
+
+      sig { params(schema: String, tables: T::Hash[String, TableInfo]).void }
+      def read_unique_columns(schema, tables)
+        result = @adapter.exec_params(PG_UNIQUE_COLUMNS_SQL, [schema])
+        i = T.let(0, Integer)
+        while i < result.row_count
+          tbl = tables[result.fetch_value(i, 0)]
+          tbl.unique_columns << result.fetch_value(i, 1) if tbl
           i += 1
         end
         result.close

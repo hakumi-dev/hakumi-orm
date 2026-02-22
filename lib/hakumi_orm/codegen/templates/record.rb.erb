@@ -20,6 +20,11 @@ module <%= module_name %>
 <%= ind %>  attr_accessor :_preloaded_<%= assoc[:method_name] %>
 
 <%- end -%>
+<%- has_one.each do |assoc| -%>
+<%= ind %>  sig { returns(T.nilable(T::Array[<%= assoc[:record_class] %>])) }
+<%= ind %>  attr_accessor :_preloaded_<%= assoc[:method_name] %>
+
+<%- end -%>
 <%- belongs_to.each do |assoc| -%>
 <%= ind %>  sig { returns(T.nilable(T::Array[<%= assoc[:record_class] %>])) }
 <%= ind %>  attr_accessor :_preloaded_<%= assoc[:method_name] %>
@@ -31,6 +36,9 @@ module <%= module_name %>
 <%= ind %>    @<%= col[:name] %> = T.let(<%= col[:name] %>, <%= col[:ruby_type] %>)
 <%- end -%>
 <%- has_many.each do |assoc| -%>
+<%= ind %>    @_preloaded_<%= assoc[:method_name] %> = T.let(nil, T.nilable(T::Array[<%= assoc[:record_class] %>]))
+<%- end -%>
+<%- has_one.each do |assoc| -%>
 <%= ind %>    @_preloaded_<%= assoc[:method_name] %> = T.let(nil, T.nilable(T::Array[<%= assoc[:record_class] %>]))
 <%- end -%>
 <%- belongs_to.each do |assoc| -%>
@@ -105,7 +113,32 @@ module <%= module_name %>
 <%= ind %>  end
 <%- if delete_sql -%>
 <%= ind %>  SQL_DELETE_BY_PK = T.let('<%= delete_sql %>', String)
+<%- (has_many + has_one).each do |assoc| -%>
+<%= ind %>  SQL_DELETE_<%= assoc[:method_name].upcase %> = T.let('<%= assoc[:delete_sql] %>', String)
+<%- end -%>
 
+<%- if has_many.any? || has_one.any? -%>
+<%= ind %>  sig { params(dependent: Symbol, adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def delete!(dependent: :none, adapter: ::HakumiORM.adapter)
+<%= ind %>    case dependent
+<%= ind %>    when :delete_all
+<%- (has_many + has_one).each do |assoc| -%>
+<%= ind %>      adapter.exec_params(SQL_DELETE_<%= assoc[:method_name].upcase %>, [@<%= pk_attr %>]).close
+<%- end -%>
+<%= ind %>    when :destroy
+<%- has_many.each do |assoc| -%>
+<%= ind %>      <%= assoc[:method_name] %>.to_a(adapter: adapter).each { |r| r.delete!(adapter: adapter) }
+<%- end -%>
+<%- has_one.each do |assoc| -%>
+<%= ind %>      <%= assoc[:method_name] %>(adapter: adapter)&.delete!(adapter: adapter)
+<%- end -%>
+<%= ind %>    end
+<%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
+<%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
+<%= ind %>  ensure
+<%= ind %>    result&.close
+<%= ind %>  end
+<%- else -%>
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def delete!(adapter: ::HakumiORM.adapter)
 <%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
@@ -113,6 +146,7 @@ module <%= module_name %>
 <%= ind %>  ensure
 <%= ind %>    result&.close
 <%= ind %>  end
+<%- end -%>
 
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).returns(<%= record_class_name %>) }
 <%= ind %>  def reload!(adapter: ::HakumiORM.adapter)
@@ -211,6 +245,46 @@ module <%= module_name %>
 <%= ind %>    records.each do |record|
 <%= ind %>      record._preloaded_<%= assoc[:method_name] %> = grouped[record.<%= assoc[:pk_attr] %>] || []
 <%= ind %>    end
+<%= ind %>  end
+<%- end -%>
+<%- has_one.each do |assoc| -%>
+
+<%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).returns(T.nilable(<%= assoc[:record_class] %>)) }
+<%= ind %>  def <%= assoc[:method_name] %>(adapter: ::HakumiORM.adapter)
+<%= ind %>    cached = @_preloaded_<%= assoc[:method_name] %>
+<%= ind %>    return cached&.first if cached
+
+<%= ind %>    <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.eq(@<%= assoc[:pk_attr] %>)).first(adapter: adapter)
+<%= ind %>  end
+
+<%= ind %>  sig { params(records: T::Array[<%= record_class_name %>], adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def self.preload_<%= assoc[:method_name] %>(records, adapter: ::HakumiORM.adapter)
+<%= ind %>    return if records.empty?
+
+<%= ind %>    ids = records.map { |r| r.<%= assoc[:pk_attr] %> }.uniq
+<%= ind %>    return if ids.empty?
+
+<%= ind %>    all_related = <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.in_list(ids)).to_a(adapter: adapter)
+<%= ind %>    indexed = T.let({}, T::Hash[<%= assoc[:pk_ruby_type] %>, <%= assoc[:record_class] %>])
+<%= ind %>    all_related.each { |r| indexed[r.<%= assoc[:fk_attr] %>] = r }
+
+<%= ind %>    records.each do |record|
+<%= ind %>      related = indexed[record.<%= assoc[:pk_attr] %>]
+<%= ind %>      record._preloaded_<%= assoc[:method_name] %> = related ? [related] : []
+<%= ind %>    end
+<%= ind %>  end
+<%- end -%>
+<%- has_many_through.each do |assoc| -%>
+
+<%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).returns(<%= assoc[:target_relation] %>) }
+<%= ind %>  def <%= assoc[:method_name] %>(adapter: ::HakumiORM.adapter)
+<%= ind %>    sub = <%= assoc[:join_relation] %>.new
+<%= ind %>      .where(<%= assoc[:join_schema] %>::<%= assoc[:join_fk_const] %>.eq(@<%= assoc[:pk_attr] %>))
+<%= ind %>      .select(<%= assoc[:join_schema] %>::<%= assoc[:join_select_const] %>)
+<%= ind %>      .compile(adapter.dialect)
+<%= ind %>    <%= assoc[:target_relation] %>.new.where(
+<%= ind %>      ::HakumiORM::SubqueryExpr.new(<%= assoc[:target_schema] %>::<%= assoc[:target_match_const] %>, :in, sub)
+<%= ind %>    )
 <%= ind %>  end
 <%- end -%>
 <%- belongs_to.each do |assoc| -%>

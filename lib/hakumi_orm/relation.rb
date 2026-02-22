@@ -26,7 +26,7 @@ module HakumiORM
       @group_fields = T.let([], T::Array[FieldRef])
       @having_exprs = T.let([], T::Array[Expr])
       @_preloaded_results = T.let(nil, T.nilable(T::Array[ModelType]))
-      @_preload_names = T.let(nil, T.nilable(T::Array[Symbol]))
+      @_preload_nodes = T.let([], T::Array[PreloadNode])
     end
 
     sig { params(expr: Expr).returns(T.self_type) }
@@ -77,14 +77,9 @@ module HakumiORM
       self
     end
 
-    sig { params(names: Symbol).returns(T.self_type) }
-    def preload(*names)
-      existing = @_preload_names
-      if existing
-        existing.concat(names)
-      else
-        @_preload_names = T.let(names, T.nilable(T::Array[Symbol]))
-      end
+    sig { params(specs: PreloadSpec).returns(T.self_type) }
+    def preload(*specs)
+      @_preload_nodes.concat(PreloadNode.from_specs(specs))
       self
     end
 
@@ -127,8 +122,7 @@ module HakumiORM
       return preloaded if preloaded
 
       records = fetch_records(adapter)
-      names = @_preload_names
-      run_preloads(records, names, adapter) if names
+      run_preloads(records, @_preload_nodes, adapter) unless @_preload_nodes.empty?
       records
     end
 
@@ -244,8 +238,8 @@ module HakumiORM
     sig { overridable.returns(T.nilable(String)) }
     def sql_count_all = nil
 
-    sig { overridable.params(records: T::Array[ModelType], names: T::Array[Symbol], adapter: Adapter::Base).void }
-    def run_preloads(records, names, adapter); end
+    sig { overridable.params(records: T::Array[ModelType], nodes: T::Array[PreloadNode], adapter: Adapter::Base).void }
+    def run_preloads(records, nodes, adapter); end
 
     private
 
