@@ -157,10 +157,10 @@ module HakumiORM
         column(col_name, :boolean_array, null: null)
       end
 
-      sig { void }
-      def timestamps
-        column("created_at", :timestamp, null: false)
-        column("updated_at", :timestamp, null: false)
+      sig { params(created_at: String, updated_at: String, null: T::Boolean).void }
+      def timestamps(created_at: "created_at", updated_at: "updated_at", null: false)
+        column(created_at, :timestamp, null: null)
+        column(updated_at, :timestamp, null: null)
       end
 
       sig { params(cols: T::Array[String]).void }

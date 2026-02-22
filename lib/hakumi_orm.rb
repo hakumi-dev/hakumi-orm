@@ -64,6 +64,10 @@ require_relative "hakumi_orm/database_config"
 require_relative "hakumi_orm/database_url_parser"
 require_relative "hakumi_orm/database_config_builder"
 require_relative "hakumi_orm/configuration"
+require_relative "hakumi_orm/setup_generator"
+
+require_relative "hakumi_orm/framework"
+require_relative "hakumi_orm/framework/rails" if defined?(Rails::Railtie)
 
 module HakumiORM
   class << self

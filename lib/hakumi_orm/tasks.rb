@@ -8,6 +8,23 @@ module HakumiORM
     extend Rake::DSL
 
     namespace :hakumi do
+      desc "Install HakumiORM (creates config and directory structure)"
+      task :install do
+        require "hakumi_orm"
+
+        framework = HakumiORM::Framework.current || HakumiORM::Framework.detect
+        generator = HakumiORM::SetupGenerator.new(root: Dir.pwd, framework: framework)
+        result = generator.run!
+
+        if result[:created].empty?
+          puts "HakumiORM: Already installed (all files exist)"
+        else
+          result[:created].each { |f| puts "  create  #{f}" }
+          result[:skipped].each { |f| puts "  exist   #{f}" }
+          puts "\nHakumiORM: Installed successfully"
+        end
+      end
+
       desc "Generate HakumiORM models from the database schema"
       task :generate do
         require "hakumi_orm"

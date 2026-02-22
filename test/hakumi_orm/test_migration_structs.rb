@@ -88,6 +88,28 @@ class TestMigrationStructs < HakumiORM::TestCase
     refute td.columns[1].null
   end
 
+  test "TableDefinition#timestamps with custom column names" do
+    td = HakumiORM::Migration::TableDefinition.new("events")
+    td.timestamps(created_at: "inserted_at", updated_at: "modified_at")
+
+    assert_equal 2, td.columns.length
+    assert_equal "inserted_at", td.columns[0].name
+    assert_equal :timestamp, td.columns[0].type
+    refute td.columns[0].null
+    assert_equal "modified_at", td.columns[1].name
+    assert_equal :timestamp, td.columns[1].type
+    refute td.columns[1].null
+  end
+
+  test "TableDefinition#timestamps with null: true" do
+    td = HakumiORM::Migration::TableDefinition.new("logs")
+    td.timestamps(null: true)
+
+    assert_equal 2, td.columns.length
+    assert td.columns[0].null
+    assert td.columns[1].null
+  end
+
   test "TableDefinition#references adds foreign key column" do
     td = HakumiORM::Migration::TableDefinition.new("posts")
     td.references "users", foreign_key: true

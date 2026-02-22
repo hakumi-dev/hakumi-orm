@@ -3,4 +3,7 @@
 --ignore=test/
 --ignore=sandbox/
 --ignore=vendor/
+--ignore=app/
+--ignore=lib/hakumi_orm/framework/rails.rb
+--ignore=lib/hakumi_orm/framework/sinatra.rb
 --suppress-payload-superclass-redefinition-for=RDoc::Markup::Heading

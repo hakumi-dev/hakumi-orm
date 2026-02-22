@@ -15,7 +15,13 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "database_config_builder.rb" | "DatabaseConfigBuilder" | Mutable builder for "DatabaseConfig". Used inside "Configuration#database_config" blocks. Supports "database_url=" (delegates to "DatabaseUrlParser") or individual field setters. Validates adapter_name and requires database. |
 | "configuration.rb" | "Configuration" | Global config object. Primary attributes: "adapter_name", "database", "host", "port", "username", "password", "output_dir", "models_dir", "contracts_dir", "module_name", "adapter", "pool_size", "pool_timeout", "logger", "migrations_path", "associations_path", "connection_options", "database_url=". Multi-DB: "database_config(name, &blk)" registers named databases, "adapter_for(name)" lazily builds adapters, "named_database(name)" returns config, "database_names" lists names, "register_adapter(name, adapter)" for manual injection, "close_named_adapters!" cleanup. "connection_options" stores extra driver params (sslmode, connect_timeout, etc.) extracted from URL query params. |
 | "json.rb" | "Json", "JsonScalar" | Opaque JSON wrapper storing raw JSON string. "Json.parse(raw)" from PG, "Json.from_hash(h)" / "Json.from_array(a)" from Ruby. Navigation: "[](key)" and "at(index)" return "T.nilable(Json)". Typed extractors: "as_s", "as_i", "as_f", "as_bool", "scalar". Zero "Object", zero "T.untyped". |
-| "tasks.rb" | "Tasks" | Rake tasks for HakumiORM. "require "hakumi_orm/tasks"" adds: "hakumi:generate" (generate + annotate), "hakumi:migrate", "hakumi:rollback[N]", "hakumi:migrate:status", "hakumi:version", "hakumi:migration[name]", "hakumi:type[name]", "hakumi:associations" (list all associations). |
+| "setup_generator.rb" | "SetupGenerator" | Creates initial project structure. "new(root:, framework:)" accepts ":rails", ":sinatra", or ":standalone". "run!" creates directories ("db/migrate", "db/associations", "app/db/generated") and config initializer. Rails adds "app/models", "app/contracts", writes to "config/initializers/hakumi/orm.rb". Standalone/Sinatra writes to "config/hakumi/orm.rb" with "require" and Rakefile instructions. Namespaced under "hakumi/" to coexist with other Hakumi packages. Idempotent: skips existing files/dirs. Returns "{ created:, skipped: }". |
+| "tasks.rb" | "Tasks" | Rake tasks for HakumiORM. "require "hakumi_orm/tasks"" adds: "hakumi:install" (setup generator), "hakumi:generate" (generate + annotate), "hakumi:migrate", "hakumi:rollback[N]", "hakumi:migrate:status", "hakumi:version", "hakumi:migration[name]", "hakumi:type[name]", "hakumi:associations" (list all associations). |
+| "framework.rb" | "Framework" | Framework detection and integration registry. "register(name, &detector)" adds a framework, "detect" returns first matching name (or ":standalone"), "current" / "current=" tracks active framework. Query methods: "rails?", "sinatra?", "standalone?". "registered" lists names, "reset!" clears state. |
+| "framework/rails_config.rb" | "Framework::RailsConfig" | Testable Rails defaults. "apply_defaults(config, logger:)" sets "models_dir", "contracts_dir", logger without requiring Rails. |
+| "framework/rails.rb" | "Framework::Rails < Rails::Railtie" | Rails Railtie ("typed: false", Sorbet-ignored). Initializers: "hakumi_orm.configure" (sets current, applies defaults), "hakumi_orm.autoload" (adds generated dir to autoload_paths). Loads rake tasks. |
+| "framework/sinatra_config.rb" | "Framework::SinatraConfig" | Testable Sinatra defaults. "apply_defaults(config, root:, logger:)" sets path defaults relative to root. |
+| "framework/sinatra.rb" | "Framework::Sinatra" | Sinatra extension ("typed: false", Sorbet-ignored). "registered(app)" callback reads "root" and "logger" from settings, applies defaults. User registers via "register HakumiORM::Framework::Sinatra". |
 | "version.rb" | "VERSION" | Gem version constant. |
 
 ## Query Engine
@@ -160,6 +166,9 @@ lib/
     │       └── sqlite.rb
     ├── compiled_query.rb
     ├── configuration.rb
+    ├── database_config.rb
+    ├── database_config_builder.rb
+    ├── database_url_parser.rb
     ├── dialect.rb
     ├── dialect/
     │   ├── mysql.rb
@@ -168,6 +177,12 @@ lib/
     ├── errors.rb
     ├── expr.rb
     ├── field.rb
+    ├── framework.rb
+    ├── framework/
+    │   ├── rails.rb
+    │   ├── rails_config.rb
+    │   ├── sinatra.rb
+    │   └── sinatra_config.rb
     ├── field/
     │   ├── bool_array_field.rb
     │   ├── bool_field.rb
@@ -202,6 +217,7 @@ lib/
     │   ├── sql_generator.rb
     │   └── table_definition.rb
     ├── schema_drift_error.rb
+    ├── setup_generator.rb
     ├── stale_object_error.rb
     ├── tasks.rb
     ├── validation_error.rb

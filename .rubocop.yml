@@ -11,6 +11,7 @@ AllCops:
     - "vendor/**/*"
     - "tmp/**/*"
     - "sandbox/**/*"
+    - "app/**/*"
 
 # Sorbet sigs inflate line counts significantly
 Metrics/MethodLength:
