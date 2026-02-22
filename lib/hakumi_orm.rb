@@ -60,6 +60,9 @@ require_relative "hakumi_orm/validation_error"
 require_relative "hakumi_orm/adapter/timeout_error"
 require_relative "hakumi_orm/adapter/connection_pool"
 
+require_relative "hakumi_orm/database_config"
+require_relative "hakumi_orm/database_url_parser"
+require_relative "hakumi_orm/database_config_builder"
 require_relative "hakumi_orm/configuration"
 
 module HakumiORM
@@ -76,12 +79,14 @@ module HakumiORM
       blk.call(config)
     end
 
-    sig { returns(Adapter::Base) }
-    def adapter
-      adapter = config.adapter
-      raise Error, "No adapter configured. Use HakumiORM.configure { |c| c.adapter = ... }" unless adapter
+    sig { params(name: T.nilable(Symbol)).returns(Adapter::Base) }
+    def adapter(name = nil)
+      return config.adapter_for(name) if name
 
-      adapter
+      override = T.cast(Thread.current[:hakumi_adapter_name], T.nilable(Symbol))
+      return (override == :primary ? primary_adapter : config.adapter_for(override)) if override
+
+      primary_adapter
     end
 
     sig { params(adapter: Adapter::Base).void }
@@ -89,9 +94,25 @@ module HakumiORM
       config.adapter = adapter
     end
 
+    sig do
+      type_parameters(:R)
+        .params(name: Symbol, blk: T.proc.returns(T.type_parameter(:R)))
+        .returns(T.type_parameter(:R))
+    end
+    def using(name, &blk)
+      config.adapter_for(name) unless name == :primary
+      previous = T.cast(Thread.current[:hakumi_adapter_name], T.nilable(Symbol))
+      Thread.current[:hakumi_adapter_name] = name
+      blk.call
+    ensure
+      Thread.current[:hakumi_adapter_name] = previous
+    end
+
     sig { void }
     def reset_config!
+      config.close_named_adapters!
       @config = T.let(nil, T.nilable(Configuration))
+      Thread.current[:hakumi_adapter_name] = nil
     end
 
     sig { params(table_name: String, blk: T.proc.params(builder: Codegen::AssociationBuilder).void).void }
@@ -112,6 +133,16 @@ module HakumiORM
       result = @_association_registry || {}
       @_association_registry = T.let(nil, T.nilable(T::Hash[String, T::Array[Codegen::CustomAssociation]]))
       result
+    end
+
+    private
+
+    sig { returns(Adapter::Base) }
+    def primary_adapter
+      adapter = config.adapter
+      raise Error, "No adapter configured. Use HakumiORM.configure { |c| c.adapter = ... }" unless adapter
+
+      adapter
     end
   end
 end

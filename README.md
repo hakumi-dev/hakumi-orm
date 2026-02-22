@@ -21,8 +21,6 @@
   <a href="https://ruby-doc.org/"><img src="https://img.shields.io/badge/ruby-%3E%3D%203.2-CC342D.svg?logo=ruby" alt="Ruby >= 3.2" /></a>
 </p>
 
----
-
 ## About
 
 HakumiORM generates fully typed models, query builders, and hydration code directly from your database schema. Every generated file is Sorbet "typed: strict" with **zero** "T.untyped", "T.unsafe", or "T.must" in the output.
@@ -38,7 +36,7 @@ No "method_missing". No "define_method". No runtime reflection for column access
 - **No Arel dependency** -- SQL is built directly from a typed expression tree with sequential bind markers
 - **Type-state validation** -- "Record::New" -> "Record::Validated" -> "Record" lifecycle enforced at compile time
 - **Pre-persist vs persisted types** -- "UserRecord::New" (without "id") and "UserRecord" (with "id") are distinct types
-- **Multi-database support** -- dialect abstraction for PostgreSQL, MySQL, and SQLite
+- **Multi-database support** -- dialect abstraction for PostgreSQL, MySQL, and SQLite; named databases with "HakumiORM.using(:replica)" block switching
 
 ## Quick Look
 
@@ -264,66 +262,132 @@ bundle install
 
 ### Configuration
 
-Configure HakumiORM once at boot -- connection, paths, and adapter are available globally:
+Configure HakumiORM once at boot. The adapter connects automatically when first needed.
+
+**PostgreSQL with user and password (typical development):**
 
 ```ruby
 HakumiORM.configure do |config|
-  # Connection (adapter is built lazily from these)
-  config.adapter_name = :postgresql          # :postgresql (default), :mysql, :sqlite
-  config.database     = "myapp"
+  config.adapter_name = :postgresql
+  config.database     = "myapp_dev"
   config.host         = "localhost"
   config.port         = 5432
   config.username     = "postgres"
-  config.password     = "secret"
-
-  # Paths
-  config.output_dir   = "app/db/generated"   # where generated code goes (default)
-  config.models_dir    = "app/models"          # where model stubs go (nil = skip)
-  config.contracts_dir = "app/contracts"      # where contract stubs go (nil = skip)
-  config.module_name   = "App"               # optional namespace wrapping
+  config.password     = "postgres"
 end
 ```
 
-The adapter connects automatically when first needed ("HakumiORM.adapter"). You can also set it explicitly:
+**MySQL with user and password:**
 
 ```ruby
-# PostgreSQL
-HakumiORM.configure do |config|
-  config.adapter = HakumiORM::Adapter::Postgresql.connect(dbname: "myapp")
-end
-
-# MySQL
-require "hakumi_orm/adapter/mysql"
 HakumiORM.configure do |config|
   config.adapter_name = :mysql
-  config.database     = "myapp"
+  config.database     = "myapp_dev"
   config.host         = "localhost"
+  config.port         = 3306
   config.username     = "root"
+  config.password     = "root"
 end
+```
 
-# SQLite
-require "hakumi_orm/adapter/sqlite"
+**SQLite (no credentials needed):**
+
+```ruby
 HakumiORM.configure do |config|
   config.adapter_name = :sqlite
   config.database     = "db/myapp.sqlite3"
 end
 ```
 
+**Connection URL (common in production / PaaS):**
+
+```ruby
+HakumiORM.configure do |config|
+  config.database_url = ENV.fetch("DATABASE_URL")
+end
+```
+
+Supported URL schemes: "postgresql://", "postgres://", "mysql2://", "mysql://", "sqlite3://", "sqlite://".
+
+URL examples:
+
+```
+postgresql://user:password@host:5432/myapp
+mysql2://root:secret@localhost:3306/myapp
+sqlite3:///path/to/db.sqlite3
+postgresql://user:p%40ssword@host/db?sslmode=require
+```
+
+Passwords with special characters ("@", "#", etc.) must be percent-encoded in URLs.
+
+Query parameters ("sslmode", "connect_timeout", etc.) are passed directly to the database driver.
+
+**SSL-encrypted connection:**
+
+```ruby
+HakumiORM.configure do |config|
+  config.database_url = "postgresql://user:pass@host/db?sslmode=verify-full&sslrootcert=/path/to/ca.pem"
+end
+```
+
+**Individual env vars (production without URL):**
+
+```ruby
+HakumiORM.configure do |config|
+  config.adapter_name = :postgresql
+  config.database = ENV.fetch("DB_NAME")
+  config.host     = ENV.fetch("DB_HOST")
+  config.port     = ENV.fetch("DB_PORT", "5432").to_i
+  config.username = ENV.fetch("DB_USER")
+  config.password = ENV.fetch("DB_PASSWORD")
+end
+```
+
+**Peer / socket auth (no password):**
+
+```ruby
+HakumiORM.configure do |config|
+  config.adapter_name = :postgresql
+  config.database = "myapp_dev"
+end
+```
+
+**Explicit adapter (advanced):**
+
+```ruby
+HakumiORM.configure do |config|
+  config.adapter = HakumiORM::Adapter::Postgresql.connect(dbname: "myapp")
+end
+```
+
+**Paths and codegen options:**
+
+```ruby
+HakumiORM.configure do |config|
+  config.output_dir    = "app/db/generated"
+  config.models_dir    = "app/models"
+  config.contracts_dir = "app/contracts"
+  config.module_name   = "App"
+end
+```
+
 | Option | Default | Description |
 |---|---|---|
-| "adapter_name" | ":postgresql" | Which database adapter to use: ":postgresql", ":mysql", or ":sqlite". |
-| "database" | "nil" | Database name. When set, the adapter is built lazily from connection params. |
-| "host" | "nil" | Database host. "nil" uses the default (local socket / localhost). |
-| "port" | "nil" | Database port. "nil" uses the default (5432 for PostgreSQL). |
-| "username" | "nil" | Database user. "nil" uses the current system user. |
-| "password" | "nil" | Database password. "nil" for passwordless / peer auth. |
+| "database_url" | -- | Connection URL. Parses scheme, credentials, host, port, database, and query params. |
+| "adapter_name" | ":postgresql" | ":postgresql", ":mysql", or ":sqlite". Set automatically by "database_url". |
+| "database" | "nil" | Database name. Set automatically by "database_url". |
+| "host" | "nil" | Database host. "nil" uses local socket / localhost. |
+| "port" | "nil" | Database port. "nil" uses default (5432 PG, 3306 MySQL). |
+| "username" | "nil" | Database user. "nil" uses current system user. |
+| "password" | "nil" | Database password. "nil" for peer / socket auth. |
+| "connection_options" | "{}" | Extra driver params (sslmode, connect_timeout, etc.). Set automatically from URL query params. |
 | "adapter" | auto | Set directly to skip lazy building. Takes precedence over connection params. |
-| "logger" | "nil" | "Logger" instance for SQL query logging. Logs SQL, binds, and execution time at "DEBUG" level. "nil" = no logging, zero overhead. |
-| "output_dir" | ""app/db/generated"" | Directory for generated schemas, records, and relations (always overwritten). |
-| "models_dir" | "nil" | Directory for model stubs ("User < UserRecord"). Generated **once**, never overwritten. "nil" = skip. |
-| "contracts_dir" | "nil" | Directory for contract stubs ("UserRecord::Contract"). Generated **once**, never overwritten. "nil" = skip. |
-| "module_name" | "nil" | Wraps all generated code in a namespace ("App::User", "App::UserRecord", etc.). |
-| "migrations_path" | ""db/migrate"" | Directory where migration files are read from and generated into. |
+| "logger" | "nil" | "Logger" instance for SQL query logging. "nil" = no logging, zero overhead. |
+| "output_dir" | ""app/db/generated"" | Directory for generated schemas, records, and relations. |
+| "models_dir" | "nil" | Directory for model stubs. "nil" = skip. |
+| "contracts_dir" | "nil" | Directory for contract stubs. "nil" = skip. |
+| "module_name" | "nil" | Namespace wrapping for generated code. |
+| "migrations_path" | ""db/migrate"" | Directory for migration files. |
 
 All generated methods ("find", "where", "save!", associations, etc.) default to "HakumiORM.adapter", so you never pass the adapter manually.
 
@@ -977,6 +1041,72 @@ The pool implements "Adapter::Base", so it's a transparent drop-in. Connections 
 |---|---|---|
 | "size" | "5" | Maximum number of connections in the pool |
 | "timeout" | "5.0" | Seconds to wait for a connection before raising "TimeoutError" |
+
+### Multi-Database Support
+
+Configure named databases for read replicas, analytics, or other secondary databases:
+
+```ruby
+HakumiORM.configure do |c|
+  c.database_url = ENV.fetch("DATABASE_URL")
+
+  c.database_config(:replica) do |r|
+    r.database_url = ENV.fetch("REPLICA_DATABASE_URL")
+  end
+
+  c.database_config(:analytics) do |r|
+    r.database_url = ENV.fetch("ANALYTICS_DATABASE_URL")
+  end
+end
+```
+
+Named databases also accept individual params:
+
+```ruby
+c.database_config(:replica) do |r|
+  r.adapter_name = :postgresql
+  r.database = "myapp_replica"
+  r.host = "replica.host.com"
+  r.username = "readonly"
+  r.password = ENV.fetch("REPLICA_DB_PASSWORD")
+  r.pool_size = 5
+end
+```
+
+**Block-based switching** -- all queries inside the block use the named adapter:
+
+```ruby
+HakumiORM.using(:replica) do
+  User.all.to_a
+  Article.where(ArticleSchema::PUBLISHED.eq(true)).to_a
+end
+```
+
+**Per-query switching** -- pass the adapter explicitly:
+
+```ruby
+User.all.to_a(adapter: HakumiORM.adapter(:replica))
+```
+
+**Nestable** -- blocks can be nested, each level restores the previous adapter:
+
+```ruby
+HakumiORM.using(:replica) do
+  users = User.all.to_a
+  HakumiORM.using(:analytics) do
+    AnalyticsEvent.all.to_a
+  end
+end
+```
+
+| Method | Description |
+|---|---|
+| "HakumiORM.using(:name) { ... }" | Switches adapter for the block (thread-safe, nestable) |
+| "HakumiORM.adapter(:name)" | Returns the named adapter directly |
+| "config.database_config(:name) { \|r\| ... }" | Registers a named database |
+| "config.database_names" | Lists all registered database names |
+
+Each named database gets its own connection pool. No automatic read/write splitting -- the caller decides where to route queries (Hakumi philosophy: explicit, not magic).
 
 ### Nested Transactions (Savepoints)
 

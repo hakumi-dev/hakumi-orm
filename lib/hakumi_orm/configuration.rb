@@ -54,6 +54,9 @@ module HakumiORM
     sig { returns(String) }
     attr_accessor :associations_path
 
+    sig { returns(T::Hash[String, String]) }
+    attr_accessor :connection_options
+
     sig { void }
     def initialize # rubocop:disable Metrics/AbcSize
       @adapter = T.let(nil, T.nilable(Adapter::Base))
@@ -72,6 +75,21 @@ module HakumiORM
       @logger = T.let(nil, T.nilable(::Logger))
       @migrations_path = T.let("db/migrate", String)
       @associations_path = T.let("db/associations", String)
+      @connection_options = T.let({}, T::Hash[String, String])
+      @named_databases = T.let({}, T::Hash[Symbol, DatabaseConfig])
+      @named_adapters = T.let({}, T::Hash[Symbol, Adapter::Base])
+    end
+
+    sig { params(url: String).void }
+    def database_url=(url)
+      parsed = DatabaseUrlParser.parse(url)
+      @adapter_name = parsed.adapter_name
+      @database = parsed.database
+      @host = parsed.host
+      @port = parsed.port
+      @username = parsed.username
+      @password = parsed.password
+      @connection_options = parsed.connection_options
     end
 
     sig { params(adapter: T.nilable(Adapter::Base)).void }
@@ -80,6 +98,58 @@ module HakumiORM
     sig { returns(T.nilable(Adapter::Base)) }
     def adapter
       @adapter ||= build_adapter
+    end
+
+    sig { params(name: Symbol, blk: T.proc.params(builder: DatabaseConfigBuilder).void).void }
+    def database_config(name, &blk)
+      raise HakumiORM::Error, "Database name :primary is reserved for the main database" if name == :primary
+      raise HakumiORM::Error, "Database '#{name}' is already registered" if @named_databases.key?(name)
+
+      builder = DatabaseConfigBuilder.new
+      blk.call(builder)
+      @named_databases[name] = builder.build
+    end
+
+    sig { params(name: Symbol).returns(DatabaseConfig) }
+    def named_database(name)
+      config = @named_databases[name]
+      raise HakumiORM::Error, "Database '#{name}' is not registered. Available: #{@named_databases.keys.inspect}" unless config
+
+      config
+    end
+
+    sig { params(name: Symbol, adapter: Adapter::Base).void }
+    def register_adapter(name, adapter)
+      @named_adapters[name] = adapter
+    end
+
+    sig { params(name: Symbol).returns(Adapter::Base) }
+    def adapter_for(name)
+      if name == :primary
+        primary = adapter
+        raise HakumiORM::Error, "No primary adapter configured" unless primary
+
+        return primary
+      end
+
+      existing = @named_adapters[name]
+      return existing if existing
+
+      db_config = named_database(name)
+      built = connect_from_config(db_config)
+      @named_adapters[name] = built
+      built
+    end
+
+    sig { returns(T::Array[Symbol]) }
+    def database_names
+      @named_databases.keys
+    end
+
+    sig { void }
+    def close_named_adapters!
+      @named_adapters.each_value(&:close)
+      @named_adapters.clear
     end
 
     private
@@ -94,53 +164,70 @@ module HakumiORM
               "Unknown adapter_name: #{@adapter_name.inspect}. Supported: #{SUPPORTED_ADAPTERS.map(&:inspect).join(", ")}"
       end
 
-      @adapter = connect_adapter(@adapter_name, database)
+      @adapter = connect_from_config(primary_database_config(database))
     end
 
-    sig { params(name: Symbol, database: String).returns(Adapter::Base) }
-    def connect_adapter(name, database)
-      case name
+    sig { params(database: String).returns(DatabaseConfig) }
+    def primary_database_config(database)
+      DatabaseConfig.new(
+        adapter_name: @adapter_name,
+        database: database,
+        host: @host,
+        port: @port,
+        username: @username,
+        password: @password,
+        pool_size: @pool_size,
+        pool_timeout: @pool_timeout,
+        connection_options: @connection_options
+      )
+    end
+
+    sig { params(db_config: DatabaseConfig).returns(Adapter::Base) }
+    def connect_from_config(db_config)
+      case db_config.adapter_name
       when :postgresql
         require_relative "adapter/postgresql"
-        Adapter::Postgresql.connect(build_connection_params(database))
+        Adapter::Postgresql.connect(pg_params(db_config))
       when :mysql
         require_relative "adapter/mysql_result"
         require_relative "adapter/mysql"
-        Adapter::Mysql.connect(build_mysql_params(database))
+        Adapter::Mysql.connect(mysql_params(db_config))
       when :sqlite
         require_relative "adapter/sqlite_result"
         require_relative "adapter/sqlite"
-        Adapter::Sqlite.connect(database)
+        Adapter::Sqlite.connect(db_config.database)
       else
-        raise HakumiORM::Error, "Adapter #{name.inspect} is not yet implemented"
+        raise HakumiORM::Error, "Adapter #{db_config.adapter_name.inspect} is not yet implemented"
       end
     end
 
-    sig { params(database: String).returns(T::Hash[Symbol, T.any(String, Integer)]) }
-    def build_connection_params(database)
-      params = T.let({ dbname: database }, T::Hash[Symbol, T.any(String, Integer)])
-      h = @host
+    sig { params(db_config: DatabaseConfig).returns(T::Hash[Symbol, T.any(String, Integer)]) }
+    def pg_params(db_config)
+      params = T.let({ dbname: db_config.database }, T::Hash[Symbol, T.any(String, Integer)])
+      h = db_config.host
       params[:host] = h if h
-      p = @port
+      p = db_config.port
       params[:port] = p if p
-      u = @username
+      u = db_config.username
       params[:user] = u if u
-      pw = @password
+      pw = db_config.password
       params[:password] = pw if pw
+      db_config.connection_options.each { |k, v| params[k.to_sym] = v }
       params
     end
 
-    sig { params(database: String).returns(T::Hash[Symbol, T.any(String, Integer)]) }
-    def build_mysql_params(database)
-      params = T.let({ database: database }, T::Hash[Symbol, T.any(String, Integer)])
-      h = @host
+    sig { params(db_config: DatabaseConfig).returns(T::Hash[Symbol, T.any(String, Integer)]) }
+    def mysql_params(db_config)
+      params = T.let({ database: db_config.database }, T::Hash[Symbol, T.any(String, Integer)])
+      h = db_config.host
       params[:host] = h if h
-      p = @port
+      p = db_config.port
       params[:port] = p if p
-      u = @username
+      u = db_config.username
       params[:username] = u if u
-      pw = @password
+      pw = db_config.password
       params[:password] = pw if pw
+      db_config.connection_options.each { |k, v| params[k.to_sym] = v }
       params
     end
   end
