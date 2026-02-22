@@ -1,9 +1,0 @@
-module HakumiORM
-  module Dialect
-    class Postgresql < Base
-      MARKERS: Array[String]
-
-      def initialize: () -> void
-    end
-  end
-end

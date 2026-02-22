@@ -1,9 +1,0 @@
-module HakumiORM
-  module Codegen
-    module TypeMaps
-      module Sqlite
-        MAP: Hash[String, HakumiType]
-      end
-    end
-  end
-end

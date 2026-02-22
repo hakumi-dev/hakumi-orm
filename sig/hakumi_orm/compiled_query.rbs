@@ -1,9 +1,0 @@
-module HakumiORM
-  class CompiledQuery
-    attr_reader sql: String
-    attr_reader binds: Array[Bind]
-
-    def initialize: (String sql, Array[Bind] binds) -> void
-    def pg_params: () -> Array[pg_value]
-  end
-end
