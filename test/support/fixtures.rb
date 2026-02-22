@@ -458,6 +458,16 @@ class ArticleRelation < HakumiORM::Relation
     self
   end
 
+  sig { override.params(adapter: HakumiORM::Adapter::Base).returns(Integer) }
+  def delete_all(adapter: HakumiORM.adapter)
+    compiled = adapter.dialect.compiler.update(
+      table: @table_name,
+      assignments: [HakumiORM::Assignment.new(ArticleSchema::DELETED_AT, HakumiORM::TimeBind.new(Time.now.utc))],
+      where_expr: combined_where
+    )
+    use_result(adapter.exec_params(compiled.sql, compiled.pg_params), &:affected_rows)
+  end
+
   sig { override.params(result: HakumiORM::Adapter::Result).returns(T::Array[ArticleRecord]) }
   def hydrate(result)
     ArticleRecord.from_result(result)

@@ -197,6 +197,15 @@ module HakumiORM
       use_result(adapter.exec_params(compiled.sql, compiled.pg_params), &:affected_rows)
     end
 
+    sig { params(adapter: Adapter::Base).returns(Integer) }
+    def really_delete_all(adapter: HakumiORM.adapter)
+      compiled = adapter.dialect.compiler.delete(
+        table: @table_name,
+        where_expr: combined_where
+      )
+      use_result(adapter.exec_params(compiled.sql, compiled.pg_params), &:affected_rows)
+    end
+
     sig { params(assignments: T::Array[Assignment], adapter: Adapter::Base).returns(Integer) }
     def update_all(assignments, adapter: HakumiORM.adapter)
       compiled = adapter.dialect.compiler.update(
@@ -238,25 +247,12 @@ module HakumiORM
     end
 
     sig { params(batch_size: Integer, adapter: Adapter::Base, blk: T.proc.params(batch: T::Array[ModelType]).void).void }
-    def find_in_batches(batch_size: 1000, adapter: HakumiORM.adapter, &blk)
-      compiled = build_select(adapter.dialect)
-      cursor_name = "hakumi_cursor_#{object_id}"
-
-      adapter.exec("BEGIN")
-      adapter.exec_params("DECLARE #{cursor_name} CURSOR FOR #{compiled.sql}", compiled.pg_params)
-
-      loop do
-        result = adapter.exec("FETCH #{batch_size} FROM #{cursor_name}")
-        batch = hydrate(result)
-        result.close
-        break if batch.empty?
-
-        blk.call(batch)
-        break if batch.length < batch_size
+    def find_in_batches(batch_size: 1000, adapter: HakumiORM.adapter, &blk) # rubocop:disable Style/ArgumentsForwarding
+      if adapter.dialect.supports_cursors?
+        find_in_batches_cursor(batch_size, adapter, &blk) # rubocop:disable Style/ArgumentsForwarding
+      else
+        find_in_batches_limit(batch_size, adapter, &blk) # rubocop:disable Style/ArgumentsForwarding
       end
-    ensure
-      adapter.exec("CLOSE #{cursor_name}") rescue nil # rubocop:disable Style/RescueModifier
-      adapter.exec("COMMIT") rescue nil # rubocop:disable Style/RescueModifier
     end
 
     sig { overridable.returns(T.nilable(String)) }
@@ -324,10 +320,11 @@ module HakumiORM
       params(
         dialect: Dialect::Base,
         columns_override: T.nilable(T::Array[FieldRef]),
-        limit_override: T.nilable(Integer)
+        limit_override: T.nilable(Integer),
+        offset_override: T.nilable(Integer)
       ).returns(CompiledQuery)
     end
-    def build_select(dialect, columns_override: nil, limit_override: nil)
+    def build_select(dialect, columns_override: nil, limit_override: nil, offset_override: nil)
       dialect.compiler.select(
         table: @table_name,
         columns: columns_override || @select_columns || @columns,
@@ -335,7 +332,7 @@ module HakumiORM
         orders: @order_clauses,
         joins: @joins,
         limit_val: limit_override || @limit_value,
-        offset_val: @offset_value,
+        offset_val: offset_override || @offset_value,
         distinct: @distinct_value,
         lock: @lock_value,
         group_fields: @group_fields,

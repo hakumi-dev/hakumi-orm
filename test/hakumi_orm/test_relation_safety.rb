@@ -82,13 +82,49 @@ class TestRelationSafety < HakumiORM::TestCase
     assert_includes @adapter.last_sql, "IS NULL"
   end
 
-  test "find_in_batches emits DECLARE CURSOR regardless of dialect" do
+  # --- find_in_batches multi-db ---
+
+  test "find_in_batches on PostgreSQL uses DECLARE CURSOR" do
+    pg_adapter = HakumiORM::Test::MockAdapter.new(dialect: HakumiORM::Dialect::Postgresql.new)
+
+    UserRecord.all.find_in_batches(adapter: pg_adapter) { |_| break }
+
+    cursor_sql = pg_adapter.executed_queries.find { |q| q[:sql].include?("DECLARE") }
+
+    assert cursor_sql, "PostgreSQL should use DECLARE CURSOR"
+  end
+
+  test "find_in_batches on MySQL uses LIMIT/OFFSET instead of CURSOR" do
     mysql_adapter = HakumiORM::Test::MockAdapter.new(dialect: HakumiORM::Dialect::Mysql.new)
 
     UserRecord.all.find_in_batches(adapter: mysql_adapter) { |_| break }
 
-    cursor_sql = mysql_adapter.executed_queries.find { |q| q[:sql].include?("DECLARE") }
+    queries = mysql_adapter.executed_queries.map { |q| q[:sql] }
 
-    assert cursor_sql, "find_in_batches emits PG-only DECLARE CURSOR even on MySQL dialect"
+    assert queries.none? { |q| q.include?("DECLARE") }, "MySQL must not use DECLARE CURSOR"
+    assert queries.none? { |q| q.include?("BEGIN") }, "MySQL LIMIT/OFFSET does not need BEGIN"
+    assert queries.any? { |q| q.include?("LIMIT") }, "MySQL should use LIMIT-based batching"
+  end
+
+  test "find_in_batches on SQLite uses LIMIT/OFFSET instead of CURSOR" do
+    sqlite_adapter = HakumiORM::Test::MockAdapter.new(dialect: HakumiORM::Dialect::Sqlite.new)
+
+    UserRecord.all.find_in_batches(adapter: sqlite_adapter) { |_| break }
+
+    queries = sqlite_adapter.executed_queries.map { |q| q[:sql] }
+
+    assert queries.none? { |q| q.include?("DECLARE") }, "SQLite must not use DECLARE CURSOR"
+    assert queries.any? { |q| q.include?("LIMIT") }, "SQLite should use LIMIT-based batching"
+  end
+
+  test "find_each delegates to find_in_batches on MySQL" do
+    mysql_adapter = HakumiORM::Test::MockAdapter.new(dialect: HakumiORM::Dialect::Mysql.new)
+
+    UserRecord.all.find_each(adapter: mysql_adapter) { |_| break }
+
+    queries = mysql_adapter.executed_queries.map { |q| q[:sql] }
+
+    assert queries.none? { |q| q.include?("DECLARE") }, "find_each on MySQL must not use cursors"
+    assert queries.any? { |q| q.include?("LIMIT") }, "find_each on MySQL should use LIMIT"
   end
 end

@@ -33,6 +33,45 @@ module HakumiORM
 
     private
 
+    sig { params(batch_size: Integer, adapter: Adapter::Base, blk: T.proc.params(batch: T::Array[ModelType]).void).void }
+    def find_in_batches_cursor(batch_size, adapter, &blk)
+      compiled = build_select(adapter.dialect)
+      cursor_name = "hakumi_cursor_#{object_id}"
+
+      adapter.exec("BEGIN")
+      adapter.exec_params("DECLARE #{cursor_name} CURSOR FOR #{compiled.sql}", compiled.pg_params)
+
+      loop do
+        result = adapter.exec("FETCH #{batch_size} FROM #{cursor_name}")
+        batch = hydrate(result)
+        result.close
+        break if batch.empty?
+
+        blk.call(batch)
+        break if batch.length < batch_size
+      end
+    ensure
+      adapter.exec("CLOSE #{cursor_name}") rescue nil # rubocop:disable Style/RescueModifier
+      adapter.exec("COMMIT") rescue nil # rubocop:disable Style/RescueModifier
+    end
+
+    sig { params(batch_size: Integer, adapter: Adapter::Base, blk: T.proc.params(batch: T::Array[ModelType]).void).void }
+    def find_in_batches_limit(batch_size, adapter, &blk)
+      current_offset = T.let(0, Integer)
+      loop do
+        compiled = build_select(adapter.dialect, limit_override: batch_size, offset_override: current_offset)
+        result = adapter.exec_params(compiled.sql, compiled.pg_params)
+        batch = hydrate(result)
+        result.close
+        break if batch.empty?
+
+        blk.call(batch)
+        break if batch.length < batch_size
+
+        current_offset += batch_size
+      end
+    end
+
     sig { params(func: String, field: FieldRef, adapter: Adapter::Base).returns(T.nilable(String)) }
     def run_aggregate(func, field, adapter)
       compiled = adapter.dialect.compiler.aggregate(

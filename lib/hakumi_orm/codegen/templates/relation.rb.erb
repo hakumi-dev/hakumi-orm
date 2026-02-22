@@ -38,6 +38,16 @@ module <%= module_name %>
 <%= ind %>    mark_defaults_dirty!
 <%= ind %>    self
 <%= ind %>  end
+
+<%= ind %>  sig { override.params(adapter: ::HakumiORM::Adapter::Base).returns(Integer) }
+<%= ind %>  def delete_all(adapter: ::HakumiORM.adapter)
+<%= ind %>    compiled = adapter.dialect.compiler.update(
+<%= ind %>      table: @table_name,
+<%= ind %>      assignments: [::HakumiORM::Assignment.new(<%= qualified_schema %>::<%= soft_delete_const %>, ::HakumiORM::TimeBind.new(::Time.now.utc))],
+<%= ind %>      where_expr: combined_where
+<%= ind %>    )
+<%= ind %>    use_result(adapter.exec_params(compiled.sql, compiled.pg_params), &:affected_rows)
+<%= ind %>  end
 <%- end -%>
 
 <%= ind %>  sig { override.params(result: ::HakumiORM::Adapter::Result).returns(T::Array[<%= qualified_record_class %>]) }

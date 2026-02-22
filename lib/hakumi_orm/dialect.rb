@@ -24,6 +24,11 @@ module HakumiORM
       sig { abstract.returns(Symbol) }
       def name; end
 
+      sig { returns(T::Boolean) }
+      def supports_cursors?
+        false
+      end
+
       sig { params(bind: Bind).returns(PGValue) }
       def encode_bind(bind)
         bind.pg_value

@@ -97,10 +97,50 @@ class TestSoftDelete < HakumiORM::TestCase
     assert_includes @adapter.last_sql, ">"
   end
 
-  test "delete_all generates DELETE FROM on soft-delete table" do
+  # --- delete_all on soft-delete tables ---
+
+  test "delete_all on soft-delete table generates UPDATE SET deleted_at" do
     @adapter.stub_default([], affected: 3)
 
     ArticleRelation.new.where(ArticleSchema::TITLE.eq("old")).delete_all(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, "UPDATE"
+    assert_includes @adapter.last_sql, '"deleted_at"'
+    refute_includes @adapter.last_sql, "DELETE FROM"
+  end
+
+  test "delete_all on soft-delete table respects default scope" do
+    @adapter.stub_default([], affected: 2)
+
+    ArticleRelation.new.delete_all(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, "UPDATE"
+    assert_includes @adapter.last_sql, "IS NULL"
+  end
+
+  test "delete_all with with_deleted scope still does soft delete" do
+    @adapter.stub_default([], affected: 5)
+
+    ArticleRelation.new.with_deleted.delete_all(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, "UPDATE"
+    assert_includes @adapter.last_sql, '"deleted_at"'
+    refute_includes @adapter.last_sql, "IS NULL"
+  end
+
+  test "really_delete_all on soft-delete table generates DELETE FROM" do
+    @adapter.stub_default([], affected: 3)
+
+    ArticleRelation.new.where(ArticleSchema::TITLE.eq("old")).really_delete_all(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, "DELETE FROM"
+    refute_includes @adapter.last_sql, "UPDATE"
+  end
+
+  test "delete_all on non-soft-delete table still generates DELETE FROM" do
+    @adapter.stub_default([], affected: 1)
+
+    UserRelation.new.where(UserSchema::ACTIVE.eq(true)).delete_all(adapter: @adapter)
 
     assert_includes @adapter.last_sql, "DELETE FROM"
   end

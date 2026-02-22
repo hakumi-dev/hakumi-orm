@@ -34,6 +34,11 @@ module HakumiORM
         true
       end
 
+      sig { override.returns(T::Boolean) }
+      def supports_cursors?
+        true
+      end
+
       sig { override.returns(Symbol) }
       def name
         :postgresql
