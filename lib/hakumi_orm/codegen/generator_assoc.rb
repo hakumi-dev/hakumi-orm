@@ -6,6 +6,32 @@ module HakumiORM
     class Generator
       private
 
+      sig do
+        params(
+          models_dir: String,
+          has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]],
+          has_one_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]],
+          through_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]
+        ).void
+      end
+      def annotate_models!(models_dir, has_many_map, has_one_map, through_map)
+        @tables.each_value do |table|
+          model_path = File.join(models_dir, "#{singularize(table.name)}.rb")
+          next unless File.exist?(model_path)
+
+          ctx = ModelAnnotator::Context.new(
+            table: table, dialect: @dialect,
+            has_many: build_has_many_assocs(table, has_many_map),
+            has_one: build_has_one_assocs(table, has_one_map),
+            belongs_to: build_belongs_to_assocs(table),
+            has_many_through: build_has_many_through_assocs(table, through_map),
+            custom_has_many: build_custom_has_many(table, @custom_associations),
+            custom_has_one: build_custom_has_one(table, @custom_associations)
+          )
+          ModelAnnotator.annotate!(model_path, ctx)
+        end
+      end
+
       sig { returns(T::Hash[String, T::Array[T::Hash[Symbol, String]]]) }
       def compute_has_many_through
         reverse_fks = build_reverse_fk_index
@@ -51,25 +77,31 @@ module HakumiORM
 
       sig { params(table: TableInfo).returns(T::Array[BelongsToEntry]) }
       def build_belongs_to_assocs(table)
-        table.foreign_keys.map do |fk|
-          fk_col = table.columns.find { |c| c.name == fk.column_name }
-          target_cls = classify(fk.foreign_table)
-          target_table = @tables[fk.foreign_table]
-          target_pk = target_table&.primary_key || "id"
-          target_pk_col = target_table&.columns&.find { |c| c.name == target_pk }
-          target_pk_type = target_pk_col ? hakumi_type_for(target_pk_col).ruby_type_string(nullable: false) : "Integer"
-          {
-            method_name: singularize(fk.foreign_table),
-            record_class: qualify("#{target_cls}Record"),
-            target_relation: qualify("#{target_cls}Relation"),
-            target_schema: qualify("#{target_cls}Schema"),
-            target_pk_const: target_pk.upcase,
-            target_pk_attr: target_pk,
-            target_pk_type: target_pk_type,
-            fk_attr: fk.column_name,
-            nullable: fk_col&.nullable || false
-          }
+        assocs = table.foreign_keys.map do |fk|
+          build_belongs_to_hash(table, fk)
         end
+        assocs.sort_by { |a| a[:method_name].to_s }
+      end
+
+      sig { params(table: TableInfo, foreign_key: ForeignKeyInfo).returns(BelongsToEntry) }
+      def build_belongs_to_hash(table, foreign_key)
+        fk_col = table.columns.find { |c| c.name == foreign_key.column_name }
+        target_cls = classify(foreign_key.foreign_table)
+        target_table = @tables[foreign_key.foreign_table]
+        target_pk = target_table&.primary_key || "id"
+        target_pk_col = target_table&.columns&.find { |c| c.name == target_pk }
+        target_pk_type = target_pk_col ? hakumi_type_for(target_pk_col).ruby_type_string(nullable: false) : "Integer"
+        {
+          method_name: singularize(foreign_key.foreign_table),
+          record_class: qualify("#{target_cls}Record"),
+          target_relation: qualify("#{target_cls}Relation"),
+          target_schema: qualify("#{target_cls}Schema"),
+          target_pk_const: target_pk.upcase,
+          target_pk_attr: target_pk,
+          target_pk_type: target_pk_type,
+          fk_attr: foreign_key.column_name,
+          nullable: fk_col&.nullable || false
+        }
       end
 
       sig { params(table: TableInfo, assoc_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]).returns(T::Array[T::Hash[Symbol, String]]) }
@@ -77,7 +109,7 @@ module HakumiORM
         pk_col = table.columns.find { |c| c.name == (table.primary_key || "id") }
         pk_type = pk_col ? hakumi_type_for(pk_col).ruby_type_string(nullable: false) : "Integer"
 
-        (assoc_map[table.name] || []).map do |info|
+        assocs = (assoc_map[table.name] || []).map do |info|
           target_cls = classify(info.fetch(:source_table))
           src = info.fetch(:source_table)
           fk_c = info.fetch(:fk_column)
@@ -93,6 +125,7 @@ module HakumiORM
             delete_sql: assoc_delete_sql(src, fk_c)
           }
         end
+        assocs.sort_by { |a| a[:method_name].to_s }
       end
 
       sig { params(table: TableInfo, assoc_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]).returns(T::Array[T::Hash[Symbol, String]]) }
@@ -100,7 +133,7 @@ module HakumiORM
         pk_col = table.columns.find { |c| c.name == (table.primary_key || "id") }
         pk_type = pk_col ? hakumi_type_for(pk_col).ruby_type_string(nullable: false) : "Integer"
 
-        (assoc_map[table.name] || []).map do |info|
+        assocs = (assoc_map[table.name] || []).map do |info|
           target_cls = classify(info.fetch(:source_table))
           src = info.fetch(:source_table)
           fk_c = info.fetch(:fk_column)
@@ -116,6 +149,7 @@ module HakumiORM
             delete_sql: assoc_delete_sql(src, fk_c)
           }
         end
+        assocs.sort_by { |a| a[:method_name].to_s }
       end
 
       sig { params(table_name: String, fk_column: String).returns(String) }
@@ -189,7 +223,7 @@ module HakumiORM
 
       sig { params(table: TableInfo, through_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]).returns(T::Array[T::Hash[Symbol, String]]) }
       def build_has_many_through_assocs(table, through_map)
-        (through_map[table.name] || []).map do |info|
+        assocs = (through_map[table.name] || []).map do |info|
           join_cls = classify(info.fetch(:join_table))
           target_cls = classify(info.fetch(:target_table))
           {
@@ -206,6 +240,7 @@ module HakumiORM
             singular: info.fetch(:singular, "false")
           }
         end
+        assocs.sort_by { |a| a[:method_name].to_s }
       end
     end
   end

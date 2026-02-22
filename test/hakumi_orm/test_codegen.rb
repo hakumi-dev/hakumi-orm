@@ -307,7 +307,24 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
-  test "models_dir does not overwrite existing model files" do
+  test "model stub references escape hatch and declarative approach" do
+    Dir.mktmpdir do |dir|
+      gen_dir = File.join(dir, "generated")
+      models_dir = File.join(dir, "models")
+
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(gen_dir, models_dir: models_dir))
+      gen.generate!
+
+      code = File.read(File.join(models_dir, "user.rb"))
+
+      assert_includes code, "custom_preload"
+      assert_includes code, "User.preload_custom_assoc"
+      refute_includes code, "UserRecord.preload_custom_assoc"
+      assert_includes code, "db/associations/"
+    end
+  end
+
+  test "models_dir preserves user code and adds annotation" do
     Dir.mktmpdir do |dir|
       gen_dir = File.join(dir, "generated")
       models_dir = File.join(dir, "models")
@@ -319,7 +336,11 @@ class TestCodegen < HakumiORM::TestCase
       gen = HakumiORM::Codegen::Generator.new(@tables, opts(gen_dir, models_dir: models_dir))
       gen.generate!
 
-      assert_equal custom_code, File.read(File.join(models_dir, "user.rb"))
+      result = File.read(File.join(models_dir, "user.rb"))
+
+      assert_includes result, "def custom_method; end"
+      assert_includes result, "# == Schema Information =="
+      assert_includes result, "# Table: users"
     end
   end
 
@@ -536,7 +557,7 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
-  test "relation run_preloads accepts PreloadNode and dispatches nested" do
+  test "relation run_preloads dispatches nested and delegates unknown to custom_preload" do
     tables = build_users_and_posts_tables
     Dir.mktmpdir do |dir|
       gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
@@ -548,6 +569,24 @@ class TestCodegen < HakumiORM::TestCase
       assert_includes rel_code, "node.name"
       assert_includes rel_code, "node.children"
       assert_includes rel_code, "PostRelation.new.run_preloads"
+      assert_includes rel_code, "custom_preload(node.name, records, adapter)"
+    end
+  end
+
+  test "relation run_preloads generated for table without FK-based associations" do
+    table = HakumiORM::Codegen::TableInfo.new("settings")
+    table.columns << HakumiORM::Codegen::ColumnInfo.new(name: "id", data_type: "integer", udt_name: "int4", nullable: false)
+    table.columns << HakumiORM::Codegen::ColumnInfo.new(name: "key", data_type: "character varying", udt_name: "varchar", nullable: false)
+    table.primary_key = "id"
+    tables = { "settings" => table }
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
+      gen.generate!
+
+      rel_code = File.read(File.join(dir, "setting/relation.rb"))
+
+      assert_includes rel_code, "run_preloads"
+      assert_includes rel_code, "custom_preload(node.name, records, adapter)"
     end
   end
 

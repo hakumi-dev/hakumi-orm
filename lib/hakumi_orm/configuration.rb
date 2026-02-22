@@ -51,8 +51,11 @@ module HakumiORM
     sig { returns(String) }
     attr_accessor :migrations_path
 
+    sig { returns(String) }
+    attr_accessor :associations_path
+
     sig { void }
-    def initialize
+    def initialize # rubocop:disable Metrics/AbcSize
       @adapter = T.let(nil, T.nilable(Adapter::Base))
       @adapter_name = T.let(:postgresql, Symbol)
       @database = T.let(nil, T.nilable(String))
@@ -68,6 +71,7 @@ module HakumiORM
       @pool_timeout = T.let(5.0, Float)
       @logger = T.let(nil, T.nilable(::Logger))
       @migrations_path = T.let("db/migrate", String)
+      @associations_path = T.let("db/associations", String)
     end
 
     sig { params(adapter: T.nilable(Adapter::Base)).void }

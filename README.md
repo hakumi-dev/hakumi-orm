@@ -223,6 +223,7 @@ Associations are generated automatically from foreign keys. "has_many" returns a
 | "has_many :through" | "has_many :tags, through: :taggings" | Generated from FK chains and join tables (subquery) |
 | "belongs_to" | "belongs_to :user" (DSL) | Generated from FK |
 | Eager loading | "includes" / "preload" / "eager_load" | ".preload(:assoc)" with nested: ".preload(posts: :comments)" |
+| Custom associations | Manual "has_many" with lambda/scope | Declarative via config, fully generated and preloadable |
 | Dependent destroy | "dependent: :destroy" | "delete!(dependent: :destroy)" or ":delete_all" |
 | Single-record update | "user.update!(name: "Bob")" | "user.update!(name: "Bob")" -- typed kwargs, validated |
 | Single-record delete | "user.destroy!" | "user.delete!" |
@@ -782,6 +783,148 @@ User.all.preload(:profile, posts: [:comments, :tags]).to_a
 
 "preload" works for "has_many", "has_one", and "belongs_to".
 
+#### Custom Associations (non-FK based)
+
+FK-based associations are generated from the schema automatically. For associations based on a different column match (email, slug, external_id), declare them in "db/associations/" and the generator produces everything -- lazy accessor, batch preload, cache, and dispatch. Zero boilerplate in your model file.
+
+One file per source table:
+
+```ruby
+# db/associations/users.rb
+# frozen_string_literal: true
+
+HakumiORM.associate("users") do |a|
+  a.has_many "authored_articles", target: "articles", foreign_key: "author_email", primary_key: "email"
+  a.has_one  "latest_comment",    target: "comments", foreign_key: "user_email",   primary_key: "email", order_by: "created_at"
+end
+```
+
+The generator produces the same code as FK-based associations. No distinction in the generated output:
+
+```ruby
+alice = User.find(1)
+
+alice.posts                    # FK-based has_many (generated from schema)
+alice.authored_articles        # Custom has_many (generated from config)
+alice.latest_comment           # Custom has_one with ordering (generated from config)
+
+# Chainable -- returns a Relation, not an array
+alice.authored_articles.where(ArticleSchema::PUBLISHED.eq(true)).count
+
+# Preloadable -- batch loading in a single extra query
+users = User.all.preload(:posts, :authored_articles, :latest_comment).to_a
+users.each do |u|
+  u.authored_articles.to_a   # no query -- already preloaded
+  u.latest_comment            # no query -- already preloaded
+end
+```
+
+Available methods inside the "associate" block:
+
+| Method | Required fields | Description |
+|---|---|---|
+| "has_many" | "name", "target:", "foreign_key:", "primary_key:" | Returns a Relation (lazy, chainable). |
+| "has_one" | "name", "target:", "foreign_key:", "primary_key:" | Returns "T.nilable(Record)". Optional "order_by:" for deterministic results (always DESC). |
+
+The generator validates at codegen time: tables and columns must exist, source column must be NOT NULL, types must be compatible (both strings, both integers, etc.), names must not collide with existing associations or columns. Errors are raised during "rake hakumi:generate" with clear messages.
+
+The associations directory is configurable:
+
+```ruby
+HakumiORM.configure do |c|
+  c.associations_path = "db/associations"  # default
+end
+```
+
+#### Model Annotations
+
+"hakumi:generate" auto-updates a comment block at the top of each model file showing columns, types, and ALL associations (FK + custom + through). The user code below the annotation is never touched:
+
+```ruby
+# == Schema Information ==
+#
+# Table: users
+# Primary key: id (bigint, not null)
+#
+# Columns:
+#   active      boolean     not null, default: true
+#   age         integer     nullable
+#   email       string      not null
+#   id          bigint      not null, PK
+#   name        string      not null
+#
+# Associations:
+#   has_many    :posts                (FK: posts.user_id -> users.id)
+#   belongs_to  :company              (FK: users.company_id -> companies.id)
+#   has_many    :authored_articles    (custom: articles.author_email -> users.email)
+#   has_one     :latest_comment       (custom: comments.user_email -> users.email, order: created_at)
+#   has_many    :roles                (through: users_roles)
+#
+# == End Schema Information ==
+
+class User < UserRecord
+  # your code, scopes, business logic
+end
+```
+
+The generator looks for the "# == Schema Information ==" / "# == End Schema Information ==" markers and replaces only that block. If no markers exist (first run), the block is prepended.
+
+You can also list all associations from the command line:
+
+```bash
+bundle exec rake hakumi:associations            # all models
+bundle exec rake hakumi:associations[users]     # single model
+```
+
+#### Custom Associations (escape hatch)
+
+For associations that cannot be expressed as a field match (multi-step subqueries, external APIs, composite keys, polymorphic patterns), override "custom_preload" in the Relation manually:
+
+```ruby
+# app/models/user.rb
+class User < UserRecord
+  extend T::Sig
+
+  sig { returns(T::Array[AuditRecord]) }
+  def recent_audits
+    AuditRelation.new.where(AuditSchema::ENTITY_TYPE.eq("user").and(AuditSchema::ENTITY_ID.eq(id.to_s))).to_a
+  end
+end
+
+class UserRelation
+  extend T::Sig
+
+  sig { override.params(name: Symbol, records: T::Array[UserRecord], adapter: ::HakumiORM::Adapter::Base).void }
+  def custom_preload(name, records, adapter)
+    case name
+    when :recent_audits
+      ids = records.map { |r| r.id.to_s }
+      all = AuditRelation.new
+        .where(AuditSchema::ENTITY_TYPE.eq("user"))
+        .where(AuditSchema::ENTITY_ID.in_list(ids))
+        .to_a(adapter: adapter)
+      grouped = all.group_by(&:entity_id)
+      records.each { |r| r.instance_variable_set(:@_recent_audits, grouped[r.id.to_s] || []) }
+    end
+  end
+end
+```
+
+The generated "run_preloads" delegates any association name it does not recognize to "custom_preload", which is a no-op by default.
+
+#### When to Regenerate
+
+| Action | Requires regeneration? |
+|---|---|
+| Run a migration (add/remove column, table, FK) | Yes (automatic if using "hakumi:migrate") |
+| Add/change a custom association in "db/associations/" | Yes |
+| Add a scope to a Relation | No |
+| Edit a Contract hook | No |
+| Override "custom_preload" (escape hatch) | No |
+| Change "GeneratorOptions" (soft delete, timestamps) | Yes |
+
+Regeneration also updates model annotations ("# == Schema Information ==" block) with the latest schema and associations.
+
 #### Dependent delete/destroy
 
 When deleting a parent record, you can cascade to associated records:
@@ -1154,13 +1297,15 @@ require "hakumi_orm/tasks"
 Available tasks:
 
 ```bash
-bundle exec rake hakumi:generate           # generate models from DB schema
+bundle exec rake hakumi:generate           # generate models from DB schema + update annotations
 bundle exec rake hakumi:migrate            # run pending migrations
 bundle exec rake hakumi:rollback[N]        # rollback N migrations
 bundle exec rake hakumi:migrate:status     # show migration status
 bundle exec rake hakumi:version            # show current schema version
 bundle exec rake hakumi:migration[name]    # scaffold new migration
 bundle exec rake hakumi:type[name]         # scaffold custom type
+bundle exec rake hakumi:associations       # list all associations (FK + custom + through)
+bundle exec rake hakumi:associations[name] # list associations for one model
 ```
 
 ### Joins

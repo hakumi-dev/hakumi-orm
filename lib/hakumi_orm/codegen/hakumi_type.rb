@@ -126,6 +126,26 @@ module HakumiORM
         else T.absurd(self)
         end
       end
+
+      sig { returns(Symbol) }
+      def compat_category
+        case self
+        when String, Uuid              then :string_like
+        when Integer                   then :int_like
+        when Float, Decimal            then :float_like
+        when Boolean                   then :bool_like
+        when Timestamp, Date           then :time_like
+        when Json                      then :json_like
+        when IntegerArray, StringArray,
+             FloatArray, BooleanArray then :array_like
+        else T.absurd(self)
+        end
+      end
+
+      sig { params(other: HakumiType).returns(T::Boolean) }
+      def compatible_with?(other)
+        self == other || compat_category == other.compat_category
+      end
     end
   end
 end

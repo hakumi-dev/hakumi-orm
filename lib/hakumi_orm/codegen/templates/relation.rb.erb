@@ -54,11 +54,11 @@ module <%= module_name %>
 <%= ind %>  def hydrate(result)
 <%= ind %>    <%= qualified_record_class %>.from_result(result)
 <%= ind %>  end
-<%- if preloadable_assocs.any? -%>
 
 <%= ind %>  sig { override.params(records: T::Array[<%= qualified_record_class %>], nodes: T::Array[::HakumiORM::PreloadNode], adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def run_preloads(records, nodes, adapter)
 <%= ind %>    nodes.each do |node|
+<%- if preloadable_assocs.any? -%>
 <%= ind %>      case node.name
 <%- preloadable_assocs.each do |assoc| -%>
 <%= ind %>      when :<%= assoc[:method_name] %>
@@ -70,10 +70,14 @@ module <%= module_name %>
 <%= ind %>        end
 <%- end -%>
 <%- end -%>
+<%= ind %>      else
+<%= ind %>        custom_preload(node.name, records, adapter)
 <%= ind %>      end
+<%- else -%>
+<%= ind %>      custom_preload(node.name, records, adapter)
+<%- end -%>
 <%= ind %>    end
 <%= ind %>  end
-<%- end -%>
 <%= ind %>end
 <%- if module_name -%>
 end

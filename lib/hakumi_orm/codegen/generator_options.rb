@@ -12,6 +12,7 @@ module HakumiORM
       const :soft_delete_tables, T::Hash[String, String], default: {}
       const :created_at_column, T.nilable(String), default: "created_at"
       const :updated_at_column, T.nilable(String), default: "updated_at"
+      const :custom_associations, T::Hash[String, T::Array[CustomAssociation]], default: {}
     end
   end
 end

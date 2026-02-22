@@ -10,7 +10,9 @@ module <%= module_name %>
 end
 <%- end -%>
 
-# Scopes — reopen the Relation to add chainable, typed query shortcuts.
+# Everything below lives in this file. Never overwritten by hakumi:generate.
+#
+# -- Scopes --
 #
 # <%- if module_name -%>
 # class <%= module_name %>::<%= relation_class_name %>
@@ -26,5 +28,25 @@ end
 #   def older_than(min) = where(<%= schema_module %>::AGE.gte(min))
 # end
 #
-# Usage:
-#   <%= model_class_name %>.all.active.older_than(18).to_a
+# Usage: <%= model_class_name %>.all.active.older_than(18).to_a
+#
+# -- Custom associations (escape hatch) --
+#
+# For associations that cannot be expressed as a field match
+# (multi-step subqueries, external APIs, composite keys, polymorphic patterns),
+# override custom_preload in the Relation:
+#
+# class <%= relation_class_name %>
+#   extend T::Sig
+#
+#   sig { override.params(name: Symbol, records: T::Array[<%= record_class_name %>], adapter: ::HakumiORM::Adapter::Base).void }
+#   def custom_preload(name, records, adapter)
+#     case name
+#     when :custom_assoc then <%= model_class_name %>.preload_custom_assoc(records, adapter: adapter)
+#     end
+#   end
+# end
+#
+# Usage: <%= model_class_name %>.all.preload(:custom_assoc).to_a
+#
+# For simple field-match associations, use db/associations/ instead (declarative, zero boilerplate).

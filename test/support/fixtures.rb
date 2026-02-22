@@ -409,7 +409,9 @@ class UserRelation < HakumiORM::Relation
   end
 
   sig { override.params(records: T::Array[UserRecord], nodes: T::Array[HakumiORM::PreloadNode], adapter: HakumiORM::Adapter::Base).void }
-  def run_preloads(records, nodes, adapter); end
+  def run_preloads(records, nodes, adapter)
+    nodes.each { |node| custom_preload(node.name, records, adapter) }
+  end
 
   sig { returns(T.self_type) }
   def active = where(UserSchema::ACTIVE.eq(true))

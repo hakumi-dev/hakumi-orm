@@ -35,6 +35,7 @@ module HakumiORM
         @soft_delete_tables = T.let(options.soft_delete_tables, T::Hash[String, String])
         @created_at_column = T.let(options.created_at_column, T.nilable(String))
         @updated_at_column = T.let(options.updated_at_column, T.nilable(String))
+        @custom_associations = T.let(options.custom_associations, T::Hash[String, T::Array[CustomAssociation]])
 
         normalize_column_order!
       end
@@ -46,6 +47,9 @@ module HakumiORM
         has_many_map = compute_has_many
         has_one_map = compute_has_one
         through_map = compute_has_many_through
+
+        fk_names = build_fk_assoc_names(has_many_map, has_one_map)
+        validate_custom_assocs!(@custom_associations, fk_names) unless @custom_associations.empty?
 
         enum_types = collect_enum_types
         generate_enum_files!(enum_types) unless enum_types.empty?
@@ -67,7 +71,10 @@ module HakumiORM
         File.write(File.join(@output_dir, "manifest.rb"), build_manifest)
 
         md = @models_dir
-        generate_models!(md) if md
+        if md
+          generate_models!(md)
+          annotate_models!(md, has_many_map, has_one_map, through_map)
+        end
         cd = @contracts_dir
         generate_contracts!(cd) if cd
       end
@@ -157,6 +164,9 @@ module HakumiORM
         col_list = ins_cols.map { |c| @dialect.quote_id(c.name) }.join(", ")
         returning_list = table.columns.map { |c| @dialect.quote_id(c.name) }.join(", ")
 
+        hm = build_has_many_assocs(table, has_many_map) + build_custom_has_many(table, @custom_associations)
+        ho = build_has_one_assocs(table, has_one_map) + build_custom_has_one(table, @custom_associations)
+
         render("record",
                module_name: @module_name,
                ind: indent,
@@ -169,8 +179,8 @@ module HakumiORM
                cast_lines: build_cast_lines(table),
                last_cast_index: table.columns.length - 1,
                qualified_relation: qualify("#{cls}Relation"),
-               has_many: build_has_many_assocs(table, has_many_map),
-               has_one: build_has_one_assocs(table, has_one_map),
+               has_many: hm,
+               has_one: ho,
                has_many_through: build_has_many_through_assocs(table, through_map),
                belongs_to: build_belongs_to_assocs(table),
                insert_all_prefix: "INSERT INTO #{@dialect.quote_id(table.name)} (#{col_list}) VALUES ",
@@ -234,8 +244,8 @@ module HakumiORM
       end
       def build_relation(table, has_many_map, has_one_map)
         cls = classify(table.name)
-        hm = build_has_many_assocs(table, has_many_map)
-        ho = build_has_one_assocs(table, has_one_map)
+        hm = build_has_many_assocs(table, has_many_map) + build_custom_has_many(table, @custom_associations)
+        ho = build_has_one_assocs(table, has_one_map) + build_custom_has_one(table, @custom_associations)
         bt = build_belongs_to_assocs(table)
         preloadable = hm.map { |a| { method_name: a[:method_name], relation_class: a[:relation_class] } } +
                       ho.map { |a| { method_name: a[:method_name], relation_class: a[:relation_class] } } +

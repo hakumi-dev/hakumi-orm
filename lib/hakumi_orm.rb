@@ -93,6 +93,26 @@ module HakumiORM
     def reset_config!
       @config = T.let(nil, T.nilable(Configuration))
     end
+
+    sig { params(table_name: String, blk: T.proc.params(builder: Codegen::AssociationBuilder).void).void }
+    def associate(table_name, &blk)
+      builder = Codegen::AssociationBuilder.new(table_name)
+      blk.call(builder)
+      assoc_registry = (@_association_registry ||= T.let({}, T.nilable(T::Hash[String, T::Array[Codegen::CustomAssociation]])))
+      (assoc_registry[table_name] ||= []).concat(builder.associations)
+    end
+
+    sig { void }
+    def clear_associations!
+      @_association_registry = T.let({}, T.nilable(T::Hash[String, T::Array[Codegen::CustomAssociation]]))
+    end
+
+    sig { returns(T::Hash[String, T::Array[Codegen::CustomAssociation]]) }
+    def drain_associations!
+      result = @_association_registry || {}
+      @_association_registry = T.let(nil, T.nilable(T::Hash[String, T::Array[Codegen::CustomAssociation]]))
+      result
+    end
   end
 end
 

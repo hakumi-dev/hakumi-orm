@@ -264,6 +264,9 @@ module HakumiORM
     sig { overridable.params(records: T::Array[ModelType], nodes: T::Array[PreloadNode], adapter: Adapter::Base).void }
     def run_preloads(records, nodes, adapter); end
 
+    sig { overridable.params(name: Symbol, records: T::Array[ModelType], adapter: Adapter::Base).void }
+    def custom_preload(name, records, adapter); end
+
     protected
 
     sig { returns(T.nilable(Expr)) }

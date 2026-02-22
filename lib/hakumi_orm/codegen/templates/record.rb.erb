@@ -371,7 +371,11 @@ module <%= module_name %>
 <%= ind %>    cached = @_preloaded_<%= assoc[:method_name] %>
 <%= ind %>    return cached&.first if cached
 
+<%- if assoc[:order_by_const] -%>
+<%= ind %>    <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.eq(@<%= assoc[:pk_attr] %>)).order(<%= assoc[:schema_module] %>::<%= assoc[:order_by_const] %>.desc).first(adapter: adapter)
+<%- else -%>
 <%= ind %>    <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.eq(@<%= assoc[:pk_attr] %>)).first(adapter: adapter)
+<%- end -%>
 <%= ind %>  end
 
 <%= ind %>  sig { params(records: T::Array[<%= record_class_name %>], adapter: ::HakumiORM::Adapter::Base).void }
@@ -381,7 +385,11 @@ module <%= module_name %>
 <%= ind %>    ids = records.map { |r| r.<%= assoc[:pk_attr] %> }.uniq
 <%= ind %>    return if ids.empty?
 
+<%- if assoc[:order_by_const] -%>
+<%= ind %>    all_related = <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.in_list(ids)).order(<%= assoc[:schema_module] %>::<%= assoc[:order_by_const] %>.desc).to_a(adapter: adapter)
+<%- else -%>
 <%= ind %>    all_related = <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.in_list(ids)).to_a(adapter: adapter)
+<%- end -%>
 <%= ind %>    indexed = T.let({}, T::Hash[<%= assoc[:pk_ruby_type] %>, <%= assoc[:record_class] %>])
 <%= ind %>    all_related.each { |r| indexed[r.<%= assoc[:fk_attr] %>] = r }
 

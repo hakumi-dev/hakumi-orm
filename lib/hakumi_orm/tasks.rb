@@ -91,6 +91,14 @@ module HakumiORM
         filepath = HakumiORM::Migration::FileGenerator.generate(name: name, path: path)
         puts "HakumiORM: Created #{filepath}"
       end
+
+      desc "List all associations (usage: rake hakumi:associations or hakumi:associations[users])"
+      task :associations, [:table] do |_t, args|
+        require "hakumi_orm"
+        require "hakumi_orm/codegen"
+
+        HakumiORM::Tasks.list_associations(args[:table])
+      end
     end
 
     class << self
@@ -108,18 +116,66 @@ module HakumiORM
         raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
 
         tables = read_schema(config, adapter)
+        custom_assocs = HakumiORM::Codegen::AssociationLoader.load(config.associations_path)
 
         opts = HakumiORM::Codegen::GeneratorOptions.new(
           dialect: adapter.dialect,
           output_dir: config.output_dir,
           module_name: config.module_name,
           models_dir: config.models_dir,
-          contracts_dir: config.contracts_dir
+          contracts_dir: config.contracts_dir,
+          custom_associations: custom_assocs
         )
         generator = HakumiORM::Codegen::Generator.new(tables, opts)
         generator.generate!
 
         puts "HakumiORM: Generated #{tables.size} table(s) into #{config.output_dir}"
+      end
+
+      def list_associations(filter_table = nil)
+        config = HakumiORM.config
+        adapter = config.adapter
+        raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
+
+        tables = read_schema(config, adapter)
+        custom_assocs = HakumiORM::Codegen::AssociationLoader.load(config.associations_path)
+
+        opts = HakumiORM::Codegen::GeneratorOptions.new(
+          dialect: adapter.dialect, custom_associations: custom_assocs
+        )
+        generator = HakumiORM::Codegen::Generator.new(tables, opts)
+
+        tables.each_value do |table|
+          next if filter_table && table.name != filter_table
+
+          print_table_associations(generator, table, custom_assocs)
+        end
+      end
+
+      def print_table_associations(generator, table, custom_assocs)
+        ctx = build_annotation_context(generator, table, custom_assocs)
+        lines = HakumiORM::Codegen::ModelAnnotator.send(:build_assoc_lines_for_cli, ctx)
+        return if lines.empty?
+
+        puts "\n#{table.name}"
+        lines.each { |l| puts l }
+      end
+
+      def build_annotation_context(generator, table, custom_assocs)
+        hm_map = generator.send(:compute_has_many)
+        ho_map = generator.send(:compute_has_one)
+        through_map = generator.send(:compute_has_many_through)
+
+        HakumiORM::Codegen::ModelAnnotator::Context.new(
+          table: table,
+          dialect: generator.instance_variable_get(:@dialect),
+          has_many: generator.send(:build_has_many_assocs, table, hm_map),
+          has_one: generator.send(:build_has_one_assocs, table, ho_map),
+          belongs_to: generator.send(:build_belongs_to_assocs, table),
+          has_many_through: generator.send(:build_has_many_through_assocs, table, through_map),
+          custom_has_many: generator.send(:build_custom_has_many, table, custom_assocs),
+          custom_has_one: generator.send(:build_custom_has_one, table, custom_assocs)
+        )
       end
 
       def read_schema(config, adapter)
