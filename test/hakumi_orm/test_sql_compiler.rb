@@ -213,4 +213,169 @@ class TestSqlCompiler < HakumiORM::TestCase
     assert_includes q.sql, "($1, $2), ($3, $4)"
     assert_equal 4, q.binds.length
   end
+
+  test "select with distinct prepends DISTINCT keyword" do
+    q = @compiler.select(table: "users", columns: [UserSchema::NAME], distinct: true)
+
+    assert_match(/\ASELECT DISTINCT /, q.sql)
+  end
+
+  test "select without distinct does not include DISTINCT" do
+    q = @compiler.select(table: "users", columns: [UserSchema::NAME])
+
+    assert_match(/\ASELECT "users"/, q.sql)
+    refute_includes q.sql, "DISTINCT"
+  end
+
+  test "group by appends GROUP BY clause" do
+    q = @compiler.select(
+      table: "users", columns: [UserSchema::ACTIVE],
+      group_fields: [UserSchema::ACTIVE]
+    )
+
+    assert_includes q.sql, 'GROUP BY "users"."active"'
+  end
+
+  test "having appends HAVING with bind markers" do
+    having = UserSchema::AGE.gt(5)
+    q = @compiler.select(
+      table: "users", columns: [UserSchema::ACTIVE],
+      group_fields: [UserSchema::ACTIVE],
+      having_expr: having
+    )
+
+    assert_includes q.sql, "HAVING"
+    assert_includes q.sql, "$1"
+    assert_equal [5], q.pg_params
+  end
+
+  test "group by comes before order by" do
+    q = @compiler.select(
+      table: "users", columns: [UserSchema::ACTIVE],
+      group_fields: [UserSchema::ACTIVE],
+      orders: [HakumiORM::OrderClause.new(UserSchema::ACTIVE, :asc)]
+    )
+
+    group_pos = q.sql.index("GROUP BY")
+    order_pos = q.sql.index("ORDER BY")
+
+    assert_operator group_pos, :<, order_pos
+  end
+
+  test "lock clause appended at the end" do
+    q = @compiler.select(
+      table: "users", columns: [UserSchema::ID],
+      lock: "FOR UPDATE"
+    )
+
+    assert_match(/FOR UPDATE\z/, q.sql)
+  end
+
+  test "lock with NOWAIT" do
+    q = @compiler.select(
+      table: "users", columns: [UserSchema::ID],
+      lock: "FOR UPDATE NOWAIT"
+    )
+
+    assert_match(/FOR UPDATE NOWAIT\z/, q.sql)
+  end
+
+  test "aggregate SUM generates correct SQL" do
+    q = @compiler.aggregate(table: "users", function: "SUM", field: UserSchema::AGE)
+
+    assert_equal 'SELECT SUM("users"."age") FROM "users"', q.sql
+  end
+
+  test "aggregate AVG with where clause" do
+    q = @compiler.aggregate(
+      table: "users", function: "AVG", field: UserSchema::AGE,
+      where_expr: UserSchema::ACTIVE.eq(true)
+    )
+
+    assert_includes q.sql, "AVG"
+    assert_includes q.sql, "WHERE"
+    assert_equal 1, q.binds.length
+  end
+
+  test "aggregate MIN" do
+    q = @compiler.aggregate(table: "users", function: "MIN", field: UserSchema::AGE)
+
+    assert_includes q.sql, 'MIN("users"."age")'
+  end
+
+  test "aggregate MAX" do
+    q = @compiler.aggregate(table: "users", function: "MAX", field: UserSchema::AGE)
+
+    assert_includes q.sql, 'MAX("users"."age")'
+  end
+
+  test "raw expr inlines SQL with bind marker substitution" do
+    raw = HakumiORM::RawExpr.new(
+      "LENGTH(\"users\".\"name\") > ?",
+      [HakumiORM::IntBind.new(10)]
+    )
+    q = @compiler.select(table: "users", columns: [UserSchema::ID], where_expr: raw)
+
+    assert_includes q.sql, 'LENGTH("users"."name") > $1'
+    assert_equal [10], q.pg_params
+  end
+
+  test "raw expr with multiple placeholders assigns sequential markers" do
+    raw = HakumiORM::RawExpr.new(
+      "? < \"users\".\"age\" AND \"users\".\"age\" < ?",
+      [HakumiORM::IntBind.new(18), HakumiORM::IntBind.new(65)]
+    )
+    q = @compiler.select(table: "users", columns: [UserSchema::ID], where_expr: raw)
+
+    assert_includes q.sql, "$1"
+    assert_includes q.sql, "$2"
+    assert_equal [18, 65], q.pg_params
+  end
+
+  test "raw expr combined with normal predicate via AND" do
+    raw = HakumiORM::RawExpr.new("\"users\".\"name\" ~* ?", [HakumiORM::StrBind.new("^A")])
+    combined = UserSchema::ACTIVE.eq(true).and(raw)
+    q = @compiler.select(table: "users", columns: [UserSchema::ID], where_expr: combined)
+
+    assert_includes q.sql, "$1"
+    assert_includes q.sql, "$2"
+    assert_equal ["t", "^A"], q.pg_params
+  end
+
+  test "subquery in produces correct IN (SELECT ...) SQL" do
+    sub_q = @compiler.select(table: "orders", columns: [UserSchema::ID])
+    expr = HakumiORM::SubqueryExpr.new(UserSchema::ID, :in, sub_q)
+    q = @compiler.select(table: "users", columns: [UserSchema::NAME], where_expr: expr)
+
+    assert_includes q.sql, '"users"."id" IN (SELECT'
+    assert_includes q.sql, '"orders"'
+    assert_includes q.sql, ")"
+  end
+
+  test "subquery not_in produces NOT IN" do
+    sub_q = @compiler.select(
+      table: "banned", columns: [UserSchema::ID],
+      where_expr: UserSchema::ACTIVE.eq(false)
+    )
+    expr = HakumiORM::SubqueryExpr.new(UserSchema::ID, :not_in, sub_q)
+    q = @compiler.select(table: "users", columns: [UserSchema::NAME], where_expr: expr)
+
+    assert_includes q.sql, "NOT IN"
+  end
+
+  test "subquery binds are rebased to avoid marker collisions" do
+    outer_where = UserSchema::ACTIVE.eq(true)
+    sub_q = @compiler.select(
+      table: "friends", columns: [UserSchema::ID],
+      where_expr: UserSchema::AGE.gt(21)
+    )
+    sub_expr = HakumiORM::SubqueryExpr.new(UserSchema::ID, :in, sub_q)
+    combined = outer_where.and(sub_expr)
+
+    q = @compiler.select(table: "users", columns: [UserSchema::NAME], where_expr: combined)
+
+    assert_includes q.sql, "$1"
+    assert_includes q.sql, "$2"
+    assert_equal ["t", 21], q.pg_params
+  end
 end

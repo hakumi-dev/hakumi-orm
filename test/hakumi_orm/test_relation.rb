@@ -138,8 +138,6 @@ class TestRelation < HakumiORM::TestCase
     assert_equal [18, 65], @adapter.last_params
   end
 
-  # -- reload! ----------------------------------------------------------------
-
   test "reload! re-fetches the record by pk" do
     @adapter.stub_default([["1", "UpdatedAlice", "a@b.com", "30", "t"]])
     user = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
@@ -157,8 +155,6 @@ class TestRelation < HakumiORM::TestCase
 
     assert_raises(HakumiORM::Error) { user.reload!(adapter: @adapter) }
   end
-
-  # -- update! ----------------------------------------------------------------
 
   test "update! executes UPDATE with all columns and returns new record" do
     @adapter.stub_default([["1", "Bob", "a@b.com", "25", "t"]])
@@ -204,8 +200,6 @@ class TestRelation < HakumiORM::TestCase
     assert_raises(HakumiORM::Error) { user.update!(name: "Bob", adapter: @adapter) }
   end
 
-  # -- delete! ----------------------------------------------------------------
-
   test "delete! executes DELETE with pk bind and raises on zero affected rows" do
     @adapter.stub_default([], affected: 1)
     user = UserRecord.new(id: 42, name: "Alice", email: "a@b.com", age: nil, active: true)
@@ -223,8 +217,6 @@ class TestRelation < HakumiORM::TestCase
 
     assert_raises(HakumiORM::Error) { user.delete!(adapter: @adapter) }
   end
-
-  # -- exists? ----------------------------------------------------------------
 
   test "exists? returns true when rows match" do
     @adapter.stub_default([["1"]])
@@ -249,8 +241,6 @@ class TestRelation < HakumiORM::TestCase
     assert_includes @adapter.last_sql, "WHERE"
   end
 
-  # -- find_by ----------------------------------------------------------------
-
   test "find_by returns first matching record" do
     @adapter.stub_default([["1", "Alice", "a@b.com", "25", "t"]])
 
@@ -267,8 +257,6 @@ class TestRelation < HakumiORM::TestCase
     assert_nil UserRecord.find_by(UserSchema::EMAIL.eq("nope"), adapter: @adapter)
   end
 
-  # -- to_h -------------------------------------------------------------------
-
   test "to_h returns hash with all column values keyed by name" do
     user = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
     h = user.to_h
@@ -282,5 +270,142 @@ class TestRelation < HakumiORM::TestCase
 
     assert_nil h[:age]
     refute h[:active]
+  end
+
+  test "distinct adds DISTINCT to the SQL" do
+    UserRecord.all.distinct.to_a(adapter: @adapter)
+
+    assert_match(/\ASELECT DISTINCT /, @adapter.last_sql)
+  end
+
+  test "distinct is chainable with where" do
+    UserRecord.all.where(UserSchema::ACTIVE.eq(true)).distinct.to_a(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, "DISTINCT"
+    assert_includes @adapter.last_sql, "WHERE"
+  end
+
+  test "group adds GROUP BY to the SQL" do
+    UserRecord.all.group(UserSchema::ACTIVE).to_a(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, "GROUP BY"
+  end
+
+  test "having adds HAVING clause after GROUP BY" do
+    UserRecord.all
+              .group(UserSchema::ACTIVE)
+              .having(UserSchema::AGE.gt(1))
+              .to_a(adapter: @adapter)
+
+    sql = @adapter.last_sql
+
+    assert_includes sql, "GROUP BY"
+    assert_includes sql, "HAVING"
+    group_pos = sql.index("GROUP BY")
+    having_pos = sql.index("HAVING")
+
+    assert_operator group_pos, :<, having_pos
+  end
+
+  test "lock appends FOR UPDATE" do
+    UserRecord.all.lock.to_a(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, "FOR UPDATE"
+  end
+
+  test "lock with custom clause" do
+    UserRecord.all.lock("FOR SHARE").to_a(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, "FOR SHARE"
+  end
+
+  test "sum returns string value from adapter" do
+    @adapter.stub_default([["150"]])
+
+    result = UserRecord.all.sum(UserSchema::AGE, adapter: @adapter)
+
+    assert_equal "150", result
+    assert_includes @adapter.last_sql, "SUM"
+  end
+
+  test "average returns string value" do
+    @adapter.stub_default([["30.5"]])
+
+    result = UserRecord.all.average(UserSchema::AGE, adapter: @adapter)
+
+    assert_equal "30.5", result
+    assert_includes @adapter.last_sql, "AVG"
+  end
+
+  test "minimum returns string value" do
+    @adapter.stub_default([["18"]])
+
+    result = UserRecord.all.minimum(UserSchema::AGE, adapter: @adapter)
+
+    assert_equal "18", result
+    assert_includes @adapter.last_sql, "MIN"
+  end
+
+  test "maximum returns string value" do
+    @adapter.stub_default([["65"]])
+
+    result = UserRecord.all.maximum(UserSchema::AGE, adapter: @adapter)
+
+    assert_equal "65", result
+    assert_includes @adapter.last_sql, "MAX"
+  end
+
+  test "sum with where filters rows" do
+    @adapter.stub_default([["100"]])
+
+    UserRecord.where(UserSchema::ACTIVE.eq(true)).sum(UserSchema::AGE, adapter: @adapter)
+
+    assert_includes @adapter.last_sql, "SUM"
+    assert_includes @adapter.last_sql, "WHERE"
+  end
+
+  test "pluck returns arrays of column values" do
+    @adapter.stub_default([["Alice", "a@b.com"], ["Bob", "b@c.com"]])
+
+    rows = UserRecord.all.pluck(UserSchema::NAME, UserSchema::EMAIL, adapter: @adapter)
+
+    assert_equal [["Alice", "a@b.com"], ["Bob", "b@c.com"]], rows
+  end
+
+  test "pluck respects where clause" do
+    @adapter.stub_default([["Alice"]])
+
+    UserRecord.where(UserSchema::ACTIVE.eq(true)).pluck(UserSchema::NAME, adapter: @adapter)
+
+    assert_includes @adapter.last_sql, "WHERE"
+  end
+
+  test "where_raw adds raw SQL fragment to query" do
+    UserRecord.all
+              .where_raw("LENGTH(\"users\".\"name\") > ?", [HakumiORM::IntBind.new(5)])
+              .to_a(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, "LENGTH"
+    assert_includes @adapter.last_sql, "$1"
+  end
+
+  test "where_raw chains with normal where" do
+    UserRecord.all
+              .where(UserSchema::ACTIVE.eq(true))
+              .where_raw("\"users\".\"age\" > ?", [HakumiORM::IntBind.new(18)])
+              .to_a(adapter: @adapter)
+
+    sql = @adapter.last_sql
+
+    assert_includes sql, "AND"
+    assert_includes sql, "$1"
+    assert_includes sql, "$2"
+  end
+
+  test "compile returns CompiledQuery from dialect" do
+    compiled = UserRecord.all.where(UserSchema::AGE.gt(18)).compile(@adapter.dialect)
+
+    assert_instance_of HakumiORM::CompiledQuery, compiled
+    assert_includes compiled.sql, "$1"
   end
 end

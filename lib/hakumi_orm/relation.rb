@@ -21,6 +21,10 @@ module HakumiORM
       @joins = T.let([], T::Array[JoinClause])
       @limit_value = T.let(nil, T.nilable(Integer))
       @offset_value = T.let(nil, T.nilable(Integer))
+      @distinct_value = T.let(false, T::Boolean)
+      @lock_value = T.let(nil, T.nilable(String))
+      @group_fields = T.let([], T::Array[FieldRef])
+      @having_exprs = T.let([], T::Array[Expr])
       @_preloaded_results = T.let(nil, T.nilable(T::Array[ModelType]))
       @_preload_names = T.let(nil, T.nilable(T::Array[Symbol]))
     end
@@ -28,6 +32,12 @@ module HakumiORM
     sig { params(expr: Expr).returns(T.self_type) }
     def where(expr)
       @where_exprs << expr
+      self
+    end
+
+    sig { params(sql: String, binds: T::Array[Bind]).returns(T.self_type) }
+    def where_raw(sql, binds = [])
+      @where_exprs << RawExpr.new(sql, binds)
       self
     end
 
@@ -75,6 +85,30 @@ module HakumiORM
       else
         @_preload_names = T.let(names, T.nilable(T::Array[Symbol]))
       end
+      self
+    end
+
+    sig { returns(T.self_type) }
+    def distinct
+      @distinct_value = true
+      self
+    end
+
+    sig { params(fields: FieldRef).returns(T.self_type) }
+    def group(*fields)
+      @group_fields.concat(fields)
+      self
+    end
+
+    sig { params(expr: Expr).returns(T.self_type) }
+    def having(expr)
+      @having_exprs << expr
+      self
+    end
+
+    sig { params(clause: String).returns(T.self_type) }
+    def lock(clause = "FOR UPDATE")
+      @lock_value = clause
       self
     end
 
@@ -170,6 +204,11 @@ module HakumiORM
       build_select(adapter.dialect)
     end
 
+    sig { params(dialect: Dialect::Base).returns(CompiledQuery) }
+    def compile(dialect)
+      build_select(dialect)
+    end
+
     sig { params(batch_size: Integer, adapter: Adapter::Base, blk: T.proc.params(record: ModelType).void).void }
     def find_each(batch_size: 1000, adapter: HakumiORM.adapter, &blk)
       find_in_batches(batch_size: batch_size, adapter: adapter) do |batch|
@@ -228,17 +267,10 @@ module HakumiORM
     end
 
     sig { returns(T.nilable(Expr)) }
-    def combined_where
-      return nil if @where_exprs.empty?
+    def combined_where = combine_exprs(@where_exprs)
 
-      result = T.let(@where_exprs.fetch(0), Expr)
-      i = T.let(1, Integer)
-      while i < @where_exprs.length
-        result = AndExpr.new(result, @where_exprs.fetch(i))
-        i += 1
-      end
-      result
-    end
+    sig { returns(T.nilable(Expr)) }
+    def combined_having = combine_exprs(@having_exprs)
 
     sig do
       params(
@@ -255,8 +287,14 @@ module HakumiORM
         orders: @order_clauses,
         joins: @joins,
         limit_val: limit_override || @limit_value,
-        offset_val: @offset_value
+        offset_val: @offset_value,
+        distinct: @distinct_value,
+        lock: @lock_value,
+        group_fields: @group_fields,
+        having_expr: combined_having
       )
     end
   end
 end
+
+require_relative "relation_query"

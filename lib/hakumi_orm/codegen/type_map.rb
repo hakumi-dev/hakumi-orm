@@ -21,10 +21,6 @@ module HakumiORM
           map[data_type] || (udt_name && map[udt_name]) || HakumiType::String
         end
 
-        # Generates a Ruby expression that casts a raw PG string to the
-        # correct Ruby type. Non-nullable columns use `fetch_value`
-        # (returns String). Nullable columns use `get_value`
-        # (returns T.nilable(String)).
         sig { params(hakumi_type: HakumiType, raw_expr: String, nullable: T::Boolean).returns(String) }
         def cast_expression(hakumi_type, raw_expr, nullable:)
           case hakumi_type

@@ -199,6 +199,13 @@ Associations are generated automatically from foreign keys. `has_many` returns a
 | Column access | `method_missing` / dynamic | Generated `attr_reader` with `sig` |
 | Column names | Strings/symbols, checked at runtime | `Schema::FIELD` constants, checked at compile time |
 | Query DSL | Strings / hash conditions | `Field[T]` objects with type-safe operations |
+| Raw SQL escape | `where("sql ?", val)` | `where_raw("sql ?", [bind])` with typed binds |
+| Subqueries | `.where(id: Sub.select(:id))` | `SubqueryExpr.new(field, :in, compiled)` |
+| DISTINCT | `.distinct` | `.distinct` |
+| GROUP BY / HAVING | `.group(:col).having("...")` | `.group(Field).having(Expr)` |
+| Aggregates | `.sum`, `.average`, `.minimum`, `.maximum` | `.sum(field)`, `.average(field)`, `.minimum(field)`, `.maximum(field)` |
+| Pessimistic locking | `.lock` / `FOR UPDATE` | `.lock` / `.lock("FOR SHARE")` |
+| Multi-column pluck | `.pluck(:a, :b)` | `.pluck(FieldA, FieldB)` returns raw string arrays |
 | SQL generation | Arel (dynamic AST) | `SqlCompiler` with sequential bind markers |
 | Hydration | Reflection + type coercion | Generated positional `fetch_value` |
 | New vs persisted | Same class, `id` is nilable | Type-state: `Record::New` -> `Record::Validated` -> `Record` |
@@ -428,10 +435,15 @@ user.created_at          # => Time (auto-set)
 | Method | Description |
 |---|---|
 | `where(expr)` | Add a WHERE condition. Multiple calls are ANDed. |
+| `where_raw(sql, binds)` | Add a raw SQL WHERE fragment with `?` bind placeholders. |
 | `order(clause)` | Add ORDER BY via an `OrderClause` (e.g., `UserSchema::NAME.asc`). |
 | `order_by(field, direction)` | Add ORDER BY via field + `:asc` / `:desc` symbol. |
 | `limit(n)` | Set LIMIT. |
 | `offset(n)` | Set OFFSET. |
+| `distinct` | Add `SELECT DISTINCT`. |
+| `group(*fields)` | Add `GROUP BY` clause. |
+| `having(expr)` | Add `HAVING` clause (used with `group`). |
+| `lock(clause)` | Append locking clause (default: `FOR UPDATE`). |
 | `join(clause)` | Add a JOIN clause. |
 | `preload(*names)` | Eager-load associations after the main query (avoids N+1). |
 
@@ -439,6 +451,7 @@ user.created_at          # => Time (auto-set)
 User
   .where(UserSchema::ACTIVE.eq(true))
   .order(UserSchema::NAME.asc)
+  .distinct
   .limit(25)
   .offset(50)
 ```
@@ -455,6 +468,11 @@ User
 | `delete_all` | `Integer` | Execute `DELETE` and return the number of deleted rows. |
 | `update_all(assignments)` | `Integer` | Execute `UPDATE` and return the number of updated rows. |
 | `to_sql` | `CompiledQuery` | Return the compiled SQL + binds **without executing**. |
+| `sum(field)` | `T.nilable(String)` | Execute `SELECT SUM(field)` and return the result. |
+| `average(field)` | `T.nilable(String)` | Execute `SELECT AVG(field)` and return the result. |
+| `minimum(field)` | `T.nilable(String)` | Execute `SELECT MIN(field)` and return the result. |
+| `maximum(field)` | `T.nilable(String)` | Execute `SELECT MAX(field)` and return the result. |
+| `pluck(*fields)` | `T::Array[T::Array[T.nilable(String)]]` | Multi-column pluck returning raw string arrays. |
 
 ```ruby
 # Execute
@@ -463,8 +481,16 @@ first = User.all.order(UserSchema::NAME.asc).first
 
 # Aggregate
 total = User.where(UserSchema::ACTIVE.eq(true)).count
+total_age = User.all.sum(UserSchema::AGE)
+avg_age = User.all.average(UserSchema::AGE)
+youngest = User.all.minimum(UserSchema::AGE)
+oldest = User.all.maximum(UserSchema::AGE)
 
-# Pluck raw values
+# Multi-column pluck
+pairs = User.all.pluck(UserSchema::NAME, UserSchema::EMAIL)
+# => [["Alice", "a@b.com"], ["Bob", "b@c.com"]]
+
+# Pluck raw values (single column)
 names = User.all.order(UserSchema::NAME.asc).pluck_raw(UserSchema::NAME)
 # => ["Alice", "Bob", "Carol"]
 
@@ -482,6 +508,26 @@ User
 # Bulk delete
 User.where(UserSchema::NAME.eq("temp")).delete_all
 # => 1 (number of deleted rows)
+
+# Distinct query
+User.all.distinct.pluck(UserSchema::NAME)
+
+# Group + aggregate
+User.all.group(UserSchema::ACTIVE).to_a
+
+# Pessimistic locking
+User.where(UserSchema::ID.eq(1)).lock.first
+# => SELECT ... WHERE ... FOR UPDATE
+
+# Raw SQL escape hatch
+User.all.where_raw(
+  "LENGTH(\"users\".\"name\") > ?",
+  [HakumiORM::IntBind.new(5)]
+).to_a
+
+# Subquery
+sub = compiler.select(table: "orders", columns: [OrderSchema::USER_ID])
+User.where(HakumiORM::SubqueryExpr.new(UserSchema::ID, :in, sub)).to_a
 ```
 
 ### Field Predicates
@@ -532,6 +578,30 @@ Predicates return `Expr` objects that can be combined with boolean logic:
 | `expr.and(other)` | `(left) AND (right)` | `UserSchema::ACTIVE.eq(true).and(UserSchema::AGE.gt(18))` |
 | `expr.or(other)` | `(left) OR (right)` | `UserSchema::NAME.eq("Alice").or(UserSchema::NAME.eq("Bob"))` |
 | `expr.not` | `NOT (expr)` | `UserSchema::ACTIVE.eq(true).not` |
+
+#### Raw SQL Expressions
+
+For SQL that can't be expressed with typed fields, use `RawExpr`:
+
+```ruby
+raw = HakumiORM::RawExpr.new("LENGTH(\"users\".\"name\") > ?", [HakumiORM::IntBind.new(5)])
+User.where(raw).to_a
+```
+
+`?` placeholders are replaced with dialect-specific bind markers (`$1`, `$2`, ...). `RawExpr` can be combined with other expressions via `.and` / `.or`.
+
+#### Subquery Expressions
+
+Use `SubqueryExpr` to embed a compiled SELECT as a subquery in WHERE:
+
+```ruby
+sub = compiler.select(table: "orders", columns: [OrderSchema::USER_ID])
+expr = HakumiORM::SubqueryExpr.new(UserSchema::ID, :in, sub)
+User.where(expr).to_a
+# => SELECT ... WHERE "users"."id" IN (SELECT ...)
+```
+
+Supported operators: `:in`, `:not_in`. Bind markers are automatically rebased to avoid collisions.
 
 Multiple `.where` calls are ANDed automatically, so the most common case needs no explicit combinator:
 

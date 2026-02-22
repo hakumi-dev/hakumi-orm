@@ -9,8 +9,6 @@ class TestVariant < HakumiORM::TestCase
     @record_nil_age = UserRecord.new(id: 2, name: "Bob", email: "bob@test.com", age: nil, active: false)
   end
 
-  # -- VariantBase delegation -------------------------------------------------
-
   test "VariantBase delegates all columns to wrapped record" do
     variant = UserRecord::VariantBase.new(record: @record)
 
@@ -33,8 +31,6 @@ class TestVariant < HakumiORM::TestCase
     assert_raises(NoMethodError) { variant.record }
     assert_equal @record, variant.send(:record)
   end
-
-  # -- User-defined variant narrowing (kwargs constructor) --------------------
 
   test "variant narrows nullable column to non-nilable via kwargs" do
     age = @record.age
@@ -63,8 +59,6 @@ class TestVariant < HakumiORM::TestCase
   test "variant inherits from VariantBase" do
     assert_operator UserRecord::WithAge, :<, UserRecord::VariantBase
   end
-
-  # -- as_* pattern with flow typing at call site -----------------------------
 
   test "flow typing: constructs variant when field is present" do
     age = @record.age

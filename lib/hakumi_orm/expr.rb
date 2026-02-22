@@ -16,7 +16,6 @@ module HakumiORM
 
     sig { params(other: Expr).returns(AndExpr) }
     def &(other)
-      # self. required: `and` is a Ruby keyword
       self.and(other)
     end
 
@@ -27,7 +26,6 @@ module HakumiORM
 
     sig { params(other: Expr).returns(OrExpr) }
     def |(other)
-      # self. required: `or` is a Ruby keyword
       self.or(other)
     end
 
@@ -38,7 +36,6 @@ module HakumiORM
 
     sig { returns(NotExpr) }
     def !
-      # self. required: `not` is a Ruby keyword
       self.not
     end
   end
@@ -104,6 +101,42 @@ module HakumiORM
     sig { params(inner: Expr).void }
     def initialize(inner)
       @inner = T.let(inner, Expr)
+    end
+  end
+
+  class RawExpr < Expr
+    extend T::Sig
+
+    sig { returns(String) }
+    attr_reader :sql
+
+    sig { returns(T::Array[Bind]) }
+    attr_reader :binds
+
+    sig { params(sql: String, binds: T::Array[Bind]).void }
+    def initialize(sql, binds = [])
+      @sql = T.let(sql, String)
+      @binds = T.let(binds, T::Array[Bind])
+    end
+  end
+
+  class SubqueryExpr < Expr
+    extend T::Sig
+
+    sig { returns(FieldRef) }
+    attr_reader :field
+
+    sig { returns(Symbol) }
+    attr_reader :op
+
+    sig { returns(CompiledQuery) }
+    attr_reader :subquery
+
+    sig { params(field: FieldRef, op: Symbol, subquery: CompiledQuery).void }
+    def initialize(field, op, subquery)
+      @field = T.let(field, FieldRef)
+      @op = T.let(op, Symbol)
+      @subquery = T.let(subquery, CompiledQuery)
     end
   end
 end

@@ -2,8 +2,6 @@
 # frozen_string_literal: true
 
 module HakumiORM
-  # Generic base for all typed fields. ValueType is fixed by each concrete
-  # subclass, ensuring that eq/neq/in_list only accept the correct Ruby type.
   class Field < FieldRef
     extend T::Sig
     extend T::Helpers
@@ -21,8 +19,6 @@ module HakumiORM
       Predicate.new(self, :eq, [to_bind(value)])
     end
 
-    # Operator form of #eq. Returns a Predicate, NOT a Boolean.
-    # Use inside .where(): User.where(UserSchema::NAME == "Alice")
     sig { params(other: ValueType).returns(Predicate) }
     def ==(other)
       eq(other)
@@ -33,7 +29,6 @@ module HakumiORM
       Predicate.new(self, :neq, [to_bind(value)])
     end
 
-    # Operator form of #neq. Returns a Predicate, NOT a Boolean.
     sig { params(other: ValueType).returns(Predicate) }
     def !=(other)
       neq(other)
@@ -60,7 +55,6 @@ module HakumiORM
     end
   end
 
-  # Fields that support gt/gte/lt/lte/between (numeric and temporal types).
   class ComparableField < Field
     extend T::Sig
     extend T::Helpers
@@ -115,7 +109,6 @@ module HakumiORM
     end
   end
 
-  # Fields that support LIKE/ILIKE (string and text types).
   class TextField < Field
     extend T::Sig
     extend T::Helpers

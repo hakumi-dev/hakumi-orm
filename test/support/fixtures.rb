@@ -1,16 +1,6 @@
 # typed: false
 # frozen_string_literal: true
 
-# Fixtures simulating generated code for a "users" table.
-# This is what the codegen would produce for:
-#   CREATE TABLE users (
-#     id serial PRIMARY KEY,
-#     name varchar NOT NULL,
-#     email varchar NOT NULL,
-#     age integer,
-#     active boolean NOT NULL DEFAULT true
-#   );
-
 module UserSchema
   ID = HakumiORM::IntField.new(:id, "users", "id", '"users"."id"').freeze
   NAME = HakumiORM::StrField.new(:name, "users", "name", '"users"."name"').freeze

@@ -384,8 +384,6 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
-  # -- Automatic timestamps ---------------------------------------------------
-
   test "validated_record uses Time.now for created_at and updated_at on insert" do
     col_id = HakumiORM::Codegen::ColumnInfo.new(
       name: "id", data_type: "integer", udt_name: "int4",

@@ -11,8 +11,6 @@ class TestValidation < HakumiORM::TestCase
     end
   end
 
-  # -- Errors -----------------------------------------------------------------
-
   test "Errors starts empty and valid" do
     e = HakumiORM::Errors.new
 
@@ -40,8 +38,6 @@ class TestValidation < HakumiORM::TestCase
     assert_equal ["name cannot be blank", "email is invalid"], e.full_messages
   end
 
-  # -- ValidationError --------------------------------------------------------
-
   test "ValidationError wraps Errors and produces a readable message" do
     e = HakumiORM::Errors.new
     e.add(:name, "cannot be blank")
@@ -52,8 +48,6 @@ class TestValidation < HakumiORM::TestCase
     assert_equal e, err.errors
     assert_includes err.message, "name cannot be blank"
   end
-
-  # -- Type-state flow: New -> Validated --------------------------------------
 
   test "New#validate! returns Validated when contract passes" do
     record = UserRecord.build(name: "Alice", email: "alice@example.com", active: true)
@@ -91,8 +85,6 @@ class TestValidation < HakumiORM::TestCase
     assert_kind_of UserRecord::Checkable, record
     assert_kind_of UserRecord::Checkable, validated
   end
-
-  # -- Contract wiring --------------------------------------------------------
 
   test "validate! raises ValidationError when on_create fails" do
     UserRecord::Contract.define_singleton_method(:on_create) do |record, e|

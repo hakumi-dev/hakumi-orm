@@ -23,6 +23,7 @@ Metrics/AbcSize:
   Exclude:
     - "lib/hakumi_orm/sql_compiler.rb"
     - "lib/hakumi_orm/codegen/generator.rb"
+    - "lib/hakumi_orm/relation.rb"
 
 Metrics/ClassLength:
   Max: 300
@@ -47,6 +48,8 @@ Metrics/PerceivedComplexity:
 
 Metrics/ParameterLists:
   Max: 8
+  Exclude:
+    - "lib/hakumi_orm/sql_compiler.rb"
 
 Metrics/CollectionLiteralLength:
   Enabled: false
@@ -66,6 +69,7 @@ Naming/MethodParameterName:
     - op
     - pk
     - id
+    - qn
 
 # is_null / is_not_null are SQL semantics, not Ruby predicates
 Naming/PredicatePrefix:
