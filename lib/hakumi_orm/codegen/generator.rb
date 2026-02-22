@@ -35,6 +35,8 @@ module HakumiORM
         @soft_delete_tables = T.let(options.soft_delete_tables, T::Hash[String, String])
         @created_at_column = T.let(options.created_at_column, T.nilable(String))
         @updated_at_column = T.let(options.updated_at_column, T.nilable(String))
+
+        normalize_column_order!
       end
 
       sig { void }
@@ -285,6 +287,15 @@ module HakumiORM
       sig { params(col: ColumnInfo).returns(HakumiType) }
       def hakumi_type_for(col)
         TypeMap.hakumi_type(@dialect.name, col.data_type, col.udt_name)
+      end
+
+      sig { void }
+      def normalize_column_order!
+        @tables.each_value do |table|
+          table.columns.sort_by!(&:name)
+          table.foreign_keys.sort_by!(&:column_name)
+          table.unique_columns.sort!
+        end
       end
 
       sig { params(col: ColumnInfo).returns(String) }

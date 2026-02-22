@@ -153,7 +153,7 @@ class TestCodegen < HakumiORM::TestCase
       assert_includes code, "returns(String)"
       assert_includes code, "returns(T.nilable(Integer))"
       assert_includes code, "returns(T::Boolean)"
-      assert_includes code, "def initialize(id:, name:, email:, age:, active:)"
+      assert_includes code, "def initialize(active:, age:, email:, id:, name:)"
       assert_includes code, "def self.from_result"
       assert_includes code, "def self.where"
       assert_includes code, "def self.all"
