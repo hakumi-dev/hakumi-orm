@@ -38,7 +38,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "generates singular folder with all required files" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       %w[
@@ -53,7 +53,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "schema has typed Field constants" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/schema.rb"))
@@ -72,7 +72,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "record has update! with SQL_UPDATE_BY_PK and RETURNING" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/record.rb"))
@@ -89,7 +89,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "base_contract has on_update hook" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/base_contract.rb"))
@@ -101,7 +101,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "record has delete! with SQL_DELETE_BY_PK" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/record.rb"))
@@ -115,7 +115,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "record has to_h returning typed hash" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/record.rb"))
@@ -128,7 +128,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "record has find_by and exists? class methods" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/record.rb"))
@@ -140,7 +140,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "record has typed attributes, keyword args, and hydration" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/record.rb"))
@@ -164,7 +164,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "new_record has insertable columns, validate!, and includes Checkable" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/new_record.rb"))
@@ -187,7 +187,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "relation references Record and Schema" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/relation.rb"))
@@ -205,7 +205,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "generated code contains zero T.untyped, T.unsafe, and T.must" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       %w[
@@ -224,9 +224,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "generated code with module_name wraps in module" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(
-        @tables, dialect: @dialect, output_dir: dir, module_name: "App"
-      )
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir, module_name: "App"))
       gen.generate!
 
       schema_code = File.read(File.join(dir, "user/schema.rb"))
@@ -242,7 +240,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "manifest requires files in correct order" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "manifest.rb"))
@@ -255,7 +253,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "variant_base delegates all columns including pk" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/variant_base.rb"))
@@ -276,7 +274,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "validated_record has SQL_INSERT with RETURNING, save!, and on_persist" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/validated_record.rb"))
@@ -295,9 +293,7 @@ class TestCodegen < HakumiORM::TestCase
       gen_dir = File.join(dir, "generated")
       models_dir = File.join(dir, "models")
 
-      gen = HakumiORM::Codegen::Generator.new(
-        @tables, dialect: @dialect, output_dir: gen_dir, models_dir: models_dir
-      )
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(gen_dir, models_dir: models_dir))
       gen.generate!
 
       model_path = File.join(models_dir, "user.rb")
@@ -320,9 +316,7 @@ class TestCodegen < HakumiORM::TestCase
       custom_code = "class User < UserRecord\n  def custom_method; end\nend\n"
       File.write(File.join(models_dir, "user.rb"), custom_code)
 
-      gen = HakumiORM::Codegen::Generator.new(
-        @tables, dialect: @dialect, output_dir: gen_dir, models_dir: models_dir
-      )
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(gen_dir, models_dir: models_dir))
       gen.generate!
 
       assert_equal custom_code, File.read(File.join(models_dir, "user.rb"))
@@ -331,7 +325,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "checkable generates an interface module with abstract field readers" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/checkable.rb"))
@@ -348,7 +342,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "base_contract has overridable on_all, on_create, on_persist" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/base_contract.rb"))
@@ -368,9 +362,7 @@ class TestCodegen < HakumiORM::TestCase
       gen_dir = File.join(dir, "generated")
       contracts_dir = File.join(dir, "contracts")
 
-      gen = HakumiORM::Codegen::Generator.new(
-        @tables, dialect: @dialect, output_dir: gen_dir, contracts_dir: contracts_dir
-      )
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(gen_dir, contracts_dir: contracts_dir))
       gen.generate!
 
       contract_path = File.join(contracts_dir, "user_contract.rb")
@@ -407,7 +399,7 @@ class TestCodegen < HakumiORM::TestCase
     table.primary_key = "id"
 
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new({ "posts" => table }, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new({ "posts" => table }, opts(dir))
       gen.generate!
 
       validated_code = File.read(File.join(dir, "post/validated_record.rb"))
@@ -436,7 +428,7 @@ class TestCodegen < HakumiORM::TestCase
     table.primary_key = "id"
 
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new({ "logs" => table }, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new({ "logs" => table }, opts(dir))
       gen.generate!
 
       validated_code = File.read(File.join(dir, "log/validated_record.rb"))
@@ -454,9 +446,7 @@ class TestCodegen < HakumiORM::TestCase
       custom_code = "class UserRecord::Contract < UserRecord::BaseContract\n  # custom\nend\n"
       File.write(File.join(contracts_dir, "user_contract.rb"), custom_code)
 
-      gen = HakumiORM::Codegen::Generator.new(
-        @tables, dialect: @dialect, output_dir: gen_dir, contracts_dir: contracts_dir
-      )
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(gen_dir, contracts_dir: contracts_dir))
       gen.generate!
 
       assert_equal custom_code, File.read(File.join(contracts_dir, "user_contract.rb"))
@@ -468,9 +458,7 @@ class TestCodegen < HakumiORM::TestCase
       gen_dir = File.join(dir, "generated")
       models_dir = File.join(dir, "models")
 
-      gen = HakumiORM::Codegen::Generator.new(
-        @tables, dialect: @dialect, output_dir: gen_dir, models_dir: models_dir, module_name: "App"
-      )
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(gen_dir, models_dir: models_dir, module_name: "App"))
       gen.generate!
 
       code = File.read(File.join(models_dir, "user.rb"))
@@ -483,7 +471,7 @@ class TestCodegen < HakumiORM::TestCase
   test "has_many generates association method and preload" do
     tables = build_users_and_posts_tables
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       user_code = File.read(File.join(dir, "user/record.rb"))
@@ -497,7 +485,7 @@ class TestCodegen < HakumiORM::TestCase
   test "has_one generates singular accessor when FK has unique constraint" do
     tables = build_users_and_profile_tables
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       user_code = File.read(File.join(dir, "user/record.rb"))
@@ -512,7 +500,7 @@ class TestCodegen < HakumiORM::TestCase
   test "has_one preload indexes by FK and stores single record" do
     tables = build_users_and_profile_tables
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       user_code = File.read(File.join(dir, "user/record.rb"))
@@ -524,7 +512,7 @@ class TestCodegen < HakumiORM::TestCase
   test "belongs_to generates accessor and preload" do
     tables = build_users_and_posts_tables
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       post_code = File.read(File.join(dir, "post/record.rb"))
@@ -538,7 +526,7 @@ class TestCodegen < HakumiORM::TestCase
   test "relation includes has_one in preloadable assocs" do
     tables = build_users_and_profile_tables
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       rel_code = File.read(File.join(dir, "user/relation.rb"))
@@ -551,7 +539,7 @@ class TestCodegen < HakumiORM::TestCase
   test "relation run_preloads accepts PreloadNode and dispatches nested" do
     tables = build_users_and_posts_tables
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       rel_code = File.read(File.join(dir, "user/relation.rb"))
@@ -566,7 +554,7 @@ class TestCodegen < HakumiORM::TestCase
   test "has_many through join table generates subquery method" do
     tables = build_users_roles_tables
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       user_code = File.read(File.join(dir, "user/record.rb"))
@@ -584,7 +572,7 @@ class TestCodegen < HakumiORM::TestCase
   test "delete! with dependent generates delete_all and destroy branches" do
     tables = build_users_and_posts_tables
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       user_code = File.read(File.join(dir, "user/record.rb"))
@@ -599,7 +587,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "delete! without associations has no dependent parameter" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       user_code = File.read(File.join(dir, "user/record.rb"))
@@ -612,7 +600,7 @@ class TestCodegen < HakumiORM::TestCase
   test "delete! with has_one generates destroy with safe navigation" do
     tables = build_users_and_profile_tables
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       user_code = File.read(File.join(dir, "user/record.rb"))
@@ -625,7 +613,7 @@ class TestCodegen < HakumiORM::TestCase
   test "has_many through chain generates subquery method" do
     tables = build_users_posts_comments_tables
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       user_code = File.read(File.join(dir, "user/record.rb"))
@@ -642,7 +630,7 @@ class TestCodegen < HakumiORM::TestCase
   test "has_many through generates both directions for join table" do
     tables = build_users_roles_tables
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       role_code = File.read(File.join(dir, "role/record.rb"))
@@ -658,7 +646,7 @@ class TestCodegen < HakumiORM::TestCase
   test "has_one through generates singular method with first" do
     tables = build_users_profiles_avatars_tables
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       user_code = File.read(File.join(dir, "user/record.rb"))
@@ -676,7 +664,7 @@ class TestCodegen < HakumiORM::TestCase
   test "has_many through remains plural without unique constraints" do
     tables = build_users_roles_tables
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       user_code = File.read(File.join(dir, "user/record.rb"))
@@ -690,7 +678,7 @@ class TestCodegen < HakumiORM::TestCase
   test "optimistic locking adds lock_version to UPDATE WHERE clause" do
     tables = build_table_with_lock_version
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "product/record.rb"))
@@ -705,7 +693,7 @@ class TestCodegen < HakumiORM::TestCase
   test "optimistic locking excludes lock_version from update! parameters" do
     tables = build_table_with_lock_version
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "product/record.rb"))
@@ -717,7 +705,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "tables without lock_version do not use StaleObjectError" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/record.rb"))
@@ -730,7 +718,7 @@ class TestCodegen < HakumiORM::TestCase
   test "json column generates JsonField and Cast.to_json" do
     tables = build_table_with_json
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       schema = File.read(File.join(dir, "event/schema.rb"))
@@ -744,7 +732,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "schema escapes double quotes in postgresql qualified names" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/schema.rb"))
@@ -758,7 +746,7 @@ class TestCodegen < HakumiORM::TestCase
   test "schema escapes double quotes in sqlite qualified names" do
     dialect = HakumiORM::Dialect::Sqlite.new
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir, dialect: dialect))
       gen.generate!
 
       code = File.read(File.join(dir, "user/schema.rb"))
@@ -771,7 +759,7 @@ class TestCodegen < HakumiORM::TestCase
   test "schema uses backticks for mysql qualified names without extra escaping" do
     dialect = HakumiORM::Dialect::Mysql.new
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir, dialect: dialect))
       gen.generate!
 
       code = File.read(File.join(dir, "user/schema.rb"))
@@ -803,7 +791,7 @@ class TestCodegen < HakumiORM::TestCase
     end.new
 
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new({ "weird" => table }, dialect: dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new({ "weird" => table }, opts(dir, dialect: dialect))
       gen.generate!
 
       code = File.read(File.join(dir, "weird/schema.rb"))
@@ -814,7 +802,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "as_json generates hash with string keys and JSON-safe values" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/record.rb"))
@@ -848,7 +836,7 @@ class TestCodegen < HakumiORM::TestCase
     table.primary_key = "id"
 
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new({ "events" => table }, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new({ "events" => table }, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "event/record.rb"))
@@ -877,7 +865,7 @@ class TestCodegen < HakumiORM::TestCase
     table.primary_key = "id"
 
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new({ "items" => table }, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new({ "items" => table }, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "item/record.rb"))
@@ -889,7 +877,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "as_json has zero T.untyped, T.unsafe, T.must" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/record.rb"))
@@ -902,7 +890,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "variant_base delegates as_json and to_h" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/variant_base.rb"))
@@ -915,7 +903,7 @@ class TestCodegen < HakumiORM::TestCase
   test "uuid column generates StrField" do
     tables = build_table_with_uuid
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       schema = File.read(File.join(dir, "token/schema.rb"))
@@ -928,7 +916,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "record generates diff and changed_from? methods" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       record = File.read(File.join(dir, "user/record.rb"))
@@ -941,7 +929,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "variant_base delegates diff and changed_from?" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       variant = File.read(File.join(dir, "user/variant_base.rb"))
@@ -954,7 +942,7 @@ class TestCodegen < HakumiORM::TestCase
   test "soft delete generates delete! as UPDATE and really_delete! as DELETE" do
     tables = build_table_with_soft_delete
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir, soft_delete_tables: ["articles"])
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir, soft_delete_tables: ["articles"]))
       gen.generate!
 
       record = File.read(File.join(dir, "article/record.rb"))
@@ -971,7 +959,7 @@ class TestCodegen < HakumiORM::TestCase
   test "soft delete relation adds default scope and with_deleted/only_deleted" do
     tables = build_table_with_soft_delete
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir, soft_delete_tables: ["articles"])
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir, soft_delete_tables: ["articles"]))
       gen.generate!
 
       relation = File.read(File.join(dir, "article/relation.rb"))
@@ -986,7 +974,7 @@ class TestCodegen < HakumiORM::TestCase
   test "soft delete count SQL includes deleted_at IS NULL" do
     tables = build_table_with_soft_delete
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir, soft_delete_tables: ["articles"])
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir, soft_delete_tables: ["articles"]))
       gen.generate!
 
       relation = File.read(File.join(dir, "article/relation.rb"))
@@ -998,7 +986,7 @@ class TestCodegen < HakumiORM::TestCase
 
   test "table without deleted_at does not get soft delete features" do
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       record = File.read(File.join(dir, "user/record.rb"))
@@ -1014,7 +1002,7 @@ class TestCodegen < HakumiORM::TestCase
   test "table with deleted_at but not in soft_delete_tables does not get soft delete" do
     tables = build_table_with_soft_delete
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       record = File.read(File.join(dir, "article/record.rb"))
@@ -1030,7 +1018,7 @@ class TestCodegen < HakumiORM::TestCase
   test "enum column generates T::Enum class file" do
     tables = build_table_with_enum
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       enum_code = File.read(File.join(dir, "enums/post_status.rb"))
@@ -1045,7 +1033,7 @@ class TestCodegen < HakumiORM::TestCase
   test "enum column generates EnumField in schema" do
     tables = build_table_with_enum
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       schema = File.read(File.join(dir, "post/schema.rb"))
@@ -1057,7 +1045,7 @@ class TestCodegen < HakumiORM::TestCase
   test "enum column types record attr as the enum class" do
     tables = build_table_with_enum
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       record = File.read(File.join(dir, "post/record.rb"))
@@ -1070,7 +1058,7 @@ class TestCodegen < HakumiORM::TestCase
   test "nullable enum column generates T.nilable type and safe cast" do
     tables = build_table_with_nullable_enum
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       record = File.read(File.join(dir, "task/record.rb"))
@@ -1083,7 +1071,7 @@ class TestCodegen < HakumiORM::TestCase
   test "enum manifest requires enum files before table files" do
     tables = build_table_with_enum
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       manifest = File.read(File.join(dir, "manifest.rb"))
@@ -1099,7 +1087,7 @@ class TestCodegen < HakumiORM::TestCase
   test "enum as_json serializes to string" do
     tables = build_table_with_enum
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
       record = File.read(File.join(dir, "post/record.rb"))
@@ -1243,5 +1231,9 @@ class TestCodegen < HakumiORM::TestCase
                                     col("body", type: "text", udt: "text")],
                           fks: [fk("post_id", "posts")])
     { "users" => users, "posts" => posts, "comments" => comments }
+  end
+
+  def opts(dir, **overrides)
+    HakumiORM::Codegen::GeneratorOptions.new(dialect: @dialect, output_dir: dir, **overrides)
   end
 end

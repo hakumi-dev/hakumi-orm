@@ -47,9 +47,11 @@ Metrics/PerceivedComplexity:
   Max: 20
 
 Metrics/ParameterLists:
-  Max: 8
+  Max: 5
   Exclude:
     - "lib/hakumi_orm/sql_compiler.rb"
+    - "lib/hakumi_orm/sql_compiler_expr.rb"
+    - "test/**/*"
 
 Metrics/CollectionLiteralLength:
   Enabled: false

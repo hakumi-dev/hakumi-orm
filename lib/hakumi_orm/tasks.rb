@@ -25,14 +25,14 @@ module HakumiORM
 
         tables = read_schema(config, adapter)
 
-        generator = HakumiORM::Codegen::Generator.new(
-          tables,
+        opts = HakumiORM::Codegen::GeneratorOptions.new(
           dialect: adapter.dialect,
           output_dir: config.output_dir,
           module_name: config.module_name,
           models_dir: config.models_dir,
           contracts_dir: config.contracts_dir
         )
+        generator = HakumiORM::Codegen::Generator.new(tables, opts)
         generator.generate!
 
         puts "HakumiORM: Generated #{tables.size} table(s) into #{config.output_dir}"

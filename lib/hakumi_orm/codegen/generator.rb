@@ -14,22 +14,11 @@ module HakumiORM
         String
       )
 
-      sig do
-        params(
-          tables: T::Hash[String, TableInfo],
-          dialect: T.nilable(Dialect::Base),
-          output_dir: T.nilable(String),
-          module_name: T.nilable(String),
-          models_dir: T.nilable(String),
-          contracts_dir: T.nilable(String),
-          soft_delete_tables: T::Array[String]
-        ).void
-      end
-      def initialize(tables, dialect: nil, output_dir: nil, module_name: nil, models_dir: nil, contracts_dir: nil,
-                     soft_delete_tables: [])
+      sig { params(tables: T::Hash[String, TableInfo], options: GeneratorOptions).void }
+      def initialize(tables, options = GeneratorOptions.new)
         cfg = HakumiORM.config
 
-        resolved_dialect = dialect
+        resolved_dialect = options.dialect
         if resolved_dialect.nil?
           adapter = cfg.adapter
           raise HakumiORM::Error, "No dialect: set HakumiORM.adapter or pass dialect:" unless adapter
@@ -39,11 +28,11 @@ module HakumiORM
 
         @tables = T.let(tables, T::Hash[String, TableInfo])
         @dialect = T.let(resolved_dialect, Dialect::Base)
-        @output_dir = T.let(output_dir || cfg.output_dir, String)
-        @module_name = T.let(module_name || cfg.module_name, T.nilable(String))
-        @models_dir = T.let(models_dir || cfg.models_dir, T.nilable(String))
-        @contracts_dir = T.let(contracts_dir || cfg.contracts_dir, T.nilable(String))
-        @soft_delete_tables = T.let(soft_delete_tables.to_set, T::Set[String])
+        @output_dir = T.let(options.output_dir || cfg.output_dir, String)
+        @module_name = T.let(options.module_name || cfg.module_name, T.nilable(String))
+        @models_dir = T.let(options.models_dir || cfg.models_dir, T.nilable(String))
+        @contracts_dir = T.let(options.contracts_dir || cfg.contracts_dir, T.nilable(String))
+        @soft_delete_tables = T.let(options.soft_delete_tables.to_set, T::Set[String])
       end
 
       sig { void }

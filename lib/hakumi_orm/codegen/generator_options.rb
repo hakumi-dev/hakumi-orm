@@ -1,0 +1,15 @@
+# typed: strict
+# frozen_string_literal: true
+
+module HakumiORM
+  module Codegen
+    class GeneratorOptions < T::Struct
+      const :dialect, T.nilable(Dialect::Base), default: nil
+      const :output_dir, T.nilable(String), default: nil
+      const :module_name, T.nilable(String), default: nil
+      const :models_dir, T.nilable(String), default: nil
+      const :contracts_dir, T.nilable(String), default: nil
+      const :soft_delete_tables, T::Array[String], default: []
+    end
+  end
+end

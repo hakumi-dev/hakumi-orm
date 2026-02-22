@@ -333,16 +333,16 @@ generator = HakumiORM::Codegen::Generator.new(tables)
 generator.generate!
 ```
 
-The generator reads `output_dir`, `models_dir`, and `module_name` from the global config. You can still override per-call:
+The generator reads `output_dir`, `models_dir`, and `module_name` from the global config. You can still override per-call via `GeneratorOptions`:
 
 ```ruby
-generator = HakumiORM::Codegen::Generator.new(
-  tables,
+opts = HakumiORM::Codegen::GeneratorOptions.new(
   dialect:     custom_dialect,
   output_dir:  "custom/path",
   models_dir:  "custom/models",
   module_name: "MyApp"
 )
+generator = HakumiORM::Codegen::Generator.new(tables, opts)
 ```
 
 ## API Reference
