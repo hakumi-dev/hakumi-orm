@@ -37,6 +37,12 @@ module HakumiORM
     sig { returns(T.nilable(String)) }
     attr_accessor :module_name
 
+    sig { returns(Integer) }
+    attr_accessor :pool_size
+
+    sig { returns(Float) }
+    attr_accessor :pool_timeout
+
     sig { void }
     def initialize
       @adapter = T.let(nil, T.nilable(Adapter::Base))
@@ -50,6 +56,8 @@ module HakumiORM
       @models_dir = T.let(nil, T.nilable(String))
       @contracts_dir = T.let(nil, T.nilable(String))
       @module_name = T.let(nil, T.nilable(String))
+      @pool_size = T.let(5, Integer)
+      @pool_timeout = T.let(5.0, Float)
     end
 
     sig { params(adapter: T.nilable(Adapter::Base)).void }

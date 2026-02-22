@@ -655,6 +655,75 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
+  test "optimistic locking adds lock_version to UPDATE WHERE clause" do
+    tables = build_table_with_lock_version
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "product/record.rb"))
+
+      assert_includes code, '"lock_version" = "lock_version" + 1'
+      assert_includes code, '"products"."lock_version" ='
+      assert_includes code, "StaleObjectError"
+      assert_includes code, "@lock_version"
+    end
+  end
+
+  test "optimistic locking excludes lock_version from update! parameters" do
+    tables = build_table_with_lock_version
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "product/record.rb"))
+
+      assert_match(/def update!\(name:/, code)
+      refute_match(/def update!.*lock_version:/, code)
+    end
+  end
+
+  test "tables without lock_version do not use StaleObjectError" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/record.rb"))
+
+      refute_includes code, "StaleObjectError"
+      refute_includes code, "lock_version"
+    end
+  end
+
+  test "json column generates JsonField and Cast.to_json" do
+    tables = build_table_with_json
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      schema = File.read(File.join(dir, "event/schema.rb"))
+      record = File.read(File.join(dir, "event/record.rb"))
+
+      assert_includes schema, "::HakumiORM::JsonField"
+      assert_includes record, "::HakumiORM::Json"
+      assert_includes record, "Cast.to_json"
+    end
+  end
+
+  test "uuid column generates StrField" do
+    tables = build_table_with_uuid
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      schema = File.read(File.join(dir, "token/schema.rb"))
+      record = File.read(File.join(dir, "token/record.rb"))
+
+      assert_includes schema, "::HakumiORM::StrField"
+      assert_includes record, "returns(String)"
+    end
+  end
+
   private
 
   def col(name, type: "integer", udt: "int4", nullable: false, default: nil, max_length: nil)
@@ -716,6 +785,27 @@ class TestCodegen < HakumiORM::TestCase
                              columns: [pk_col("users_roles"), fk_col("user_id"), fk_col("role_id")],
                              fks: [fk("user_id", "users"), fk("role_id", "roles")])
     { "users" => users, "roles" => roles, "users_roles" => users_roles }
+  end
+
+  def build_table_with_lock_version
+    products = make_table("products",
+                          columns: [pk_col("products"), str_col("name"),
+                                    col("lock_version", default: "0")])
+    { "products" => products }
+  end
+
+  def build_table_with_json
+    events = make_table("events",
+                        columns: [pk_col("events"), str_col("name"),
+                                  col("payload", type: "jsonb", udt: "jsonb", nullable: true)])
+    { "events" => events }
+  end
+
+  def build_table_with_uuid
+    tokens = make_table("tokens",
+                        columns: [pk_col("tokens"),
+                                  col("token_id", type: "uuid", udt: "uuid")])
+    { "tokens" => tokens }
   end
 
   def build_users_posts_comments_tables

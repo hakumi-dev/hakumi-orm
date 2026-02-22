@@ -103,32 +103,46 @@ module HakumiORM
         return { update_sql: nil } unless pk
         return { update_sql: nil } if ins_cols.empty?
 
-        sql = build_update_sql(table, ins_cols, pk)
+        has_lv = lock_version_column(table)
+        user_cols = has_lv ? ins_cols.reject { |c| c.name == "lock_version" } : ins_cols
+        sql = build_update_sql(table, user_cols, pk, lock_version: !has_lv.nil?)
 
         {
           update_sql: sql,
-          update_sig_params: ins_cols.map { |c| "#{c.name}: #{ruby_type(c)}" }.join(", "),
-          update_defaults: ins_cols.map { |c| "#{c.name}: @#{c.name}" }.join(", "),
-          update_bind_list: build_update_bind_list(ins_cols),
-          update_ins_cols: ins_cols.map { |c| { name: c.name } }
+          update_sig_params: user_cols.map { |c| "#{c.name}: #{ruby_type(c)}" }.join(", "),
+          update_defaults: user_cols.map { |c| "#{c.name}: @#{c.name}" }.join(", "),
+          update_bind_list: build_update_bind_list(user_cols),
+          update_ins_cols: user_cols.map { |c| { name: c.name } },
+          has_lock_version: !has_lv.nil?
         }
       end
 
-      sig { params(table: TableInfo, ins_cols: T::Array[ColumnInfo], pk: String).returns(String) }
-      def build_update_sql(table, ins_cols, pk)
-        set_parts = ins_cols.each_with_index.map { |c, i| "#{@dialect.quote_id(c.name)} = #{@dialect.bind_marker(i)}" }
-        pk_marker = @dialect.bind_marker(ins_cols.length)
-        returning = table.columns.map { |c| @dialect.quote_id(c.name) }.join(", ")
+      sig do
+        params(table: TableInfo, user_cols: T::Array[ColumnInfo], pk: String, lock_version: T::Boolean).returns(String)
+      end
+      def build_update_sql(table, user_cols, pk, lock_version:)
+        set_parts = user_cols.each_with_index.map do |col, idx|
+          "#{@dialect.quote_id(col.name)} = #{@dialect.bind_marker(idx)}"
+        end
+        set_parts << "#{@dialect.quote_id("lock_version")} = #{@dialect.quote_id("lock_version")} + 1" if lock_version
 
-        sql = "UPDATE #{@dialect.quote_id(table.name)} SET #{set_parts.join(", ")} " \
-              "WHERE #{@dialect.qualified_name(table.name, pk)} = #{pk_marker}"
+        next_idx = user_cols.length
+        pk_marker = @dialect.bind_marker(next_idx)
+        where = "#{@dialect.qualified_name(table.name, pk)} = #{pk_marker}"
+        if lock_version
+          lv_marker = @dialect.bind_marker(next_idx + 1)
+          where += " AND #{@dialect.qualified_name(table.name, "lock_version")} = #{lv_marker}"
+        end
+
+        returning = table.columns.map { |c| @dialect.quote_id(c.name) }.join(", ")
+        sql = "UPDATE #{@dialect.quote_id(table.name)} SET #{set_parts.join(", ")} WHERE #{where}"
         sql += " RETURNING #{returning}" if @dialect.supports_returning?
         sql
       end
 
-      sig { params(ins_cols: T::Array[ColumnInfo]).returns(String) }
-      def build_update_bind_list(ins_cols)
-        ins_cols.map do |col|
+      sig { params(user_cols: T::Array[ColumnInfo]).returns(String) }
+      def build_update_bind_list(user_cols)
+        user_cols.map do |col|
           bind_class = hakumi_type_for(col).bind_class
           if col.name == "updated_at" && hakumi_type_for(col) == Codegen::HakumiType::Timestamp
             "#{bind_class}.new(::Time.now).pg_value"
@@ -136,6 +150,13 @@ module HakumiORM
             "#{bind_class}.new(#{col.name}).pg_value"
           end
         end.join(", ")
+      end
+
+      sig { params(table: TableInfo).returns(T.nilable(ColumnInfo)) }
+      def lock_version_column(table)
+        table.columns.find do |col|
+          col.name == "lock_version" && hakumi_type_for(col) == Codegen::HakumiType::Integer
+        end
       end
 
       sig { params(table: TableInfo).returns(T::Hash[Symbol, T.nilable(String)]) }

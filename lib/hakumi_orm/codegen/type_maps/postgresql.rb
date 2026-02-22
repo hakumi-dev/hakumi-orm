@@ -45,9 +45,9 @@ module HakumiORM
           "decimal" => HakumiType::Decimal,
           "money" => HakumiType::Decimal,
 
-          "json" => HakumiType::String,
-          "jsonb" => HakumiType::String,
-          "uuid" => HakumiType::String,
+          "json" => HakumiType::Json,
+          "jsonb" => HakumiType::Json,
+          "uuid" => HakumiType::Uuid,
           "bytea" => HakumiType::String,
           "inet" => HakumiType::String,
           "cidr" => HakumiType::String,

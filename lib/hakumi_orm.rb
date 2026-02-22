@@ -4,6 +4,7 @@
 require "sorbet-runtime"
 
 require_relative "hakumi_orm/version"
+require_relative "hakumi_orm/json"
 require_relative "hakumi_orm/bind"
 require_relative "hakumi_orm/field_ref"
 require_relative "hakumi_orm/expr"
@@ -56,4 +57,5 @@ module HakumiORM
   class Error < StandardError; end
 end
 
+require_relative "hakumi_orm/adapter/connection_pool"
 require_relative "hakumi_orm/errors"

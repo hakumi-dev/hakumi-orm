@@ -44,6 +44,11 @@ module HakumiORM
       def to_string(raw)
         raw
       end
+
+      sig { params(raw: String).returns(Json) }
+      def to_json(raw)
+        Json.parse(raw)
+      end
     end
   end
 end

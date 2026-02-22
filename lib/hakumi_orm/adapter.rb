@@ -60,9 +60,26 @@ module HakumiORM
       sig { abstract.void }
       def close; end
 
+      sig { params(requires_new: T::Boolean, blk: T.proc.params(adapter: Base).void).void }
+      def transaction(requires_new: false, &blk)
+        @txn_depth = T.let(@txn_depth, T.nilable(Integer))
+        depth = @txn_depth || 0
+
+        if depth.zero?
+          run_top_level_transaction(&blk)
+        elsif requires_new
+          run_savepoint_transaction(depth, &blk)
+        else
+          blk.call(self)
+        end
+      end
+
+      private
+
       sig { params(blk: T.proc.params(adapter: Base).void).void }
-      def transaction(&blk)
+      def run_top_level_transaction(&blk)
         exec("BEGIN")
+        @txn_depth = 1
         blk.call(self)
       rescue StandardError
         begin
@@ -73,6 +90,27 @@ module HakumiORM
         raise
       else
         exec("COMMIT")
+      ensure
+        @txn_depth = 0
+      end
+
+      sig { params(depth: Integer, blk: T.proc.params(adapter: Base).void).void }
+      def run_savepoint_transaction(depth, &blk)
+        sp = "hakumi_sp_#{depth}"
+        exec("SAVEPOINT #{sp}")
+        @txn_depth = depth + 1
+        blk.call(self)
+      rescue StandardError
+        begin
+          exec("ROLLBACK TO SAVEPOINT #{sp}")
+        rescue StandardError
+          nil
+        end
+        raise
+      else
+        exec("RELEASE SAVEPOINT #{sp}")
+      ensure
+        @txn_depth = depth
       end
     end
   end

@@ -109,4 +109,17 @@ class TestField < HakumiORM::TestCase
     assert_equal :eq, (field == 1).op
     assert_equal :gt, (field > 18).op
   end
+
+  test "JsonField produces JsonBind and supports eq/neq/null" do
+    field = HakumiORM::JsonField.new(:data, "t", "col", '"t"."col"')
+    json = HakumiORM::Json.from_hash({ "a" => 1 })
+    pred = field.eq(json)
+
+    assert_instance_of HakumiORM::JsonBind, pred.binds[0]
+    assert_equal :eq, pred.op
+
+    refute_respond_to field, :gt
+    refute_respond_to field, :like
+    assert_respond_to field, :is_null
+  end
 end

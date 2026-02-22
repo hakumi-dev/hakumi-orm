@@ -34,6 +34,8 @@ module HakumiORM
     end
   end
 
+  class StaleObjectError < Error; end
+
   class ValidationError < Error
     extend T::Sig
 

@@ -15,10 +15,21 @@ class TestTypeMap < HakumiORM::TestCase
   end
 
   test "PG string types resolve to HakumiType::String" do
-    ["character varying", "text", "varchar", "uuid", "json", "jsonb", "bytea", "inet"].each do |pg_type|
+    ["character varying", "text", "varchar", "bytea", "inet"].each do |pg_type|
       assert_equal HT::String, TM.hakumi_type(:postgresql, pg_type),
                    "Expected #{pg_type} to map to String"
     end
+  end
+
+  test "PG json types resolve to HakumiType::Json" do
+    %w[json jsonb].each do |pg_type|
+      assert_equal HT::Json, TM.hakumi_type(:postgresql, pg_type),
+                   "Expected #{pg_type} to map to Json"
+    end
+  end
+
+  test "PG uuid resolves to HakumiType::Uuid" do
+    assert_equal HT::Uuid, TM.hakumi_type(:postgresql, "uuid")
   end
 
   test "PG boolean resolves to HakumiType::Boolean" do
@@ -60,6 +71,8 @@ class TestTypeMap < HakumiORM::TestCase
     assert_equal "::HakumiORM::DateField", HT::Date.field_class
     assert_equal "::HakumiORM::FloatField", HT::Float.field_class
     assert_equal "::HakumiORM::DecimalField", HT::Decimal.field_class
+    assert_equal "::HakumiORM::JsonField", HT::Json.field_class
+    assert_equal "::HakumiORM::StrField", HT::Uuid.field_class
   end
 
   test "comparable? is true for numeric and temporal types" do
@@ -67,15 +80,17 @@ class TestTypeMap < HakumiORM::TestCase
       assert_predicate ht, :comparable?, "Expected #{ht.serialize} to be comparable"
     end
 
-    [HT::String, HT::Boolean].each do |ht|
+    [HT::String, HT::Boolean, HT::Json, HT::Uuid].each do |ht|
       refute_predicate ht, :comparable?, "Expected #{ht.serialize} to not be comparable"
     end
   end
 
-  test "text? is true only for String" do
+  test "text? is true for String and Uuid" do
     assert_predicate HT::String, :text?
+    assert_predicate HT::Uuid, :text?
     refute_predicate HT::Integer, :text?
     refute_predicate HT::Boolean, :text?
+    refute_predicate HT::Json, :text?
   end
 
   test "cast_expression for nullable integer uses safe navigation" do
@@ -92,5 +107,32 @@ class TestTypeMap < HakumiORM::TestCase
 
     assert_includes nullable, '== "t"'
     assert_includes non_null, '== "t"'
+  end
+
+  test "cast_expression for json uses Cast.to_json" do
+    non_null = TM.cast_expression(HT::Json, "raw", nullable: false)
+
+    assert_equal "::HakumiORM::Cast.to_json(raw)", non_null
+  end
+
+  test "cast_expression for nullable json wraps with nil check" do
+    nullable = TM.cast_expression(HT::Json, "raw", nullable: true)
+
+    assert_includes nullable, "Cast.to_json"
+    assert_includes nullable, "nil"
+  end
+
+  test "cast_expression for uuid is identity (String)" do
+    assert_equal "raw", TM.cast_expression(HT::Uuid, "raw", nullable: false)
+  end
+
+  test "ruby_type returns correct types for Json and Uuid" do
+    assert_equal "::HakumiORM::Json", HT::Json.ruby_type
+    assert_equal "String", HT::Uuid.ruby_type
+  end
+
+  test "bind_class returns correct classes for Json and Uuid" do
+    assert_equal "::HakumiORM::JsonBind", HT::Json.bind_class
+    assert_equal "::HakumiORM::StrBind", HT::Uuid.bind_class
   end
 end

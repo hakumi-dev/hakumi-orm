@@ -169,9 +169,15 @@ module <%= module_name %>
 <%= ind %>    <%= record_class_name %>::Contract.on_persist(proxy, adapter, errors)
 <%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
 
+<%- if has_lock_version -%>
+<%= ind %>    result = adapter.exec_params(SQL_UPDATE_BY_PK, [<%= update_bind_list %>, @<%= pk_attr %>, ::HakumiORM::IntBind.new(@lock_version).pg_value])
+<%= ind %>    record = <%= record_class_name %>.from_result(result).first
+<%= ind %>    raise ::HakumiORM::StaleObjectError, "Attempted to update a stale #{<%= record_class_name %>.name}" unless record
+<%- else -%>
 <%= ind %>    result = adapter.exec_params(SQL_UPDATE_BY_PK, [<%= update_bind_list %>, @<%= pk_attr %>])
 <%= ind %>    record = <%= record_class_name %>.from_result(result).first
 <%= ind %>    raise ::HakumiORM::Error, "UPDATE returned no rows" unless record
+<%- end -%>
 
 <%= ind %>    record
 <%= ind %>  ensure

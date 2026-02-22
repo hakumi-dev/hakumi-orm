@@ -43,4 +43,20 @@ class TestCast < HakumiORM::TestCase
   test "to_float handles scientific notation" do
     assert_in_delta 1.5e10, HakumiORM::Cast.to_float("1.5e10")
   end
+
+  test "to_json parses JSON object string" do
+    result = HakumiORM::Cast.to_json('{"key":"value","num":42}')
+
+    assert_instance_of HakumiORM::Json, result
+    assert_equal "value", result["key"]&.as_s
+    assert_equal 42, result["num"]&.as_i
+  end
+
+  test "to_json parses JSON array string" do
+    result = HakumiORM::Cast.to_json("[1,2,3]")
+
+    assert_instance_of HakumiORM::Json, result
+    assert_equal 1, result.at(0)&.as_i
+    assert_equal 3, result.at(2)&.as_i
+  end
 end

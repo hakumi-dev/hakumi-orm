@@ -137,6 +137,23 @@ module HakumiORM
     end
   end
 
+  class JsonBind < Bind
+    extend T::Sig
+
+    sig { returns(Json) }
+    attr_reader :value
+
+    sig { params(value: Json).void }
+    def initialize(value)
+      @value = T.let(value, Json)
+    end
+
+    sig { override.returns(String) }
+    def pg_value
+      @value.to_json
+    end
+  end
+
   class NullBind < Bind
     extend T::Sig
 

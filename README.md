@@ -204,6 +204,7 @@ Associations are generated automatically from foreign keys. `has_many` returns a
 | DISTINCT | `.distinct` | `.distinct` |
 | GROUP BY / HAVING | `.group(:col).having("...")` | `.group(Field).having(Expr)` |
 | Aggregates | `.sum`, `.average`, `.minimum`, `.maximum` | `.sum(field)`, `.average(field)`, `.minimum(field)`, `.maximum(field)` |
+| Optimistic locking | `lock_version` column | `lock_version` column + `StaleObjectError` |
 | Pessimistic locking | `.lock` / `FOR UPDATE` | `.lock` / `.lock("FOR SHARE")` |
 | Multi-column pluck | `.pluck(:a, :b)` | `.pluck(FieldA, FieldB)` returns raw string arrays |
 | SQL generation | Arel (dynamic AST) | `SqlCompiler` with sequential bind markers |
@@ -218,6 +219,11 @@ Associations are generated automatically from foreign keys. `has_many` returns a
 | Single-record update | `user.update!(name: "Bob")` | `user.update!(name: "Bob")` -- typed kwargs, validated |
 | Single-record delete | `user.destroy!` | `user.delete!` |
 | Callbacks | Before/after hooks | Contract hooks: `on_all`, `on_create`, `on_update`, `on_persist` |
+| Connection pool | Built-in pool | `ConnectionPool` (thread-safe, reentrant, configurable) |
+| Transactions | `transaction { }` + nested | `transaction(requires_new: true)` + savepoints |
+| JSON/JSONB | Automatic hash/array | `HakumiORM::Json` opaque wrapper with typed extractors |
+| UUID | String column | `HakumiType::Uuid`, `StrField`, LIKE/ILIKE support |
+| Rake task | `rails db:migrate` etc. | `rake hakumi:generate` |
 | Dirty tracking | Automatic | None (opt-in if needed) |
 | Timestamps | Automatic `created_at`/`updated_at` | Auto-detected by codegen for timestamp columns |
 | Migrations | Built-in | Not included (use standalone tools) |
@@ -742,6 +748,124 @@ user.delete!
 ```
 
 The `dependent` parameter is only generated when the record has `has_many` or `has_one` associations.
+
+### Connection Pooling
+
+For multi-threaded applications, use `ConnectionPool` instead of a single adapter:
+
+```ruby
+HakumiORM.configure do |config|
+  config.adapter = HakumiORM::Adapter::ConnectionPool.new(size: 10, timeout: 5.0) do
+    HakumiORM::Adapter::Postgresql.connect(dbname: "myapp")
+  end
+end
+```
+
+The pool implements `Adapter::Base`, so it's a transparent drop-in. Connections are checked out per-thread and reused within nested calls (transactions, etc.).
+
+| Option | Default | Description |
+|---|---|---|
+| `size` | `5` | Maximum number of connections in the pool |
+| `timeout` | `5.0` | Seconds to wait for a connection before raising `TimeoutError` |
+
+### Nested Transactions (Savepoints)
+
+```ruby
+adapter.transaction do |a|
+  a.exec("INSERT INTO users ...")
+
+  adapter.transaction(requires_new: true) do |inner|
+    inner.exec("INSERT INTO posts ...")
+    raise "oops"  # rolls back only the inner savepoint
+  end
+
+  # Outer transaction continues
+end
+```
+
+Without `requires_new: true`, nested calls are no-ops (reuse the outer transaction). With it, each level uses `SAVEPOINT hakumi_sp_N` / `RELEASE` / `ROLLBACK TO`.
+
+### Optimistic Locking
+
+If a table has a `lock_version` integer column, the codegen automatically:
+- Adds `lock_version = lock_version + 1` to every `UPDATE`
+- Adds `WHERE lock_version = $current` to prevent stale writes
+- Excludes `lock_version` from `update!` user parameters
+- Raises `StaleObjectError` if the row was modified by another process
+
+```ruby
+user = User.find(1)
+
+# Another process updates the same user...
+other = User.find(1)
+other.update!(name: "Other")
+
+# This raises StaleObjectError because lock_version no longer matches
+user.update!(name: "Stale")  # => HakumiORM::StaleObjectError
+```
+
+### JSON/JSONB Columns
+
+JSON and JSONB columns are automatically mapped to `HakumiORM::Json`. The `Json` class stores the raw JSON string internally and provides typed accessors -- zero `Object`, zero `T.untyped`:
+
+```ruby
+event = Event.find(1)
+event.payload            # => HakumiORM::Json
+
+# Navigate nested structures -- [] and at return T.nilable(Json)
+event.payload["key"]           # => T.nilable(Json)
+event.payload["nested"]["deep"]  # => T.nilable(Json)
+event.payload.at(0)            # => T.nilable(Json)
+
+# Extract typed scalars
+event.payload["name"]&.as_s   # => T.nilable(String)
+event.payload["count"]&.as_i  # => T.nilable(Integer)
+event.payload["rate"]&.as_f   # => T.nilable(Float)
+event.payload["active"]&.as_bool  # => T.nilable(T::Boolean)
+event.payload["count"]&.scalar    # => JsonScalar (union of all primitives)
+
+# Serialize back to JSON string
+event.payload.to_json          # => String
+event.payload.raw_json         # => String (same)
+
+# Creating with JSON data
+Event.build(
+  name: "signup",
+  payload: HakumiORM::Json.from_hash({ "source" => "web", "ip" => "1.2.3.4" })
+)
+
+# From arrays
+HakumiORM::Json.from_array([1, 2, 3])
+```
+
+`JsonField` supports `eq`, `neq`, `is_null`, `is_not_null`. For JSON path queries, use `where_raw`.
+
+### UUID Columns
+
+UUID columns map to `String` / `StrField` with full LIKE/ILIKE support:
+
+```ruby
+token = Token.find(1)
+token.token_id           # => String ("550e8400-e29b-41d4-a716-446655440000")
+
+Token.where(TokenSchema::TOKEN_ID.eq("550e8400-..."))
+```
+
+### Rake Task
+
+Add to your `Rakefile`:
+
+```ruby
+require "hakumi_orm/tasks"
+```
+
+Then run:
+
+```bash
+bundle exec rake hakumi:generate
+```
+
+This reads your database schema and generates all model files into `output_dir`.
 
 ### Joins
 

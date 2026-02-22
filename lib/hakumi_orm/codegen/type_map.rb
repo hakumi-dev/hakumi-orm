@@ -27,33 +27,25 @@ module HakumiORM
           when HakumiType::Integer
             nullable ? "#{raw_expr}&.to_i" : "#{raw_expr}.to_i"
           when HakumiType::Boolean
-            if nullable
-              "((_hv = #{raw_expr}).nil? ? nil : _hv == \"t\")"
-            else
-              "#{raw_expr} == \"t\""
-            end
+            nullable ? "((_hv = #{raw_expr}).nil? ? nil : _hv == \"t\")" : "#{raw_expr} == \"t\""
           when HakumiType::Float
             nullable ? "#{raw_expr}&.to_f" : "#{raw_expr}.to_f"
-          when HakumiType::Decimal
-            if nullable
-              "((_hv = #{raw_expr}).nil? ? nil : BigDecimal(_hv))"
-            else
-              "BigDecimal(#{raw_expr})"
-            end
-          when HakumiType::Timestamp
-            if nullable
-              "((_hv = #{raw_expr}).nil? ? nil : ::HakumiORM::Cast.to_time(_hv))"
-            else
-              "::HakumiORM::Cast.to_time(#{raw_expr})"
-            end
-          when HakumiType::Date
-            if nullable
-              "((_hv = #{raw_expr}).nil? ? nil : ::HakumiORM::Cast.to_date(_hv))"
-            else
-              "::HakumiORM::Cast.to_date(#{raw_expr})"
-            end
+          when HakumiType::Decimal   then nullable_cast("BigDecimal", raw_expr, nullable)
+          when HakumiType::Timestamp then nullable_cast("::HakumiORM::Cast.to_time", raw_expr, nullable)
+          when HakumiType::Date      then nullable_cast("::HakumiORM::Cast.to_date", raw_expr, nullable)
+          when HakumiType::Json      then nullable_cast("::HakumiORM::Cast.to_json", raw_expr, nullable)
+          else raw_expr
+          end
+        end
+
+        private
+
+        sig { params(cast_fn: String, raw_expr: String, nullable: T::Boolean).returns(String) }
+        def nullable_cast(cast_fn, raw_expr, nullable)
+          if nullable
+            "((_hv = #{raw_expr}).nil? ? nil : #{cast_fn}(_hv))"
           else
-            raw_expr
+            "#{cast_fn}(#{raw_expr})"
           end
         end
       end

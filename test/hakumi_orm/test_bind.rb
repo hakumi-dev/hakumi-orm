@@ -41,4 +41,11 @@ class TestBind < HakumiORM::TestCase
   test "StrBind passes through string value unchanged" do
     assert_equal "hello", HakumiORM::StrBind.new("hello").pg_value
   end
+
+  test "JsonBind serializes Json to JSON string" do
+    json = HakumiORM::Json.from_hash({ "key" => "value" })
+    bind = HakumiORM::JsonBind.new(json)
+
+    assert_equal '{"key":"value"}', bind.pg_value
+  end
 end
