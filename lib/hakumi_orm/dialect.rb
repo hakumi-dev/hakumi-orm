@@ -41,8 +41,7 @@ module HakumiORM
 
       sig { returns(SqlCompiler) }
       def compiler
-        @compiler = T.let(@compiler, T.nilable(SqlCompiler))
-        @compiler ||= SqlCompiler.new(self)
+        @compiler ||= T.let(SqlCompiler.new(self), T.nilable(SqlCompiler))
       end
     end
   end

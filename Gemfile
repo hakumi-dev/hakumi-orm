@@ -23,3 +23,6 @@ gem "tapioca", ">= 0.17", require: false
 # Benchmarking (sandbox only)
 gem "activerecord", require: false
 gem "benchmark-ips", require: false
+
+gem "rubocop-performance", "~> 1.26", group: :development
+gem "rubocop-sorbet", "~> 0.12.0", group: :development

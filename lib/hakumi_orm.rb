@@ -63,8 +63,7 @@ module HakumiORM
 
     sig { returns(Configuration) }
     def config
-      @config = T.let(@config, T.nilable(Configuration))
-      @config ||= Configuration.new
+      @config ||= T.let(Configuration.new, T.nilable(Configuration))
     end
 
     sig { params(blk: T.proc.params(config: Configuration).void).void }

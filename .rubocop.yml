@@ -1,5 +1,7 @@
 plugins:
   - rubocop-minitest
+  - rubocop-performance
+  - rubocop-sorbet
 
 AllCops:
   TargetRubyVersion: 3.2
@@ -93,6 +95,12 @@ Style/StringLiterals:
 
 Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
+
+# All blk.call sites receive the block via forwarding (&blk) or store it as a Proc.
+# The Proc is already allocated before blk.call, so yield saves nothing.
+# connector.call / @connector.call are stored Procs (not blocks), which yield can't replace.
+Performance/RedundantBlockCall:
+  Enabled: false
 
 Layout/LineLength:
   Max: 140

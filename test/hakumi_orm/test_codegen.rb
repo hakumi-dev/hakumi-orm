@@ -785,7 +785,7 @@ class TestCodegen < HakumiORM::TestCase
     table.primary_key = "id"
 
     dialect = Class.new(HakumiORM::Dialect::Postgresql) do
-      def qualified_name(tbl, col)
+      define_method(:qualified_name) do |tbl, col|
         "\"#{tbl}\\\".\"#{col}\""
       end
     end.new

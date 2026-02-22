@@ -60,7 +60,7 @@ class TestConnectionPool < HakumiORM::TestCase
     barrier = Queue.new
     conn_ids = Queue.new
 
-    threads = 2.times.map do
+    threads = Array.new(2) do
       Thread.new do
         @pool.exec_params("SELECT 1", [])
         conn_ids << Thread.current.object_id
