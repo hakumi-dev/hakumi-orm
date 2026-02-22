@@ -152,6 +152,19 @@ module HakumiORM
       use_result(adapter.exec_params(compiled.sql, compiled.pg_params), &:affected_rows)
     end
 
+    sig { params(adapter: Adapter::Base).returns(T::Boolean) }
+    def exists?(adapter: HakumiORM.adapter)
+      preloaded = @_preloaded_results
+      return !preloaded.empty? if preloaded
+
+      compiled = adapter.dialect.compiler.exists(
+        table: @table_name,
+        where_expr: combined_where,
+        joins: @joins
+      )
+      use_result(adapter.exec_params(compiled.sql, compiled.pg_params)) { |r| r.row_count.positive? }
+    end
+
     sig { params(adapter: Adapter::Base).returns(CompiledQuery) }
     def to_sql(adapter: HakumiORM.adapter)
       build_select(adapter.dialect)

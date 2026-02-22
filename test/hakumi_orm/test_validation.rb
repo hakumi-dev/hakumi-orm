@@ -6,7 +6,7 @@ require "test_helper"
 class TestValidation < HakumiORM::TestCase
   def setup
     sc = UserRecord::Contract.singleton_class
-    %i[on_all on_create on_persist].each do |m|
+    %i[on_all on_create on_update on_persist].each do |m|
       sc.remove_method(m) if sc.method_defined?(m, false)
     end
   end

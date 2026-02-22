@@ -16,6 +16,10 @@ module <%= module_name %>
 <%= ind %>  # def self.on_create(record, e)
 <%= ind %>  # end
 
+<%= ind %>  # sig { override.params(record: <%= record_class_name %>::Checkable, e: ::HakumiORM::Errors).void }
+<%= ind %>  # def self.on_update(record, e)
+<%= ind %>  # end
+
 <%= ind %>  # sig { override.params(record: <%= record_class_name %>::Checkable, adapter: ::HakumiORM::Adapter::Base, e: ::HakumiORM::Errors).void }
 <%= ind %>  # def self.on_persist(record, adapter, e)
 <%= ind %>  # end

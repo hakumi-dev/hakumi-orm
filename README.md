@@ -204,8 +204,11 @@ Associations are generated automatically from foreign keys. `has_many` returns a
 | New vs persisted | Same class, `id` is nilable | Type-state: `Record::New` -> `Record::Validated` -> `Record` |
 | Associations | Declared via DSL macros | Generated from foreign keys |
 | Eager loading | `includes` / `preload` / `eager_load` | `.preload(:assoc)` on Relation (batch query) |
-| Callbacks | Before/after hooks | None (explicit control flow) |
+| Single-record update | `user.update!(name: "Bob")` | `user.update!(name: "Bob")` -- typed kwargs, validated |
+| Single-record delete | `user.destroy!` | `user.delete!` |
+| Callbacks | Before/after hooks | Contract hooks: `on_all`, `on_create`, `on_update`, `on_persist` |
 | Dirty tracking | Automatic | None (opt-in if needed) |
+| Timestamps | Automatic `created_at`/`updated_at` | Auto-detected by codegen for timestamp columns |
 | Migrations | Built-in | Not included (use standalone tools) |
 
 ## Installation
@@ -314,6 +317,22 @@ Find a record by primary key. Returns `nil` if not found.
 user = User.find(42)     # => UserRecord or nil
 ```
 
+#### `find_by(expr) -> T.nilable(Record)`
+
+Find the first record matching an expression. Sugar for `.where(expr).first`.
+
+```ruby
+user = User.find_by(UserSchema::EMAIL.eq("alice@example.com"))
+```
+
+#### `exists?(expr) -> Boolean`
+
+Check if any record matches. Compiles `SELECT 1 ... LIMIT 1` for efficiency.
+
+```ruby
+User.exists?(UserSchema::EMAIL.eq("alice@example.com"))  # => true or false
+```
+
 #### `where(expr) -> Relation`
 
 Start a filtered query. Returns a chainable `Relation`.
@@ -339,6 +358,44 @@ new_user = User.build(name: "Alice", email: "alice@example.com", active: true)
 new_user.class           # => UserRecord::New
 ```
 
+### Record Instance Methods
+
+#### `update!(...) -> Record`
+
+Update a persisted record's attributes. Takes keyword arguments for each column (defaults to current values for unchanged fields). Validates via `Contract.on_all`, `Contract.on_update`, and `Contract.on_persist`, then executes `UPDATE ... RETURNING *`. Returns a new hydrated `Record`.
+
+```ruby
+updated_user = user.update!(name: "Bob", active: false)
+updated_user.name        # => "Bob"
+updated_user.id          # => same id, guaranteed
+```
+
+#### `delete! -> void`
+
+Delete a persisted record by primary key. Raises `HakumiORM::Error` if no rows are affected (record was already deleted).
+
+```ruby
+user.delete!
+```
+
+#### `reload! -> Record`
+
+Re-fetch the record from the database by primary key. Returns a new `Record` instance with fresh data. Raises if the record no longer exists.
+
+```ruby
+fresh = user.reload!
+fresh.name               # => current DB value
+```
+
+#### `to_h -> Hash`
+
+Convert the record to a hash keyed by column name. The value type is a union of all column types (no `T.untyped`).
+
+```ruby
+user.to_h
+# => { id: 1, name: "Alice", email: "alice@example.com", age: 25, active: true }
+```
+
 ### Record::New Instance Methods
 
 #### `validate! -> Record::Validated`
@@ -354,11 +411,12 @@ validated.class          # => UserRecord::Validated
 
 #### `save!(adapter: HakumiORM.adapter) -> Record`
 
-Run `Contract.on_persist` validations, then persist via `INSERT ... RETURNING *`. Returns a fully hydrated `Record` with `id`.
+Run `Contract.on_persist` validations, then persist via `INSERT ... RETURNING *`. Returns a fully hydrated `Record` with `id`. If the table has `created_at` / `updated_at` timestamp columns, they are automatically set to `Time.now`.
 
 ```ruby
 user = validated.save!
 user.id                  # => Integer (guaranteed)
+user.created_at          # => Time (auto-set)
 ```
 
 ### Relation Methods
@@ -392,6 +450,7 @@ User
 | `to_a` | `T::Array[Record]` | Execute and return all matching records. |
 | `first` | `T.nilable(Record)` | Execute with LIMIT 1 and return the first record. |
 | `count` | `Integer` | Execute `SELECT COUNT(*)` and return the count. |
+| `exists?` | `T::Boolean` | Execute `SELECT 1 ... LIMIT 1` and return whether any row matches. |
 | `pluck_raw(field)` | `T::Array[T.nilable(String)]` | Return raw string values for a single column. |
 | `delete_all` | `Integer` | Execute `DELETE` and return the number of deleted rows. |
 | `update_all(assignments)` | `Integer` | Execute `UPDATE` and return the number of updated rows. |
@@ -605,6 +664,40 @@ user.class       # => UserRecord
 user.id          # => Integer (guaranteed non-nil)
 ```
 
+### Updating Records
+
+```ruby
+# Update specific fields -- unchanged fields default to current values
+updated = user.update!(name: "Bob", active: false)
+updated.name     # => "Bob"
+updated.active   # => false
+updated.email    # => unchanged from original
+
+# Validation runs automatically (on_all + on_update + on_persist)
+user.update!(name: "")  # raises ValidationError if contract rejects blank names
+```
+
+If the table has an `updated_at` timestamp column, it is automatically set to `Time.now` on every `update!` call.
+
+### Deleting Records
+
+```ruby
+# Delete a single record by primary key
+user.delete!             # => void (raises if record doesn't exist)
+
+# Bulk delete via Relation
+User.where(UserSchema::ACTIVE.eq(false)).delete_all  # => Integer (rows deleted)
+```
+
+### Automatic Timestamps
+
+If your table has `created_at` and/or `updated_at` columns of type `timestamp` / `timestamptz`, the codegen automatically handles them:
+
+- **On `save!` (insert):** Both `created_at` and `updated_at` are set to `Time.now`
+- **On `update!`:** Only `updated_at` is set to `Time.now`
+
+No configuration needed -- the generator detects these columns by name and type.
+
 ### Custom Models
 
 Generated code lives in `app/db/generated/` and is always overwritten. Your models live in `app/models/` and are never touched after the initial stub generation:
@@ -634,8 +727,7 @@ Each model has a validation contract that controls the `New -> Validated -> Reco
 class UserRecord::Contract < UserRecord::BaseContract
   extend T::Sig
 
-  # Runs during both validate! and save! -- for both create and (future) update flows.
-  # Receives UserRecord::Checkable (shared interface for New and Validated).
+  # Runs during validate!, save!, and update! -- shared rules for all flows.
   sig { override.params(record: UserRecord::Checkable, e: ::HakumiORM::Errors).void }
   def self.on_all(record, e)
     e.add(:name, "cannot be blank") if record.name.strip.empty?
@@ -648,7 +740,13 @@ class UserRecord::Contract < UserRecord::BaseContract
     e.add(:email, "is reserved") if record.email.end_with?("@system.internal")
   end
 
-  # Runs during save! just before INSERT -- has adapter access for DB-dependent checks.
+  # Runs only during update! on a persisted record.
+  sig { override.params(record: UserRecord::Checkable, e: ::HakumiORM::Errors).void }
+  def self.on_update(record, e)
+    # Example: prevent deactivating admin accounts
+  end
+
+  # Runs during save! and update! just before INSERT/UPDATE -- has adapter access.
   sig { override.params(record: UserRecord::Checkable, adapter: ::HakumiORM::Adapter::Base, e: ::HakumiORM::Errors).void }
   def self.on_persist(record, adapter, e)
     # Example: check uniqueness
@@ -656,13 +754,14 @@ class UserRecord::Contract < UserRecord::BaseContract
 end
 ```
 
-The three contract hooks correspond to different phases:
+The four contract hooks correspond to different phases:
 
 | Hook | Runs during | Receives | Use case |
 |---|---|---|---|
-| `on_all` | `validate!` and `save!` | `Checkable` | Pure business rules (format, presence, ranges) |
+| `on_all` | `validate!`, `save!`, and `update!` | `Checkable` | Pure business rules (format, presence, ranges) |
 | `on_create` | `validate!` only | `New` | Rules specific to new record creation |
-| `on_persist` | `save!` only | `Checkable` + `Adapter` | DB-dependent rules (uniqueness, FK existence) |
+| `on_update` | `update!` only | `Checkable` | Rules specific to record updates |
+| `on_persist` | `save!` and `update!` | `Checkable` + `Adapter` | DB-dependent rules (uniqueness, FK existence) |
 
 When validation fails, a `HakumiORM::ValidationError` is raised with a structured `Errors` object:
 

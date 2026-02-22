@@ -80,10 +80,71 @@ module <%= module_name %>
 <%= ind %>    <%= qualified_relation %>.new.where(expr)
 <%= ind %>  end
 
+<%= ind %>  sig { params(expr: ::HakumiORM::Expr, adapter: ::HakumiORM::Adapter::Base).returns(T.nilable(<%= record_class_name %>)) }
+<%= ind %>  def self.find_by(expr, adapter: ::HakumiORM.adapter)
+<%= ind %>    <%= qualified_relation %>.new.where(expr).first(adapter: adapter)
+<%= ind %>  end
+
+<%= ind %>  sig { params(expr: ::HakumiORM::Expr, adapter: ::HakumiORM::Adapter::Base).returns(T::Boolean) }
+<%= ind %>  def self.exists?(expr, adapter: ::HakumiORM.adapter)
+<%= ind %>    <%= qualified_relation %>.new.where(expr).exists?(adapter: adapter)
+<%= ind %>  end
+
 <%= ind %>  sig { returns(<%= qualified_relation %>) }
 <%= ind %>  def self.all
 <%= ind %>    <%= qualified_relation %>.new
 <%= ind %>  end
+
+<%= ind %>  sig { returns(T::Hash[Symbol, <%= to_h_value_type %>]) }
+<%= ind %>  def to_h
+<%= ind %>    {
+<%- columns.each_with_index do |col, i| -%>
+<%= ind %>      <%= col[:name] %>: @<%= col[:name] %><%= i < columns.length - 1 ? "," : "" %>
+<%- end -%>
+<%= ind %>    }
+<%= ind %>  end
+<%- if delete_sql -%>
+<%= ind %>  SQL_DELETE_BY_PK = T.let('<%= delete_sql %>', String)
+
+<%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def delete!(adapter: ::HakumiORM.adapter)
+<%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
+<%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
+<%= ind %>  ensure
+<%= ind %>    result&.close
+<%= ind %>  end
+
+<%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).returns(<%= record_class_name %>) }
+<%= ind %>  def reload!(adapter: ::HakumiORM.adapter)
+<%= ind %>    record = self.class.find(@<%= pk_attr %>, adapter: adapter)
+<%= ind %>    raise ::HakumiORM::Error, "Record not found on reload" unless record
+
+<%= ind %>    record
+<%= ind %>  end
+
+<%- end -%>
+<%- if update_sql -%>
+<%= ind %>  SQL_UPDATE_BY_PK = T.let('<%= update_sql %>', String)
+
+<%= ind %>  sig { params(<%= update_sig_params %>, adapter: ::HakumiORM::Adapter::Base).returns(<%= record_class_name %>) }
+<%= ind %>  def update!(<%= update_defaults %>, adapter: ::HakumiORM.adapter)
+<%= ind %>    proxy = <%= record_class_name %>::New.new(<%= update_ins_cols.map { |c| "#{c[:name]}: #{c[:name]}" }.join(", ") %>)
+<%= ind %>    errors = ::HakumiORM::Errors.new
+<%= ind %>    <%= record_class_name %>::Contract.on_all(proxy, errors)
+<%= ind %>    <%= record_class_name %>::Contract.on_update(proxy, errors)
+<%= ind %>    <%= record_class_name %>::Contract.on_persist(proxy, adapter, errors)
+<%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
+
+<%= ind %>    result = adapter.exec_params(SQL_UPDATE_BY_PK, [<%= update_bind_list %>, @<%= pk_attr %>])
+<%= ind %>    record = <%= record_class_name %>.from_result(result).first
+<%= ind %>    raise ::HakumiORM::Error, "UPDATE returned no rows" unless record
+
+<%= ind %>    record
+<%= ind %>  ensure
+<%= ind %>    result&.close
+<%= ind %>  end
+
+<%- end -%>
 <%- if build_sig_params -%>
 
 <%= ind %>  sig { params(<%= build_sig_params %>).returns(<%= record_class_name %>::New) }

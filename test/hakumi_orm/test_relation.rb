@@ -137,4 +137,150 @@ class TestRelation < HakumiORM::TestCase
     assert_includes sql, "OR"
     assert_equal [18, 65], @adapter.last_params
   end
+
+  # -- reload! ----------------------------------------------------------------
+
+  test "reload! re-fetches the record by pk" do
+    @adapter.stub_default([["1", "UpdatedAlice", "a@b.com", "30", "t"]])
+    user = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+
+    reloaded = user.reload!(adapter: @adapter)
+
+    assert_instance_of UserRecord, reloaded
+    assert_equal "UpdatedAlice", reloaded.name
+    assert_equal 30, reloaded.age
+  end
+
+  test "reload! raises Error when record not found" do
+    @adapter.stub_default([])
+    user = UserRecord.new(id: 999, name: "Ghost", email: "g@b.com", age: nil, active: false)
+
+    assert_raises(HakumiORM::Error) { user.reload!(adapter: @adapter) }
+  end
+
+  # -- update! ----------------------------------------------------------------
+
+  test "update! executes UPDATE with all columns and returns new record" do
+    @adapter.stub_default([["1", "Bob", "a@b.com", "25", "t"]])
+    user = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+
+    updated = user.update!(name: "Bob", adapter: @adapter)
+
+    assert_instance_of UserRecord, updated
+    assert_equal "Bob", updated.name
+    assert_includes @adapter.last_sql, "UPDATE"
+    assert_includes @adapter.last_sql, "SET"
+    assert_includes @adapter.last_sql, "RETURNING"
+  end
+
+  test "update! defaults unchanged fields to current values" do
+    @adapter.stub_default([["1", "Alice", "a@b.com", "25", "f"]])
+    user = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+
+    updated = user.update!(active: false, adapter: @adapter)
+
+    assert_equal "Alice", updated.name
+    refute updated.active
+  end
+
+  test "update! runs on_update contract and raises on failure" do
+    UserRecord::Contract.define_singleton_method(:on_update) do |record, e|
+      e.add(:name, "cannot be blank") if record.name.strip.empty?
+    end
+
+    user = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+
+    err = assert_raises(HakumiORM::ValidationError) { user.update!(name: "", adapter: @adapter) }
+    assert_includes err.errors.messages[:name], "cannot be blank"
+  ensure
+    sc = UserRecord::Contract.singleton_class
+    sc.remove_method(:on_update) if sc.method_defined?(:on_update, false)
+  end
+
+  test "update! raises Error when UPDATE returns no rows" do
+    @adapter.stub_default([])
+    user = UserRecord.new(id: 999, name: "Alice", email: "a@b.com", age: nil, active: true)
+
+    assert_raises(HakumiORM::Error) { user.update!(name: "Bob", adapter: @adapter) }
+  end
+
+  # -- delete! ----------------------------------------------------------------
+
+  test "delete! executes DELETE with pk bind and raises on zero affected rows" do
+    @adapter.stub_default([], affected: 1)
+    user = UserRecord.new(id: 42, name: "Alice", email: "a@b.com", age: nil, active: true)
+
+    user.delete!(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, 'DELETE FROM "users"'
+    assert_includes @adapter.last_sql, "$1"
+    assert_equal [42], @adapter.last_params
+  end
+
+  test "delete! raises Error when no rows affected" do
+    @adapter.stub_default([], affected: 0)
+    user = UserRecord.new(id: 999, name: "Ghost", email: "g@b.com", age: nil, active: false)
+
+    assert_raises(HakumiORM::Error) { user.delete!(adapter: @adapter) }
+  end
+
+  # -- exists? ----------------------------------------------------------------
+
+  test "exists? returns true when rows match" do
+    @adapter.stub_default([["1"]])
+
+    assert UserRecord.exists?(UserSchema::ACTIVE.eq(true), adapter: @adapter)
+    assert_includes @adapter.last_sql, "SELECT 1"
+    assert_includes @adapter.last_sql, "LIMIT 1"
+  end
+
+  test "exists? returns false when no rows match" do
+    @adapter.stub_default([])
+
+    refute UserRecord.exists?(UserSchema::ACTIVE.eq(true), adapter: @adapter)
+  end
+
+  test "exists? on relation respects where clauses" do
+    @adapter.stub_default([["1"]])
+
+    result = UserRecord.where(UserSchema::AGE.gt(18)).exists?(adapter: @adapter)
+
+    assert result
+    assert_includes @adapter.last_sql, "WHERE"
+  end
+
+  # -- find_by ----------------------------------------------------------------
+
+  test "find_by returns first matching record" do
+    @adapter.stub_default([["1", "Alice", "a@b.com", "25", "t"]])
+
+    user = UserRecord.find_by(UserSchema::EMAIL.eq("a@b.com"), adapter: @adapter)
+
+    assert_instance_of UserRecord, user
+    assert_equal "Alice", user.name
+    assert_includes @adapter.last_sql, "LIMIT 1"
+  end
+
+  test "find_by returns nil when no match" do
+    @adapter.stub_default([])
+
+    assert_nil UserRecord.find_by(UserSchema::EMAIL.eq("nope"), adapter: @adapter)
+  end
+
+  # -- to_h -------------------------------------------------------------------
+
+  test "to_h returns hash with all column values keyed by name" do
+    user = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+    h = user.to_h
+
+    assert_equal({ id: 1, name: "Alice", email: "a@b.com", age: 25, active: true }, h)
+  end
+
+  test "to_h preserves nil values for nullable columns" do
+    user = UserRecord.new(id: 2, name: "Bob", email: "b@c.com", age: nil, active: false)
+    h = user.to_h
+
+    assert_nil h[:age]
+    refute h[:active]
+  end
 end

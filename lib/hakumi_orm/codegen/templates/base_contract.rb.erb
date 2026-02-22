@@ -14,6 +14,9 @@ module <%= module_name %>
 <%= ind %>  sig { overridable.params(record: <%= record_class_name %>::New, e: ::HakumiORM::Errors).void }
 <%= ind %>  def self.on_create(record, e); end
 
+<%= ind %>  sig { overridable.params(record: <%= record_class_name %>::Checkable, e: ::HakumiORM::Errors).void }
+<%= ind %>  def self.on_update(record, e); end
+
 <%= ind %>  sig { overridable.params(record: <%= record_class_name %>::Checkable, adapter: ::HakumiORM::Adapter::Base, e: ::HakumiORM::Errors).void }
 <%= ind %>  def self.on_persist(record, adapter, e); end
 <%= ind %>end

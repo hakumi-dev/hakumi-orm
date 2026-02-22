@@ -67,14 +67,94 @@ class UserRecord
     rows
   end
 
+  sig { params(pk_value: Integer, adapter: HakumiORM::Adapter::Base).returns(T.nilable(UserRecord)) }
+  def self.find(pk_value, adapter: HakumiORM.adapter)
+    result = adapter.exec_params(
+      'SELECT "users"."id", "users"."name", "users"."email", "users"."age", "users"."active" FROM "users" WHERE "users"."id" = $1 LIMIT 1',
+      [pk_value]
+    )
+    return nil if result.row_count.zero?
+
+    from_result(result).first
+  ensure
+    result&.close
+  end
+
   sig { params(name: String, email: String, active: T::Boolean, age: T.nilable(Integer)).returns(UserRecord::New) }
   def self.build(name:, email:, active:, age: nil)
     UserRecord::New.new(name: name, email: email, age: age, active: active)
   end
 
+  SQL_DELETE_BY_PK = T.let('DELETE FROM "users" WHERE "users"."id" = $1', String)
+
+  sig { params(adapter: HakumiORM::Adapter::Base).void }
+  def delete!(adapter: HakumiORM.adapter)
+    result = adapter.exec_params(SQL_DELETE_BY_PK, [@id])
+    raise HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
+  ensure
+    result&.close
+  end
+
+  sig { params(adapter: HakumiORM::Adapter::Base).returns(UserRecord) }
+  def reload!(adapter: HakumiORM.adapter)
+    record = self.class.find(@id, adapter: adapter)
+    raise HakumiORM::Error, "Record not found on reload" unless record
+
+    record
+  end
+
+  SQL_UPDATE_BY_PK = T.let(
+    'UPDATE "users" SET "name" = $1, "email" = $2, "age" = $3, "active" = $4 WHERE "users"."id" = $5 RETURNING "id", "name", "email", "age", "active"',
+    String
+  )
+
+  sig do
+    params(
+      name: String, email: String, age: T.nilable(Integer), active: T::Boolean,
+      adapter: HakumiORM::Adapter::Base
+    ).returns(UserRecord)
+  end
+  def update!(name: @name, email: @email, age: @age, active: @active, adapter: HakumiORM.adapter)
+    proxy = UserRecord::New.new(name: name, email: email, age: age, active: active)
+    errors = HakumiORM::Errors.new
+    UserRecord::Contract.on_all(proxy, errors)
+    UserRecord::Contract.on_update(proxy, errors)
+    UserRecord::Contract.on_persist(proxy, adapter, errors)
+    raise HakumiORM::ValidationError, errors unless errors.valid?
+
+    result = adapter.exec_params(SQL_UPDATE_BY_PK, [name, email, age, active == true ? "t" : "f", @id])
+    record = UserRecord.from_result(result).first
+    raise HakumiORM::Error, "UPDATE returned no rows" unless record
+
+    record
+  ensure
+    result&.close
+  end
+
+  sig { returns(T::Hash[Symbol, T.any(Integer, String, T.nilable(Integer), T::Boolean)]) }
+  def to_h
+    {
+      id: @id,
+      name: @name,
+      email: @email,
+      age: @age,
+      active: @active
+    }
+  end
+
   sig { params(expr: HakumiORM::Expr).returns(UserRelation) }
   def self.where(expr)
     UserRelation.new.where(expr)
+  end
+
+  sig { params(expr: HakumiORM::Expr, adapter: HakumiORM::Adapter::Base).returns(T.nilable(UserRecord)) }
+  def self.find_by(expr, adapter: HakumiORM.adapter)
+    UserRelation.new.where(expr).first(adapter: adapter)
+  end
+
+  sig { params(expr: HakumiORM::Expr, adapter: HakumiORM::Adapter::Base).returns(T::Boolean) }
+  def self.exists?(expr, adapter: HakumiORM.adapter)
+    UserRelation.new.where(expr).exists?(adapter: adapter)
   end
 
   sig { returns(UserRelation) }
@@ -113,6 +193,9 @@ class UserRecord
 
     sig { overridable.params(record: UserRecord::New, e: HakumiORM::Errors).void }
     def self.on_create(record, e); end
+
+    sig { overridable.params(record: UserRecord::Checkable, e: HakumiORM::Errors).void }
+    def self.on_update(record, e); end
 
     sig { overridable.params(record: UserRecord::Checkable, adapter: HakumiORM::Adapter::Base, e: HakumiORM::Errors).void }
     def self.on_persist(record, adapter, e); end

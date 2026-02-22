@@ -70,6 +70,74 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
+  test "record has update! with SQL_UPDATE_BY_PK and RETURNING" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes code, "SQL_UPDATE_BY_PK"
+      assert_includes code, 'UPDATE "users" SET'
+      assert_includes code, "RETURNING"
+      assert_includes code, "def update!"
+      assert_includes code, "Contract.on_update"
+      assert_includes code, "Contract.on_all"
+      assert_includes code, "Contract.on_persist"
+    end
+  end
+
+  test "base_contract has on_update hook" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/base_contract.rb"))
+
+      assert_includes code, "def self.on_update"
+      assert_includes code, "UserRecord::Checkable"
+    end
+  end
+
+  test "record has delete! with SQL_DELETE_BY_PK" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes code, "SQL_DELETE_BY_PK"
+      assert_includes code, 'DELETE FROM "users"'
+      assert_includes code, "def delete!"
+      assert_includes code, "affected_rows"
+    end
+  end
+
+  test "record has to_h returning typed hash" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes code, "def to_h"
+      assert_includes code, "T::Hash[Symbol,"
+      refute_includes code, "T.untyped"
+    end
+  end
+
+  test "record has find_by and exists? class methods" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes code, "def self.find_by"
+      assert_includes code, "def self.exists?"
+    end
+  end
+
   test "record has typed attributes, keyword args, and hydration" do
     Dir.mktmpdir do |dir|
       gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
@@ -313,6 +381,69 @@ class TestCodegen < HakumiORM::TestCase
 
       assert_includes code, "class UserRecord::Contract < UserRecord::BaseContract"
       assert_includes code, "typed: strict"
+    end
+  end
+
+  # -- Automatic timestamps ---------------------------------------------------
+
+  test "validated_record uses Time.now for created_at and updated_at on insert" do
+    col_id = HakumiORM::Codegen::ColumnInfo.new(
+      name: "id", data_type: "integer", udt_name: "int4",
+      nullable: false, default: "nextval('posts_id_seq'::regclass)", max_length: nil
+    )
+    col_title = HakumiORM::Codegen::ColumnInfo.new(
+      name: "title", data_type: "character varying", udt_name: "varchar",
+      nullable: false, default: nil, max_length: 255
+    )
+    col_created = HakumiORM::Codegen::ColumnInfo.new(
+      name: "created_at", data_type: "timestamp with time zone", udt_name: "timestamptz",
+      nullable: false, default: nil, max_length: nil
+    )
+    col_updated = HakumiORM::Codegen::ColumnInfo.new(
+      name: "updated_at", data_type: "timestamp with time zone", udt_name: "timestamptz",
+      nullable: false, default: nil, max_length: nil
+    )
+
+    table = HakumiORM::Codegen::TableInfo.new("posts")
+    table.columns << col_id << col_title << col_created << col_updated
+    table.primary_key = "id"
+
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new({ "posts" => table }, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      validated_code = File.read(File.join(dir, "post/validated_record.rb"))
+
+      assert_includes validated_code, "TimeBind.new(::Time.now)", "save! should auto-set created_at/updated_at"
+
+      record_code = File.read(File.join(dir, "post/record.rb"))
+
+      assert_includes record_code, "SQL_UPDATE_BY_PK"
+      assert_includes record_code, "TimeBind.new(::Time.now)", "update! should auto-set updated_at"
+    end
+  end
+
+  test "timestamps are not auto-set for non-timestamp columns named created_at" do
+    col_id = HakumiORM::Codegen::ColumnInfo.new(
+      name: "id", data_type: "integer", udt_name: "int4",
+      nullable: false, default: "nextval('logs_id_seq'::regclass)", max_length: nil
+    )
+    col_created = HakumiORM::Codegen::ColumnInfo.new(
+      name: "created_at", data_type: "character varying", udt_name: "varchar",
+      nullable: false, default: nil, max_length: 255
+    )
+
+    table = HakumiORM::Codegen::TableInfo.new("logs")
+    table.columns << col_id << col_created
+    table.primary_key = "id"
+
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new({ "logs" => table }, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      validated_code = File.read(File.join(dir, "log/validated_record.rb"))
+
+      refute_includes validated_code, "Time.now", "Non-timestamp created_at should not auto-set"
     end
   end
 

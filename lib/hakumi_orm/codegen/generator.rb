@@ -71,6 +71,8 @@ module HakumiORM
         generate_contracts!(cd) if cd
       end
 
+      TIMESTAMP_AUTO_NAMES = T.let(%w[created_at updated_at].freeze, T::Array[String])
+
       private
 
       sig { params(models_dir: String).void }
@@ -133,6 +135,7 @@ module HakumiORM
                module_name: @module_name,
                ind: indent,
                record_class_name: qualify(record_cls),
+               to_h_value_type: to_h_value_type(table),
                columns: table.columns.map { |c| { name: c.name, ruby_type: ruby_type(c) } },
                init_sig_params: table.columns.map { |c| "#{c.name}: #{ruby_type(c)}" }.join(", "),
                init_args: table.columns.map { |c| "#{c.name}:" }.join(", "),
@@ -146,6 +149,8 @@ module HakumiORM
                supports_returning: @dialect.supports_returning?,
                returning_cols: returning_list,
                **build_find_locals(table, record_cls),
+               **build_delete_locals(table),
+               **build_update_locals(table, ins_cols),
                **build_build_locals(ins_cols, ins_cols.reject(&:nullable), ins_cols.select(&:nullable), record_cls))
       end
 

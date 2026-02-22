@@ -186,6 +186,22 @@ class TestSqlCompiler < HakumiORM::TestCase
     assert_includes q.sql, 'RETURNING "id"'
   end
 
+  test "exists produces SELECT 1 with LIMIT 1" do
+    q = @compiler.exists(table: "users")
+
+    assert_equal 'SELECT 1 FROM "users" LIMIT 1', q.sql
+    assert_empty q.binds
+  end
+
+  test "exists with where includes condition" do
+    q = @compiler.exists(table: "users", where_expr: UserSchema::ACTIVE.eq(true))
+
+    assert_includes q.sql, "SELECT 1"
+    assert_includes q.sql, "WHERE"
+    assert_includes q.sql, "LIMIT 1"
+    assert_equal 1, q.binds.length
+  end
+
   test "batch insert produces sequential bind markers across rows" do
     cols = [UserSchema::NAME, UserSchema::EMAIL]
     vals = [
