@@ -291,7 +291,12 @@ module HakumiORM
     end
 
     sig { returns(T.nilable(Expr)) }
-    def combined_where = combine_exprs(@default_exprs + @where_exprs)
+    def combined_where
+      return combine_exprs(@where_exprs) if @default_exprs.empty?
+      return combine_exprs(@default_exprs) if @where_exprs.empty?
+
+      combine_exprs(@default_exprs + @where_exprs)
+    end
 
     sig { returns(T.nilable(Expr)) }
     def combined_having = combine_exprs(@having_exprs)
