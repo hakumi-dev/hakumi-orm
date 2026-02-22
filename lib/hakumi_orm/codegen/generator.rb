@@ -32,7 +32,7 @@ module HakumiORM
         @module_name = T.let(options.module_name || cfg.module_name, T.nilable(String))
         @models_dir = T.let(options.models_dir || cfg.models_dir, T.nilable(String))
         @contracts_dir = T.let(options.contracts_dir || cfg.contracts_dir, T.nilable(String))
-        @soft_delete_tables = T.let(options.soft_delete_tables.to_set, T::Set[String])
+        @soft_delete_tables = T.let(options.soft_delete_tables, T::Hash[String, String])
         @created_at_column = T.let(options.created_at_column, T.nilable(String))
         @updated_at_column = T.let(options.updated_at_column, T.nilable(String))
       end
@@ -239,9 +239,9 @@ module HakumiORM
                       ho.map { |a| { method_name: a[:method_name], relation_class: a[:relation_class] } } +
                       bt.map { |a| { method_name: a[:method_name], relation_class: a[:target_relation] } }
 
-        has_soft_delete = soft_delete_column?(table)
+        sd_col = soft_delete_column(table)
         count_sql = "SELECT COUNT(*) FROM #{@dialect.quote_id(table.name)}"
-        count_sql += " WHERE #{@dialect.qualified_name(table.name, "deleted_at")} IS NULL" if has_soft_delete
+        count_sql += " WHERE #{@dialect.qualified_name(table.name, sd_col)} IS NULL" if sd_col
 
         render("relation",
                module_name: @module_name,
@@ -251,7 +251,8 @@ module HakumiORM
                qualified_schema: qualify("#{cls}Schema"),
                count_sql: count_sql,
                stmt_count_name: "hakumi_#{table.name}_count",
-               soft_delete: has_soft_delete,
+               soft_delete: !sd_col.nil?,
+               soft_delete_const: sd_col&.upcase,
                preloadable_assocs: preloadable)
       end
 

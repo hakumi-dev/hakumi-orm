@@ -145,7 +145,7 @@ module <%= module_name %>
 
 <%- if soft_delete -%>
 <%= ind %>  sig { returns(T::Boolean) }
-<%= ind %>  def deleted? = !@deleted_at.nil?
+<%= ind %>  def deleted? = !@<%= soft_delete_attr %>.nil?
 
 <%- end -%>
 <%- if has_many.any? || has_one.any? -%>

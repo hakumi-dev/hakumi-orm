@@ -44,24 +44,24 @@ module HakumiORM
       sig { params(table: TableInfo).returns(T::Hash[Symbol, T.nilable(String)]) }
       def build_delete_locals(table)
         pk = table.primary_key
-        return { delete_sql: nil, pk_attr: nil, soft_delete: false, soft_delete_sql: nil } unless pk
+        return { delete_sql: nil, pk_attr: nil, soft_delete: false, soft_delete_sql: nil, soft_delete_attr: nil } unless pk
 
-        has_sd = soft_delete_column?(table)
+        sd_col = soft_delete_column(table)
         tbl = @dialect.quote_id(table.name)
         pk_where = "#{@dialect.qualified_name(table.name, pk)} = #{@dialect.bind_marker(0)}"
         hard_sql = "DELETE FROM #{tbl} WHERE #{pk_where}"
-        sd_sql = if has_sd
-                   da = @dialect.quote_id("deleted_at")
+        sd_sql = if sd_col
+                   da = @dialect.quote_id(sd_col)
                    pk_qn = @dialect.qualified_name(table.name, pk)
                    "UPDATE #{tbl} SET #{da} = #{@dialect.bind_marker(0)} WHERE #{pk_qn} = #{@dialect.bind_marker(1)}"
                  end
 
-        { delete_sql: hard_sql, pk_attr: pk, soft_delete: has_sd, soft_delete_sql: sd_sql }
+        { delete_sql: hard_sql, pk_attr: pk, soft_delete: !sd_col.nil?, soft_delete_sql: sd_sql, soft_delete_attr: sd_col }
       end
 
-      sig { params(table: TableInfo).returns(T::Boolean) }
-      def soft_delete_column?(table)
-        @soft_delete_tables.include?(table.name)
+      sig { params(table: TableInfo).returns(T.nilable(String)) }
+      def soft_delete_column(table)
+        @soft_delete_tables[table.name]
       end
 
       sig { params(table: TableInfo).returns(T::Array[String]) }

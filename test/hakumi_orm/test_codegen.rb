@@ -942,7 +942,7 @@ class TestCodegen < HakumiORM::TestCase
   test "soft delete generates delete! as UPDATE and really_delete! as DELETE" do
     tables = build_table_with_soft_delete
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir, soft_delete_tables: ["articles"]))
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir, soft_delete_tables: { "articles" => "deleted_at" }))
       gen.generate!
 
       record = File.read(File.join(dir, "article/record.rb"))
@@ -959,7 +959,7 @@ class TestCodegen < HakumiORM::TestCase
   test "soft delete relation adds default scope and with_deleted/only_deleted" do
     tables = build_table_with_soft_delete
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir, soft_delete_tables: ["articles"]))
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir, soft_delete_tables: { "articles" => "deleted_at" }))
       gen.generate!
 
       relation = File.read(File.join(dir, "article/relation.rb"))
@@ -974,7 +974,7 @@ class TestCodegen < HakumiORM::TestCase
   test "soft delete count SQL includes deleted_at IS NULL" do
     tables = build_table_with_soft_delete
     Dir.mktmpdir do |dir|
-      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir, soft_delete_tables: ["articles"]))
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir, soft_delete_tables: { "articles" => "deleted_at" }))
       gen.generate!
 
       relation = File.read(File.join(dir, "article/relation.rb"))
@@ -1012,6 +1012,27 @@ class TestCodegen < HakumiORM::TestCase
       refute_includes record, "SQL_SOFT_DELETE"
       refute_includes relation, "with_deleted"
       refute_includes relation, "only_deleted"
+    end
+  end
+
+  test "soft delete with custom column name uses that column in generated code" do
+    tables = build_table_with_custom_soft_delete
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir, soft_delete_tables: { "events" => "removed_at" }))
+      gen.generate!
+
+      record = File.read(File.join(dir, "event/record.rb"))
+      relation = File.read(File.join(dir, "event/relation.rb"))
+
+      assert_includes record, "def deleted?"
+      assert_includes record, "@removed_at.nil?"
+      assert_includes record, "SQL_SOFT_DELETE_BY_PK"
+      assert_includes relation, "REMOVED_AT.is_null"
+      assert_includes relation, "REMOVED_AT.is_not_null"
+      assert_includes relation, "def with_deleted"
+      assert_includes relation, "def only_deleted"
+
+      refute_includes relation, "DELETED_AT"
     end
   end
 
@@ -1205,6 +1226,13 @@ class TestCodegen < HakumiORM::TestCase
                           columns: [pk_col("articles"), str_col("title"),
                                     col("deleted_at", type: "timestamp with time zone", udt: "timestamptz", nullable: true)])
     { "articles" => articles }
+  end
+
+  def build_table_with_custom_soft_delete
+    events = make_table("events",
+                        columns: [pk_col("events"), str_col("name"),
+                                  col("removed_at", type: "timestamp with time zone", udt: "timestamptz", nullable: true)])
+    { "events" => events }
   end
 
   def build_table_with_enum

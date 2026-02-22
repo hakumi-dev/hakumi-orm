@@ -9,7 +9,7 @@ module HakumiORM
       const :module_name, T.nilable(String), default: nil
       const :models_dir, T.nilable(String), default: nil
       const :contracts_dir, T.nilable(String), default: nil
-      const :soft_delete_tables, T::Array[String], default: []
+      const :soft_delete_tables, T::Hash[String, String], default: {}
       const :created_at_column, T.nilable(String), default: "created_at"
       const :updated_at_column, T.nilable(String), default: "updated_at"
     end

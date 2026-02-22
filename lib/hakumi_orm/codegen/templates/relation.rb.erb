@@ -20,7 +20,7 @@ module <%= module_name %>
 <%= ind %>  def initialize
 <%= ind %>    super(<%= qualified_schema %>::TABLE_NAME, <%= qualified_schema %>::ALL)
 <%- if soft_delete -%>
-<%= ind %>    @default_exprs << <%= qualified_schema %>::DELETED_AT.is_null
+<%= ind %>    @default_exprs << <%= qualified_schema %>::<%= soft_delete_const %>.is_null
 <%- end -%>
 <%= ind %>  end
 <%- if soft_delete -%>
@@ -33,7 +33,7 @@ module <%= module_name %>
 
 <%= ind %>  sig { returns(T.self_type) }
 <%= ind %>  def only_deleted
-<%= ind %>    @default_exprs = [<%= qualified_schema %>::DELETED_AT.is_not_null]
+<%= ind %>    @default_exprs = [<%= qualified_schema %>::<%= soft_delete_const %>.is_not_null]
 <%= ind %>    self
 <%= ind %>  end
 <%- end -%>

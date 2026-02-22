@@ -341,7 +341,7 @@ opts = HakumiORM::Codegen::GeneratorOptions.new(
   output_dir:        "custom/path",
   models_dir:        "custom/models",
   module_name:       "MyApp",
-  soft_delete_tables: %w[articles posts],     # opt-in soft delete for specific tables
+  soft_delete_tables: { "articles" => "deleted_at", "posts" => "removed_at" },
   created_at_column: "created_at",            # auto-set on INSERT (nil to disable)
   updated_at_column: "updated_at"             # auto-set on INSERT and UPDATE (nil to disable)
 )
@@ -969,6 +969,42 @@ user.delete!             # => void (raises if record doesn't exist)
 # Bulk delete via Relation
 User.where(UserSchema::ACTIVE.eq(false)).delete_all  # => Integer (rows deleted)
 ```
+
+### Soft Delete
+
+Soft delete is disabled by default. To enable it, list the tables and their deletion marker column in "soft_delete_tables":
+
+```ruby
+opts = HakumiORM::Codegen::GeneratorOptions.new(
+  soft_delete_tables: {
+    "articles" => "deleted_at",
+    "comments" => "removed_at",
+  }
+)
+```
+
+When enabled for a table:
+
+- **delete!** executes UPDATE SET column = NOW() instead of DELETE
+- **really_delete!** executes a hard DELETE FROM (bypasses soft delete)
+- **deleted?** returns true when the column is non-nil
+- **Default scope** filters out soft-deleted records (WHERE column IS NULL) on all queries
+- **with_deleted** removes the default scope to include soft-deleted records
+- **only_deleted** replaces the scope with WHERE column IS NOT NULL
+- **unscoped** clears all default scopes (including soft delete)
+
+```ruby
+Article.all.to_a              # only non-deleted articles
+Article.all.with_deleted.to_a # all articles, including deleted
+Article.all.only_deleted.to_a # only deleted articles
+
+article = Article.find(1)
+article.deleted?              # => false
+article.delete!               # UPDATE SET deleted_at = NOW()
+article.really_delete!        # DELETE FROM articles WHERE id = 1
+```
+
+Each table can use a different column name -- there is no hardcoded default.
 
 ### Automatic Timestamps
 
