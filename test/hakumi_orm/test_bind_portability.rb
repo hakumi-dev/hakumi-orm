@@ -4,12 +4,12 @@
 require "test_helper"
 
 class TestBindPortability < HakumiORM::TestCase
-  test "BoolBind pg_value returns PostgreSQL-specific t/f" do
+  test "BoolBind pg_value returns PG-specific t/f" do
     assert_equal "t", HakumiORM::BoolBind.new(true).pg_value
     assert_equal "f", HakumiORM::BoolBind.new(false).pg_value
   end
 
-  test "Cast.to_boolean recognizes PostgreSQL t but not MySQL/SQLite 1" do
+  test "Cast.to_boolean recognizes PG t but not MySQL/SQLite 1" do
     assert HakumiORM::Cast.to_boolean("t")
     refute HakumiORM::Cast.to_boolean("f")
     refute HakumiORM::Cast.to_boolean("1"), "MySQL/SQLite send 1 for true"

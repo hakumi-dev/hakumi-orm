@@ -4,14 +4,14 @@
 require "test_helper"
 
 class TestBind < HakumiORM::TestCase
-  test "DecimalBind serializes BigDecimal as fixed-point string for PG wire format" do
+  test "DecimalBind serializes BigDecimal as fixed-point string" do
     bind = HakumiORM::DecimalBind.new(BigDecimal("99999.00001"))
 
     assert_instance_of String, bind.pg_value
     assert_equal "99999.00001", bind.pg_value
   end
 
-  test "BoolBind converts true/false to PG text boolean format" do
+  test "BoolBind converts true/false to t/f" do
     assert_equal "t", HakumiORM::BoolBind.new(true).pg_value
     assert_equal "f", HakumiORM::BoolBind.new(false).pg_value
   end
@@ -29,7 +29,7 @@ class TestBind < HakumiORM::TestCase
     assert_equal "2024-01-15", bind.pg_value
   end
 
-  test "NullBind produces nil for PG NULL representation" do
+  test "NullBind returns nil" do
     assert_nil HakumiORM::NullBind.new.pg_value
   end
 

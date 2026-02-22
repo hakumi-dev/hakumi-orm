@@ -8,7 +8,7 @@ class TestDialectSqlite < HakumiORM::TestCase
     @dialect = HakumiORM::Dialect::Sqlite.new
   end
 
-  test "bind_marker always returns ? (SQLite uses positional ? placeholders)" do
+  test "bind_marker returns ? for all positions" do
     assert_equal "?", @dialect.bind_marker(0)
     assert_equal "?", @dialect.bind_marker(1)
     assert_equal "?", @dialect.bind_marker(99)
@@ -26,27 +26,27 @@ class TestDialectSqlite < HakumiORM::TestCase
     assert_same result1, result2
   end
 
-  test "qualified_name produces double-quoted column reference" do
+  test "qualified_name produces double-quoted table.column reference" do
     assert_equal '"users"."name"', @dialect.qualified_name("users", "name")
   end
 
-  test "supports RETURNING (SQLite 3.35+)" do
+  test "supports_returning? returns true" do
     assert_predicate @dialect, :supports_returning?
   end
 
-  test "name is :sqlite" do
+  test "name returns :sqlite" do
     assert_equal :sqlite, @dialect.name
   end
 
-  test "supports DDL transactions (SQLite DDL is fully rollback-safe)" do
+  test "supports_ddl_transactions? returns true" do
     assert_predicate @dialect, :supports_ddl_transactions?
   end
 
-  test "does not support advisory lock" do
+  test "supports_advisory_lock? returns false" do
     refute_predicate @dialect, :supports_advisory_lock?
   end
 
-  test "advisory lock SQL returns nil" do
+  test "advisory_lock_sql and advisory_unlock_sql return nil" do
     assert_nil @dialect.advisory_lock_sql
     assert_nil @dialect.advisory_unlock_sql
   end

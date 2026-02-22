@@ -8,7 +8,7 @@ class TestDialectMysql < HakumiORM::TestCase
     @dialect = HakumiORM::Dialect::Mysql.new
   end
 
-  test "bind_marker always returns ? (MySQL uses positional ? placeholders)" do
+  test "bind_marker returns ? for all positions" do
     assert_equal "?", @dialect.bind_marker(0)
     assert_equal "?", @dialect.bind_marker(1)
     assert_equal "?", @dialect.bind_marker(99)
@@ -26,27 +26,27 @@ class TestDialectMysql < HakumiORM::TestCase
     assert_same result1, result2
   end
 
-  test "qualified_name produces backtick-quoted column reference" do
+  test "qualified_name produces backtick-quoted table.column reference" do
     assert_equal "`users`.`name`", @dialect.qualified_name("users", "name")
   end
 
-  test "does not support RETURNING" do
+  test "supports_returning? returns false" do
     refute_predicate @dialect, :supports_returning?
   end
 
-  test "name is :mysql" do
+  test "name returns :mysql" do
     assert_equal :mysql, @dialect.name
   end
 
-  test "does not support DDL transactions" do
+  test "supports_ddl_transactions? returns false" do
     refute_predicate @dialect, :supports_ddl_transactions?
   end
 
-  test "supports advisory lock" do
+  test "supports_advisory_lock? returns true" do
     assert_predicate @dialect, :supports_advisory_lock?
   end
 
-  test "advisory lock SQL uses GET_LOCK" do
+  test "advisory_lock_sql uses GET_LOCK" do
     assert_includes @dialect.advisory_lock_sql, "GET_LOCK"
     assert_includes @dialect.advisory_unlock_sql, "RELEASE_LOCK"
   end

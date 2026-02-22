@@ -82,7 +82,7 @@ class TestRelationSafety < HakumiORM::TestCase
     assert_includes @adapter.last_sql, "IS NULL"
   end
 
-  test "find_in_batches on PostgreSQL uses DECLARE CURSOR" do
+  test "find_in_batches on PG uses DECLARE CURSOR" do
     pg_adapter = HakumiORM::Test::MockAdapter.new(dialect: HakumiORM::Dialect::Postgresql.new)
 
     UserRecord.all.find_in_batches(adapter: pg_adapter) { |_| break }

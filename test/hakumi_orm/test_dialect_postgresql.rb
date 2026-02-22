@@ -8,37 +8,37 @@ class TestDialectPostgresql < HakumiORM::TestCase
     @dialect = HakumiORM::Dialect::Postgresql.new
   end
 
-  test "bind_marker is 1-indexed (PG uses $1, $2, ...)" do
+  test "bind_marker returns 1-indexed $N markers" do
     assert_equal "$1", @dialect.bind_marker(0)
     assert_equal "$2", @dialect.bind_marker(1)
     assert_equal "$100", @dialect.bind_marker(99)
   end
 
-  test "quote_id wraps identifiers in double quotes to prevent SQL injection" do
+  test "quote_id wraps identifiers in double quotes" do
     assert_equal '"users"', @dialect.quote_id("users")
     assert_equal '"order"', @dialect.quote_id("order")
   end
 
-  test "quote_id caches results to avoid repeated string allocation" do
+  test "quote_id caches results" do
     result1 = @dialect.quote_id("users")
     result2 = @dialect.quote_id("users")
 
     assert_same result1, result2
   end
 
-  test "qualified_name produces fully-qualified column reference" do
+  test "qualified_name produces double-quoted table.column reference" do
     assert_equal '"users"."name"', @dialect.qualified_name("users", "name")
   end
 
-  test "supports DDL transactions" do
+  test "supports_ddl_transactions? returns true" do
     assert_predicate @dialect, :supports_ddl_transactions?
   end
 
-  test "supports advisory lock" do
+  test "supports_advisory_lock? returns true" do
     assert_predicate @dialect, :supports_advisory_lock?
   end
 
-  test "advisory lock SQL uses pg_advisory_lock" do
+  test "advisory_lock_sql uses pg_advisory_lock" do
     assert_includes @dialect.advisory_lock_sql, "pg_advisory_lock"
     assert_includes @dialect.advisory_unlock_sql, "pg_advisory_unlock"
   end
