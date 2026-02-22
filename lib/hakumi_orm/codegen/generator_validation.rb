@@ -41,7 +41,7 @@ module HakumiORM
 
         insert_sql = build_insert_sql(table)
         validated_bind_list = ins_cols.map do |col|
-          if timestamp_auto_column?(col)
+          if auto_timestamp_on_insert?(col)
             "#{hakumi_type_for(col).bind_class}.new(::Time.now).pg_value"
           elsif col.enum_values
             "::HakumiORM::StrBind.new(T.cast(@record.#{col.name}.serialize, String)).pg_value"
@@ -144,7 +144,7 @@ module HakumiORM
       sig { params(user_cols: T::Array[ColumnInfo]).returns(String) }
       def build_update_bind_list(user_cols)
         user_cols.map do |col|
-          if col.name == "updated_at" && hakumi_type_for(col) == Codegen::HakumiType::Timestamp
+          if auto_timestamp_on_update?(col)
             "#{hakumi_type_for(col).bind_class}.new(::Time.now).pg_value"
           elsif col.enum_values
             "::HakumiORM::StrBind.new(T.cast(#{col.name}.serialize, String)).pg_value"
@@ -182,8 +182,14 @@ module HakumiORM
       end
 
       sig { params(col: ColumnInfo).returns(T::Boolean) }
-      def timestamp_auto_column?(col)
-        TIMESTAMP_AUTO_NAMES.include?(col.name) && hakumi_type_for(col) == Codegen::HakumiType::Timestamp
+      def auto_timestamp_on_insert?(col)
+        [@created_at_column, @updated_at_column].include?(col.name) &&
+          hakumi_type_for(col) == Codegen::HakumiType::Timestamp
+      end
+
+      sig { params(col: ColumnInfo).returns(T::Boolean) }
+      def auto_timestamp_on_update?(col)
+        col.name == @updated_at_column && hakumi_type_for(col) == Codegen::HakumiType::Timestamp
       end
 
       sig { params(table: TableInfo).returns(String) }

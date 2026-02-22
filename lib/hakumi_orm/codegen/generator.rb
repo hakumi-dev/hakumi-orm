@@ -33,6 +33,8 @@ module HakumiORM
         @models_dir = T.let(options.models_dir || cfg.models_dir, T.nilable(String))
         @contracts_dir = T.let(options.contracts_dir || cfg.contracts_dir, T.nilable(String))
         @soft_delete_tables = T.let(options.soft_delete_tables.to_set, T::Set[String])
+        @created_at_column = T.let(options.created_at_column, T.nilable(String))
+        @updated_at_column = T.let(options.updated_at_column, T.nilable(String))
       end
 
       sig { void }
@@ -67,8 +69,6 @@ module HakumiORM
         cd = @contracts_dir
         generate_contracts!(cd) if cd
       end
-
-      TIMESTAMP_AUTO_NAMES = T.let(%w[created_at updated_at].freeze, T::Array[String])
 
       private
 

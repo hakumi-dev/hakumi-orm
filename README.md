@@ -232,8 +232,8 @@ Associations are generated automatically from foreign keys. `has_many` returns a
 | JSON/JSONB | Automatic hash/array | `HakumiORM::Json` opaque wrapper with typed extractors |
 | UUID | String column | `HakumiType::Uuid`, `StrField`, LIKE/ILIKE support |
 | Rake task | `rails db:migrate` etc. | `rake hakumi:generate` |
-| Dirty tracking | Automatic | None (opt-in if needed) |
-| Timestamps | Automatic `created_at`/`updated_at` | Auto-detected by codegen for timestamp columns |
+| Dirty tracking | Automatic (mutable) | `diff(other)` / `changed_from?(other)` (immutable snapshots) |
+| Timestamps | Automatic `created_at`/`updated_at` | Configurable via `created_at_column` / `updated_at_column` |
 | Migrations | Built-in | Not included (use standalone tools) |
 
 ## Installation
@@ -333,14 +333,17 @@ generator = HakumiORM::Codegen::Generator.new(tables)
 generator.generate!
 ```
 
-The generator reads `output_dir`, `models_dir`, and `module_name` from the global config. You can still override per-call via `GeneratorOptions`:
+The generator reads `output_dir`, `models_dir`, and `module_name` from the global config. You can override per-call via `GeneratorOptions`:
 
 ```ruby
 opts = HakumiORM::Codegen::GeneratorOptions.new(
-  dialect:     custom_dialect,
-  output_dir:  "custom/path",
-  models_dir:  "custom/models",
-  module_name: "MyApp"
+  dialect:           custom_dialect,
+  output_dir:        "custom/path",
+  models_dir:        "custom/models",
+  module_name:       "MyApp",
+  soft_delete_tables: %w[articles posts],     # opt-in soft delete for specific tables
+  created_at_column: "created_at",            # auto-set on INSERT (nil to disable)
+  updated_at_column: "updated_at"             # auto-set on INSERT and UPDATE (nil to disable)
 )
 generator = HakumiORM::Codegen::Generator.new(tables, opts)
 ```
@@ -969,12 +972,19 @@ User.where(UserSchema::ACTIVE.eq(false)).delete_all  # => Integer (rows deleted)
 
 ### Automatic Timestamps
 
-If your table has `created_at` and/or `updated_at` columns of type `timestamp` / `timestamptz`, the codegen automatically handles them:
+If your table has timestamp columns matching `created_at_column` and/or `updated_at_column` (configurable in `GeneratorOptions`):
 
-- **On `save!` (insert):** Both `created_at` and `updated_at` are set to `Time.now`
-- **On `update!`:** Only `updated_at` is set to `Time.now`
+- **On `save!` (insert):** Both are set to `Time.now`
+- **On `update!`:** Only `updated_at_column` is set to `Time.now`
 
-No configuration needed -- the generator detects these columns by name and type.
+Defaults to `"created_at"` and `"updated_at"`. Pass `nil` to disable either:
+
+```ruby
+opts = HakumiORM::Codegen::GeneratorOptions.new(
+  created_at_column: "inserted_at",   # custom name
+  updated_at_column: nil              # disable auto-update timestamp
+)
+```
 
 ### Custom Models
 
