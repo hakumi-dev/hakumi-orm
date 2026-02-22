@@ -19,6 +19,18 @@ module <%= module_name %>
 
 <%= ind %>  sig { overridable.params(record: <%= record_class_name %>::Checkable, adapter: ::HakumiORM::Adapter::Base, e: ::HakumiORM::Errors).void }
 <%= ind %>  def self.on_persist(record, adapter, e); end
+
+<%= ind %>  sig { overridable.params(record: <%= record_class_name %>, e: ::HakumiORM::Errors).void }
+<%= ind %>  def self.on_destroy(record, e); end
+
+<%= ind %>  sig { overridable.params(record: <%= record_class_name %>, adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def self.after_create(record, adapter); end
+
+<%= ind %>  sig { overridable.params(record: <%= record_class_name %>, adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def self.after_update(record, adapter); end
+
+<%= ind %>  sig { overridable.params(record: <%= record_class_name %>, adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def self.after_destroy(record, adapter); end
 <%= ind %>end
 <%- if module_name -%>
 end

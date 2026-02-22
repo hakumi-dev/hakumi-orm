@@ -87,8 +87,14 @@ class UserRecord
 
   sig { params(adapter: HakumiORM::Adapter::Base).void }
   def delete!(adapter: HakumiORM.adapter)
+    errors = HakumiORM::Errors.new
+    UserRecord::Contract.on_destroy(self, errors)
+    raise HakumiORM::ValidationError, errors unless errors.valid?
+
     result = adapter.exec_params(SQL_DELETE_BY_PK, [@id])
     raise HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
+
+    UserRecord::Contract.after_destroy(self, adapter)
   ensure
     result&.close
   end
@@ -124,6 +130,7 @@ class UserRecord
     record = UserRecord.from_result(result).first
     raise HakumiORM::Error, "UPDATE returned no rows" unless record
 
+    UserRecord::Contract.after_update(record, adapter)
     record
   ensure
     result&.close
@@ -224,6 +231,18 @@ class UserRecord
 
     sig { overridable.params(record: UserRecord::Checkable, adapter: HakumiORM::Adapter::Base, e: HakumiORM::Errors).void }
     def self.on_persist(record, adapter, e); end
+
+    sig { overridable.params(record: UserRecord, e: HakumiORM::Errors).void }
+    def self.on_destroy(record, e); end
+
+    sig { overridable.params(record: UserRecord, adapter: HakumiORM::Adapter::Base).void }
+    def self.after_create(record, adapter); end
+
+    sig { overridable.params(record: UserRecord, adapter: HakumiORM::Adapter::Base).void }
+    def self.after_update(record, adapter); end
+
+    sig { overridable.params(record: UserRecord, adapter: HakumiORM::Adapter::Base).void }
+    def self.after_destroy(record, adapter); end
   end
 
   class Contract < BaseContract
@@ -289,6 +308,28 @@ class UserRecord
     def initialize(record)
       record.freeze
       @record = T.let(record, UserRecord::New)
+    end
+
+    SQL_INSERT = T.let(
+      'INSERT INTO "users" ("name", "email", "age", "active") VALUES ($1, $2, $3, $4) RETURNING "id", "name", "email", "age", "active"',
+      String
+    )
+
+    sig { params(adapter: HakumiORM::Adapter::Base).returns(UserRecord) }
+    def save!(adapter: HakumiORM.adapter)
+      errors = HakumiORM::Errors.new
+      UserRecord::Contract.on_all(self, errors)
+      UserRecord::Contract.on_persist(self, adapter, errors)
+      raise HakumiORM::ValidationError, errors unless errors.valid?
+
+      result = adapter.exec_params(SQL_INSERT, [name, email, age, active == true ? "t" : "f"])
+      record = UserRecord.from_result(result).first
+      raise HakumiORM::Error, "INSERT returned no rows" unless record
+
+      UserRecord::Contract.after_create(record, adapter)
+      record
+    ensure
+      result&.close
     end
   end
 end

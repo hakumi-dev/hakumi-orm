@@ -151,6 +151,10 @@ module <%= module_name %>
 <%- if has_many.any? || has_one.any? -%>
 <%= ind %>  sig { params(dependent: Symbol, adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def delete!(dependent: :none, adapter: ::HakumiORM.adapter)
+<%= ind %>    errors = ::HakumiORM::Errors.new
+<%= ind %>    <%= record_class_name %>::Contract.on_destroy(self, errors)
+<%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
+<%= ind %>
 <%= ind %>    case dependent
 <%= ind %>    when :delete_all
 <%- (has_many + has_one).each do |assoc| -%>
@@ -170,6 +174,8 @@ module <%= module_name %>
 <%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
 <%- end -%>
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
+<%= ind %>
+<%= ind %>    <%= record_class_name %>::Contract.after_destroy(self, adapter)
 <%= ind %>  ensure
 <%= ind %>    result&.close
 <%= ind %>  end
@@ -177,6 +183,10 @@ module <%= module_name %>
 
 <%= ind %>  sig { params(dependent: Symbol, adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def really_delete!(dependent: :none, adapter: ::HakumiORM.adapter)
+<%= ind %>    errors = ::HakumiORM::Errors.new
+<%= ind %>    <%= record_class_name %>::Contract.on_destroy(self, errors)
+<%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
+<%= ind %>
 <%= ind %>    case dependent
 <%= ind %>    when :delete_all
 <%- (has_many + has_one).each do |assoc| -%>
@@ -192,6 +202,8 @@ module <%= module_name %>
 <%= ind %>    end
 <%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
+<%= ind %>
+<%= ind %>    <%= record_class_name %>::Contract.after_destroy(self, adapter)
 <%= ind %>  ensure
 <%= ind %>    result&.close
 <%= ind %>  end
@@ -200,24 +212,42 @@ module <%= module_name %>
 <%- if soft_delete -%>
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def delete!(adapter: ::HakumiORM.adapter)
+<%= ind %>    errors = ::HakumiORM::Errors.new
+<%= ind %>    <%= record_class_name %>::Contract.on_destroy(self, errors)
+<%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
+<%= ind %>
 <%= ind %>    result = adapter.exec_params(SQL_SOFT_DELETE_BY_PK, [::HakumiORM::TimeBind.new(::Time.now).pg_value, @<%= pk_attr %>])
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
+<%= ind %>
+<%= ind %>    <%= record_class_name %>::Contract.after_destroy(self, adapter)
 <%= ind %>  ensure
 <%= ind %>    result&.close
 <%= ind %>  end
 
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def really_delete!(adapter: ::HakumiORM.adapter)
+<%= ind %>    errors = ::HakumiORM::Errors.new
+<%= ind %>    <%= record_class_name %>::Contract.on_destroy(self, errors)
+<%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
+<%= ind %>
 <%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
+<%= ind %>
+<%= ind %>    <%= record_class_name %>::Contract.after_destroy(self, adapter)
 <%= ind %>  ensure
 <%= ind %>    result&.close
 <%= ind %>  end
 <%- else -%>
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def delete!(adapter: ::HakumiORM.adapter)
+<%= ind %>    errors = ::HakumiORM::Errors.new
+<%= ind %>    <%= record_class_name %>::Contract.on_destroy(self, errors)
+<%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
+<%= ind %>
 <%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
+<%= ind %>
+<%= ind %>    <%= record_class_name %>::Contract.after_destroy(self, adapter)
 <%= ind %>  ensure
 <%= ind %>    result&.close
 <%= ind %>  end
@@ -255,6 +285,7 @@ module <%= module_name %>
 <%= ind %>    raise ::HakumiORM::Error, "UPDATE returned no rows" unless record
 <%- end -%>
 
+<%= ind %>    <%= record_class_name %>::Contract.after_update(record, adapter)
 <%= ind %>    record
 <%= ind %>  ensure
 <%= ind %>    result&.close

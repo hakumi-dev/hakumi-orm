@@ -34,6 +34,7 @@ module <%= module_name %>
 <%= ind %>    record = <%= record_class_name %>.from_result(result).first
 <%= ind %>    raise ::HakumiORM::Error, "INSERT returned no rows" unless record
 
+<%= ind %>    <%= record_class_name %>::Contract.after_create(record, adapter)
 <%= ind %>    record
 <%= ind %>  ensure
 <%= ind %>    result&.close

@@ -41,6 +41,18 @@ module HakumiORM
         end
       end
 
+      sig { params(blk: T.proc.void).void }
+      def after_commit(&blk)
+        @after_commit_callbacks = T.let(@after_commit_callbacks, T.nilable(T::Array[T.proc.void]))
+        (@after_commit_callbacks ||= []) << blk
+      end
+
+      sig { params(blk: T.proc.void).void }
+      def after_rollback(&blk)
+        @after_rollback_callbacks = T.let(@after_rollback_callbacks, T.nilable(T::Array[T.proc.void]))
+        (@after_rollback_callbacks ||= []) << blk
+      end
+
       private
 
       sig { returns(T.nilable(Float)) }
@@ -63,6 +75,10 @@ module HakumiORM
 
       sig { params(blk: T.proc.params(adapter: Base).void).void }
       def run_top_level_transaction(&blk)
+        @after_commit_callbacks = T.let(nil, T.nilable(T::Array[T.proc.void]))
+        @after_rollback_callbacks = T.let(nil, T.nilable(T::Array[T.proc.void]))
+        @after_commit_callbacks = []
+        @after_rollback_callbacks = []
         exec("BEGIN")
         @txn_depth = 1
         blk.call(self)
@@ -72,11 +88,22 @@ module HakumiORM
         rescue StandardError
           nil
         end
+        fire_callbacks(@after_rollback_callbacks)
         raise
       else
         exec("COMMIT")
+        fire_callbacks(@after_commit_callbacks)
       ensure
         @txn_depth = 0
+        @after_commit_callbacks = nil
+        @after_rollback_callbacks = nil
+      end
+
+      sig { params(callbacks: T.nilable(T::Array[T.proc.void])).void }
+      def fire_callbacks(callbacks)
+        return unless callbacks
+
+        callbacks.each(&:call)
       end
 
       sig { params(depth: Integer, blk: T.proc.params(adapter: Base).void).void }
