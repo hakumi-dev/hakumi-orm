@@ -21,5 +21,10 @@ module HakumiORM
     def pg_params
       @binds.map(&:pg_value)
     end
+
+    sig { params(dialect: Dialect::Base).returns(T::Array[PGValue]) }
+    def params_for(dialect)
+      dialect.encode_binds(@binds)
+    end
   end
 end

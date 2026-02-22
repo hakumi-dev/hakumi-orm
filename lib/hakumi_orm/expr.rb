@@ -115,6 +115,12 @@ module HakumiORM
 
     sig { params(sql: String, binds: T::Array[Bind]).void }
     def initialize(sql, binds = [])
+      placeholders = sql.count("?")
+      if placeholders != binds.length
+        raise ArgumentError,
+              "RawExpr placeholder count (#{placeholders}) does not match bind count (#{binds.length}) in: #{sql}"
+      end
+
       @sql = T.let(sql, String)
       @binds = T.let(binds, T::Array[Bind])
     end

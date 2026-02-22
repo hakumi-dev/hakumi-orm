@@ -24,6 +24,16 @@ module HakumiORM
       sig { abstract.returns(Symbol) }
       def name; end
 
+      sig { params(bind: Bind).returns(PGValue) }
+      def encode_bind(bind)
+        bind.pg_value
+      end
+
+      sig { params(binds: T::Array[Bind]).returns(T::Array[PGValue]) }
+      def encode_binds(binds)
+        binds.map { |b| encode_bind(b) }
+      end
+
       sig { returns(SqlCompiler) }
       def compiler
         @compiler = T.let(@compiler, T.nilable(SqlCompiler))

@@ -38,6 +38,14 @@ module HakumiORM
       def name
         :sqlite
       end
+
+      sig { override.params(bind: ::HakumiORM::Bind).returns(::HakumiORM::PGValue) }
+      def encode_bind(bind)
+        case bind
+        when ::HakumiORM::BoolBind then bind.value ? 1 : 0
+        else bind.pg_value
+        end
+      end
     end
   end
 end

@@ -376,3 +376,90 @@ class UserRelation < HakumiORM::Relation
   sig { params(min_age: Integer).returns(T.self_type) }
   def older_than(min_age) = where(UserSchema::AGE.gte(min_age))
 end
+
+# --- Soft-delete fixture: articles table with deleted_at ---
+
+module ArticleSchema
+  ID = HakumiORM::IntField.new(:id, "articles", "id", '"articles"."id"').freeze
+  TITLE = HakumiORM::StrField.new(:title, "articles", "title", '"articles"."title"').freeze
+  DELETED_AT = HakumiORM::TimeField.new(:deleted_at, "articles", "deleted_at", '"articles"."deleted_at"').freeze
+
+  ALL = [ID, TITLE, DELETED_AT].freeze
+  TABLE_NAME = "articles"
+end
+
+class ArticleRecord
+  extend T::Sig
+
+  sig { returns(Integer) }
+  attr_reader :id
+
+  sig { returns(String) }
+  attr_reader :title
+
+  sig { returns(T.nilable(Time)) }
+  attr_reader :deleted_at
+
+  sig { params(id: Integer, title: String, deleted_at: T.nilable(Time)).void }
+  def initialize(id:, title:, deleted_at: nil)
+    @id = T.let(id, Integer)
+    @title = T.let(title, String)
+    @deleted_at = T.let(deleted_at, T.nilable(Time))
+  end
+
+  sig { params(result: HakumiORM::Adapter::Result).returns(T::Array[ArticleRecord]) }
+  def self.from_result(result)
+    n = result.row_count
+    rows = T.let(::Array.new(n), T::Array[ArticleRecord])
+    i = T.let(0, Integer)
+    while i < n
+      rows[i] = new(
+        id: result.fetch_value(i, 0).to_i,
+        title: result.fetch_value(i, 1),
+        deleted_at: (v = result.get_value(i, 2)) ? Time.parse(v) : nil
+      )
+      i += 1
+    end
+    rows
+  end
+
+  sig { returns(T::Boolean) }
+  def deleted? = !@deleted_at.nil?
+end
+
+class ArticleRelation < HakumiORM::Relation
+  extend T::Sig
+
+  ModelType = type_member { { fixed: ArticleRecord } }
+
+  sig { override.returns(T.nilable(String)) }
+  def stmt_count_all = "hakumi_articles_count"
+
+  sig { override.returns(T.nilable(String)) }
+  def sql_count_all = 'SELECT COUNT(*) FROM "articles" WHERE "articles"."deleted_at" IS NULL'
+
+  sig { void }
+  def initialize
+    super(ArticleSchema::TABLE_NAME, ArticleSchema::ALL)
+    @default_exprs << ArticleSchema::DELETED_AT.is_null
+  end
+
+  sig { returns(T.self_type) }
+  def with_deleted
+    @default_exprs = []
+    mark_defaults_dirty!
+    self
+  end
+
+  sig { returns(T.self_type) }
+  def only_deleted
+    @default_exprs = [ArticleSchema::DELETED_AT.is_not_null]
+    mark_defaults_dirty!
+    self
+  end
+
+  sig { override.params(result: HakumiORM::Adapter::Result).returns(T::Array[ArticleRecord]) }
+  def hydrate(result)
+    ArticleRecord.from_result(result)
+  end
+end

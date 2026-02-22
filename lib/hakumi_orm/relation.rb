@@ -28,6 +28,7 @@ module HakumiORM
       @having_exprs = T.let([], T::Array[Expr])
       @_preloaded_results = T.let(nil, T.nilable(T::Array[ModelType]))
       @_preload_nodes = T.let([], T::Array[PreloadNode])
+      @defaults_pristine = T.let(true, T::Boolean)
     end
 
     sig { params(expr: Expr).returns(T.self_type) }
@@ -129,6 +130,7 @@ module HakumiORM
     sig { returns(T.self_type) }
     def unscoped
       @default_exprs = []
+      mark_defaults_dirty!
       self
     end
 
@@ -167,7 +169,7 @@ module HakumiORM
 
       stmt = stmt_count_all
       sql = sql_count_all
-      result = if @where_exprs.empty? && stmt && sql
+      result = if @where_exprs.empty? && @defaults_pristine && stmt && sql
                  adapter.prepare(stmt, sql)
                  adapter.exec_prepared(stmt, [])
                else
@@ -272,6 +274,23 @@ module HakumiORM
     def where_expression = combined_where
 
     private
+
+    sig { void }
+    def mark_defaults_dirty!
+      @defaults_pristine = false
+    end
+
+    sig { params(source: Relation[ModelType]).void }
+    def initialize_copy(source)
+      super
+      @where_exprs = @where_exprs.dup
+      @default_exprs = @default_exprs.dup
+      @order_clauses = @order_clauses.dup
+      @joins = @joins.dup
+      @group_fields = @group_fields.dup
+      @having_exprs = @having_exprs.dup
+      @_preload_nodes = @_preload_nodes.dup
+    end
 
     sig do
       type_parameters(:R)
