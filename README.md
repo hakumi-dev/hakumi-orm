@@ -151,6 +151,7 @@ User.where(UserSchema::EMAIL.like("%@gmail.com"))
 ```
 
 Key differences:
+
 - AR uses hash conditions and raw SQL strings -- typos and type mismatches are caught at runtime (or not at all)
 - HakumiORM uses typed "Field" objects -- Sorbet catches column name typos, wrong value types, and invalid operations at compile time
 
@@ -997,6 +998,7 @@ Without "requires_new: true", nested calls are no-ops (reuse the outer transacti
 ### Optimistic Locking
 
 If a table has a "lock_version" integer column, the codegen automatically:
+
 - Adds "lock_version = lock_version + 1" to every "UPDATE"
 - Adds "WHERE lock_version = $current" to prevent stale writes
 - Excludes "lock_version" from "update!" user parameters
@@ -1715,6 +1717,7 @@ Draft
 "Completed" and "Cancelled" both inherit from "Started" (both have "started_at"), but "Rejected" branches from "Draft" directly. Sorbet enforces this: a "Rejected" is **not** a "Started", and the type checker prevents you from treating it as one.
 
 Key points:
+
 - **Real static typing** -- variant constructors demand non-nil kwargs; Sorbet verifies call sites at compile time
 - **No "T.must"** -- "T.let" in constructors is a declaration, not a cast (types already match)
 - **No metaprogramming** -- you write the variant classes yourself, full control
