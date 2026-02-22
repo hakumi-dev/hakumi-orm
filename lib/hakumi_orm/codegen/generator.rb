@@ -128,7 +128,7 @@ module HakumiORM
         fields = table.columns.map do |col|
           ht = hakumi_type_for(col)
           field_cls = ht.field_class
-          qn = @dialect.qualified_name(table.name, col.name).gsub('"', '\\"')
+          qn = escape_ruby_dq(@dialect.qualified_name(table.name, col.name))
           { const: col.name.upcase, field_cls: field_cls, name: col.name, qn: qn }
         end
 
@@ -325,6 +325,11 @@ module HakumiORM
       sig { params(table_name: String).returns(String) }
       def classify(table_name)
         singularize(table_name).split("_").map(&:capitalize).join
+      end
+
+      sig { params(value: String).returns(String) }
+      def escape_ruby_dq(value)
+        value.gsub("\\") { "\\\\" }.gsub('"') { '\\"' }
       end
 
       sig { params(word: String).returns(String) }

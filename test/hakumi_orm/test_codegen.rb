@@ -710,6 +710,76 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
+  test "schema escapes double quotes in postgresql qualified names" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/schema.rb"))
+
+      assert_includes code, '\"users\".\"name\"'
+      assert_includes code, '\"users\".\"email\"'
+      assert_includes code, '\"users\".\"id\"'
+    end
+  end
+
+  test "schema escapes double quotes in sqlite qualified names" do
+    dialect = HakumiORM::Dialect::Sqlite.new
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/schema.rb"))
+
+      assert_includes code, '\"users\".\"name\"'
+      assert_includes code, '\"users\".\"email\"'
+    end
+  end
+
+  test "schema uses backticks for mysql qualified names without extra escaping" do
+    dialect = HakumiORM::Dialect::Mysql.new
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/schema.rb"))
+
+      assert_includes code, "`users`.`name`"
+      assert_includes code, "`users`.`email`"
+      refute_includes code, '\\"'
+    end
+  end
+
+  test "schema escapes backslashes before double quotes in qualified names" do
+    col_id = HakumiORM::Codegen::ColumnInfo.new(
+      name: "id", data_type: "integer", udt_name: "int4",
+      nullable: false, default: "nextval('weird_id_seq'::regclass)", max_length: nil
+    )
+    col_val = HakumiORM::Codegen::ColumnInfo.new(
+      name: "val", data_type: "character varying", udt_name: "varchar",
+      nullable: false, default: nil, max_length: 255
+    )
+
+    table = HakumiORM::Codegen::TableInfo.new("weird")
+    table.columns << col_id << col_val
+    table.primary_key = "id"
+
+    dialect = Class.new(HakumiORM::Dialect::Postgresql) do
+      def qualified_name(tbl, col)
+        "\"#{tbl}\\\".\"#{col}\""
+      end
+    end.new
+
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new({ "weird" => table }, dialect: dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "weird/schema.rb"))
+
+      assert_includes code, '\\\\\"'
+    end
+  end
+
   test "uuid column generates StrField" do
     tables = build_table_with_uuid
     Dir.mktmpdir do |dir|
