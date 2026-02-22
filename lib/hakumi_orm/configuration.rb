@@ -48,6 +48,9 @@ module HakumiORM
     sig { returns(T.nilable(::Logger)) }
     attr_accessor :logger
 
+    sig { returns(String) }
+    attr_accessor :migrations_path
+
     sig { void }
     def initialize
       @adapter = T.let(nil, T.nilable(Adapter::Base))
@@ -64,6 +67,7 @@ module HakumiORM
       @pool_size = T.let(5, Integer)
       @pool_timeout = T.let(5.0, Float)
       @logger = T.let(nil, T.nilable(::Logger))
+      @migrations_path = T.let("db/migrate", String)
     end
 
     sig { params(adapter: T.nilable(Adapter::Base)).void }

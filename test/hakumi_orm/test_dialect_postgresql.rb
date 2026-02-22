@@ -29,4 +29,17 @@ class TestDialectPostgresql < HakumiORM::TestCase
   test "qualified_name produces fully-qualified column reference" do
     assert_equal '"users"."name"', @dialect.qualified_name("users", "name")
   end
+
+  test "supports DDL transactions" do
+    assert_predicate @dialect, :supports_ddl_transactions?
+  end
+
+  test "supports advisory lock" do
+    assert_predicate @dialect, :supports_advisory_lock?
+  end
+
+  test "advisory lock SQL uses pg_advisory_lock" do
+    assert_includes @dialect.advisory_lock_sql, "pg_advisory_lock"
+    assert_includes @dialect.advisory_unlock_sql, "pg_advisory_unlock"
+  end
 end

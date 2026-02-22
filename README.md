@@ -1017,7 +1017,100 @@ Product.where(ProductSchema::PRICE.eq(Money.new(9995)))
 
 Network types ("inet", "cidr", "macaddr") and "hstore" are mapped to "String" by default. Override with "TypeRegistry" for richer types.
 
-### Rake Task
+### Migrations
+
+Create a migration:
+
+```bash
+bundle exec rake hakumi:migration[create_users]
+```
+
+This generates "db/migrate/20260222120000_create_users.rb":
+
+```ruby
+class CreateUsers < HakumiORM::Migration
+  def up
+    create_table("users") do |t|
+      t.string "name", null: false
+      t.string "email", null: false, limit: 255
+      t.integer "age"
+      t.boolean "active", null: false, default: "true"
+      t.timestamps
+    end
+
+    add_index "users", ["email"], unique: true
+  end
+
+  def down
+    drop_table "users"
+  end
+end
+```
+
+Run migrations:
+
+```bash
+bundle exec rake hakumi:migrate           # run pending
+bundle exec rake hakumi:rollback          # rollback last
+bundle exec rake hakumi:rollback[3]       # rollback 3
+bundle exec rake hakumi:migrate:status    # show up/down status
+bundle exec rake hakumi:version           # current version
+```
+
+Available DSL methods inside "up"/"down":
+
+| Method | Description |
+|---|---|
+| "create_table(name, id:)" | Create table. "id:" controls PK type: ":bigserial" (default), ":serial", ":uuid", "false" (no PK). Block yields "TableDefinition". |
+| "drop_table(name)" | Drop table. |
+| "rename_table(old, new)" | Rename table. |
+| "add_column(table, col, type, ...)" | Add column. Options: "null:", "default:", "limit:", "precision:", "scale:". |
+| "remove_column(table, col)" | Drop column. |
+| "change_column(table, col, type, ...)" | Change column type. |
+| "rename_column(table, old, new)" | Rename column. |
+| "add_index(table, columns, ...)" | Create index. Options: "unique:", "name:". |
+| "remove_index(table, columns, ...)" | Drop index. Options: "name:". |
+| "add_foreign_key(from, to, column:, ...)" | Add FK constraint. Options: "primary_key:", "on_delete:" (":cascade", ":set_null", ":restrict"). |
+| "remove_foreign_key(from, to, ...)" | Drop FK constraint. Options: "column:". |
+| "execute(sql)" | Run raw SQL. |
+
+"TableDefinition" sugar methods: "t.string", "t.text", "t.integer", "t.bigint", "t.float", "t.decimal", "t.boolean", "t.date", "t.datetime", "t.timestamp", "t.binary", "t.json", "t.jsonb", "t.uuid", "t.inet", "t.cidr", "t.hstore", "t.integer_array", "t.string_array", "t.float_array", "t.boolean_array", "t.timestamps", "t.references".
+
+All SQL is dialect-aware -- the same migration produces correct SQL for PostgreSQL, MySQL, and SQLite.
+
+#### DDL transactions
+
+On PostgreSQL and SQLite, each migration runs inside a transaction. If it fails, all changes are rolled back.
+
+On MySQL, DDL statements cause implicit commits -- the Runner detects this via "dialect.supports_ddl_transactions?" and logs a warning. Partial rollback is not guaranteed.
+
+To opt out of the transaction wrapper (needed for operations like "CREATE INDEX CONCURRENTLY" in PostgreSQL):
+
+```ruby
+class AddEmailIndexConcurrently < HakumiORM::Migration
+  disable_ddl_transaction!
+
+  def up
+    execute "CREATE INDEX CONCURRENTLY idx_users_email ON users (email)"
+  end
+
+  def down
+    execute "DROP INDEX CONCURRENTLY idx_users_email"
+  end
+end
+```
+
+#### Configuration
+
+Migration files are read from "db/migrate" by default. To change:
+
+```ruby
+HakumiORM.configure do |c|
+  c.migrations_path = "database/migrations"
+end
+```
+
+### Rake Tasks
 
 Add to your "Rakefile":
 
@@ -1025,13 +1118,17 @@ Add to your "Rakefile":
 require "hakumi_orm/tasks"
 ```
 
-Then run:
+Available tasks:
 
 ```bash
-bundle exec rake hakumi:generate
+bundle exec rake hakumi:generate           # generate models from DB schema
+bundle exec rake hakumi:migrate            # run pending migrations
+bundle exec rake hakumi:rollback[N]        # rollback N migrations
+bundle exec rake hakumi:migrate:status     # show migration status
+bundle exec rake hakumi:version            # show current schema version
+bundle exec rake hakumi:migration[name]    # scaffold new migration
+bundle exec rake hakumi:type[name]         # scaffold custom type
 ```
-
-This reads your database schema and generates all model files into "output_dir".
 
 ### Joins
 

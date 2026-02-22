@@ -37,4 +37,17 @@ class TestDialectMysql < HakumiORM::TestCase
   test "name is :mysql" do
     assert_equal :mysql, @dialect.name
   end
+
+  test "does not support DDL transactions" do
+    refute_predicate @dialect, :supports_ddl_transactions?
+  end
+
+  test "supports advisory lock" do
+    assert_predicate @dialect, :supports_advisory_lock?
+  end
+
+  test "advisory lock SQL uses GET_LOCK" do
+    assert_includes @dialect.advisory_lock_sql, "GET_LOCK"
+    assert_includes @dialect.advisory_unlock_sql, "RELEASE_LOCK"
+  end
 end

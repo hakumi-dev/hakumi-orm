@@ -29,6 +29,26 @@ module HakumiORM
         false
       end
 
+      sig { returns(T::Boolean) }
+      def supports_ddl_transactions?
+        false
+      end
+
+      sig { returns(T::Boolean) }
+      def supports_advisory_lock?
+        false
+      end
+
+      sig { returns(T.nilable(String)) }
+      def advisory_lock_sql
+        nil
+      end
+
+      sig { returns(T.nilable(String)) }
+      def advisory_unlock_sql
+        nil
+      end
+
       sig { params(bind: Bind).returns(PGValue) }
       def encode_bind(bind)
         bind.pg_value

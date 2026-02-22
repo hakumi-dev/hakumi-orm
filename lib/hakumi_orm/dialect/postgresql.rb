@@ -39,6 +39,28 @@ module HakumiORM
         true
       end
 
+      sig { override.returns(T::Boolean) }
+      def supports_ddl_transactions?
+        true
+      end
+
+      sig { override.returns(T::Boolean) }
+      def supports_advisory_lock?
+        true
+      end
+
+      MIGRATION_LOCK_KEY = 7_283_482_910
+
+      sig { override.returns(T.nilable(String)) }
+      def advisory_lock_sql
+        "SELECT pg_advisory_lock(#{MIGRATION_LOCK_KEY})"
+      end
+
+      sig { override.returns(T.nilable(String)) }
+      def advisory_unlock_sql
+        "SELECT pg_advisory_unlock(#{MIGRATION_LOCK_KEY})"
+      end
+
       sig { override.returns(Symbol) }
       def name
         :postgresql

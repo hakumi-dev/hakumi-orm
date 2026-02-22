@@ -41,6 +41,7 @@ Metrics/BlockLength:
   Exclude:
     - "test/**/*"
     - "*.gemspec"
+    - "lib/hakumi_orm/tasks.rb"
 
 Metrics/CyclomaticComplexity:
   Max: 20
@@ -53,6 +54,9 @@ Metrics/ParameterLists:
   Exclude:
     - "lib/hakumi_orm/sql_compiler.rb"
     - "lib/hakumi_orm/sql_compiler_expr.rb"
+    - "lib/hakumi_orm/migration.rb"
+    - "lib/hakumi_orm/migration/table_definition.rb"
+    - "lib/hakumi_orm/migration/sql_generator.rb"
     - "test/**/*"
 
 Metrics/CollectionLiteralLength:

@@ -10,7 +10,7 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "errors.rb" | "Errors" | Collects validation messages grouped by field. Methods: "add(field, message)", "valid?", "messages", "full_messages", "count". |
 | "validation_error.rb" | "ValidationError < Error" | Wraps "Errors" for the type-state flow. Raised when contract validation fails. |
 | "stale_object_error.rb" | "StaleObjectError < Error" | Raised by optimistic locking when "lock_version" doesn't match. |
-| "configuration.rb" | "Configuration" | Global config object. Attributes: "adapter_name", "database", "host", "port", "username", "password", "output_dir", "models_dir", "contracts_dir", "module_name", "adapter", "pool_size", "pool_timeout", "logger". "logger" accepts a "T.nilable(::Logger)" for SQL query logging at "DEBUG" level with execution time (default "nil", zero overhead). Builds the adapter lazily from connection params. |
+| "configuration.rb" | "Configuration" | Global config object. Attributes: "adapter_name", "database", "host", "port", "username", "password", "output_dir", "models_dir", "contracts_dir", "module_name", "adapter", "pool_size", "pool_timeout", "logger", "migrations_path". "logger" accepts a "T.nilable(::Logger)" for SQL query logging at "DEBUG" level with execution time (default "nil", zero overhead). "migrations_path" defaults to "db/migrate". Builds the adapter lazily from connection params. |
 | "json.rb" | "Json", "JsonScalar" | Opaque JSON wrapper storing raw JSON string. "Json.parse(raw)" from PG, "Json.from_hash(h)" / "Json.from_array(a)" from Ruby. Navigation: "[](key)" and "at(index)" return "T.nilable(Json)". Typed extractors: "as_s", "as_i", "as_f", "as_bool", "scalar". Zero "Object", zero "T.untyped". |
 | "tasks.rb" | "Tasks" | Rake tasks for HakumiORM. "require "hakumi_orm/tasks"" adds "rake hakumi:generate". |
 | "version.rb" | "VERSION" | Gem version constant. |
@@ -35,6 +35,7 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "field/time_field.rb" | "TimeField" | Time/timestamp field ("ComparableField"). |
 | "field/date_field.rb" | "DateField" | Date field ("ComparableField"). |
 | "field/json_field.rb" | "JsonField" | JSON/JSONB field (base "Field"). |
+| "field/enum_field.rb" | "EnumField" | PG enum field (base "Field"). Serializes "T::Enum" values to "StrBind". |
 | "field/int_array_field.rb" | "IntArrayField" | Integer array field (base "Field"). Supports "eq", "is_null", "is_not_null". |
 | "field/str_array_field.rb" | "StrArrayField" | String array field (base "Field"). |
 | "field/float_array_field.rb" | "FloatArrayField" | Float array field (base "Field"). |
@@ -68,10 +69,10 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 
 | File | Module / Class | Description |
 |---|---|---|
-| "dialect.rb" | "Dialect::Base" (abstract) | Interface for database-specific SQL syntax: "bind_marker(index)", "quote_id(name)", "qualified_name(table, column)", "supports_returning?", "name". |
-| "dialect/postgresql.rb" | "Dialect::Postgresql" | PostgreSQL: "$1"/"$2" bind markers, double-quote identifiers, caches quoted/qualified names. |
-| "dialect/mysql.rb" | "Dialect::Mysql" | MySQL: "?" bind markers, backtick identifiers, "supports_returning?: false". |
-| "dialect/sqlite.rb" | "Dialect::Sqlite" | SQLite: "?" bind markers, double-quote identifiers, "supports_returning?: true". |
+| "dialect.rb" | "Dialect::Base" (abstract) | Interface for database-specific SQL syntax: "bind_marker(index)", "quote_id(name)", "qualified_name(table, column)", "supports_returning?", "supports_ddl_transactions?", "supports_advisory_lock?", "advisory_lock_sql", "advisory_unlock_sql", "name". |
+| "dialect/postgresql.rb" | "Dialect::Postgresql" | PostgreSQL: "$1"/"$2" bind markers, double-quote identifiers, DDL transactions supported, advisory lock via "pg_advisory_lock". |
+| "dialect/mysql.rb" | "Dialect::Mysql" | MySQL: "?" bind markers, backtick identifiers, "supports_returning?: false", DDL transactions NOT supported (implicit commit), advisory lock via "GET_LOCK". |
+| "dialect/sqlite.rb" | "Dialect::Sqlite" | SQLite: "?" bind markers, double-quote identifiers, "supports_returning?: true", DDL transactions supported, no advisory lock (single-process). |
 
 ## Code Generation
 
@@ -92,9 +93,19 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "codegen/schema_reader.rb" | "Codegen::SchemaReader" | PostgreSQL schema reader. Reads "information_schema" to extract tables, columns, primary keys, unique columns, and foreign keys. |
 | "codegen/mysql_schema_reader.rb" | "Codegen::MysqlSchemaReader" | MySQL schema reader. Reads "information_schema" with MySQL-specific queries. Handles "tinyint(1)" → "Boolean". |
 | "codegen/sqlite_schema_reader.rb" | "Codegen::SqliteSchemaReader" | SQLite schema reader. Uses "PRAGMA table_info", "PRAGMA index_list", "PRAGMA foreign_key_list". |
+| "codegen/generator_options.rb" | "Codegen::GeneratorOptions" | "T::Struct" configuring code generation: "dialect", "output_dir", "module_name", "models_dir", "contracts_dir", "soft_delete_tables", "created_at_column", "updated_at_column". |
 | "codegen/generator.rb" | "Codegen::Generator" | Generates "typed: strict" Ruby files from ERB templates. Uses folder-per-table structure: "checkable.rb", "schema.rb", "record.rb", "new_record.rb", "validated_record.rb", "base_contract.rb", "relation.rb", plus a manifest. Generates "has_many", "has_one" (UNIQUE FK), "has_many :through" (FK chains / join tables), and "belongs_to" associations from foreign keys. Nested preload support via "PreloadNode". "dependent: :delete_all / :destroy" on "delete!". Auto-detects "created_at"/"updated_at" timestamp columns. Lifecycle hooks: "record.rb.erb" calls "Contract.on_destroy" before DELETE and "Contract.after_destroy" after, "Contract.after_update" after UPDATE; "validated_record.rb.erb" calls "Contract.after_create" after INSERT; "base_contract.rb.erb" generates stubs for all 8 hooks ("on_all", "on_create", "on_update", "on_persist", "on_destroy", "after_create", "after_update", "after_destroy"). |
 | "codegen/generator_validation.rb" | "Codegen::Generator" (reopened) | Validation, persistence, and variant builder methods: "build_checkable", "build_validated_record", "build_base_contract", "build_contract", "build_variant_base", "build_update_locals", "build_delete_locals", "build_update_sql", "build_update_bind_list", "timestamp_auto_column?", "to_h_value_type", "generate_contracts!", "lock_version_column". Optimistic locking: detects "lock_version" column and modifies UPDATE SQL/binds accordingly. |
+| "codegen/generator_enum.rb" | "Codegen::Generator" (reopened) | Enum type handling: "collect_enum_types" reads PG enum definitions, generates "T::Enum" classes for each enum type. |
 | "codegen/generator_assoc.rb" | "Codegen::Generator" (reopened) | Association builder methods: "compute_has_many_through", "build_has_many_assocs", "build_has_one_assocs", "build_belongs_to_assocs", "build_has_many_through_assocs", "collect_join_table_throughs", "collect_chain_throughs", "assoc_delete_sql". |
+| "migration.rb" | "Migration" | Base class for user-defined migrations. Class method "disable_ddl_transaction!" opts out of transaction wrapping (needed for "CREATE INDEX CONCURRENTLY"). Instance DSL methods: "create_table", "drop_table", "rename_table", "add_column", "remove_column", "change_column", "rename_column", "add_index", "remove_index", "add_foreign_key", "remove_foreign_key", "execute". Receives adapter in constructor, delegates to "SqlGenerator" for dialect-specific SQL. |
+| "migration/column_definition.rb" | "Migration::ColumnDefinition" | "T::Struct" with column metadata: "name", "type" (Symbol), "null", "default", "limit", "precision", "scale". |
+| "migration/table_definition.rb" | "Migration::TableDefinition" | Collects columns during "create_table" block. Type-specific sugar methods ("t.string", "t.integer", etc.), "t.timestamps", "t.references". Tracks inline foreign keys. |
+| "migration/sql_generator.rb" | "Migration::SqlGenerator" | Converts DSL operations to dialect-specific SQL. Type maps for PG, MySQL, SQLite. Handles PK types (":bigserial", ":uuid", ":serial"), column constraints, indexes, foreign keys with ON DELETE. |
+| "migration/runner.rb" | "Migration::Runner" | Loads migration files from "migrations_path", tracks applied versions in "hakumi_migrations" table. "migrate!" runs pending, "rollback!(count:)" reverses N migrations, "status" reports up/down state, "current_version" returns latest. Wraps each migration in a transaction when dialect supports DDL transactions; logs warning otherwise. Respects "disable_ddl_transaction!". Acquires dialect-specific advisory lock before migrate!/rollback! to prevent concurrent execution (released in ensure block). Filename pattern restricted to "\w+" for safety. Clear error messages for class name mismatches, syntax errors, and invalid inheritance. |
+| "migration/file_generator.rb" | "Migration::FileGenerator" | Generates timestamped migration file (e.g., "20260222120000_create_users.rb") with empty "up"/"down" methods. Prevents duplicate names. Bumps timestamp by 1 second on collision with existing files. |
+| "migration/schema_fingerprint.rb" | "Migration::SchemaFingerprint" | Computes deterministic SHA256 hash of schema. Prefixed with GENERATOR_VERSION to detect codegen changes. Sorts tables and columns alphabetically. Includes column types, nullability, defaults, foreign keys, unique columns. "check!" compares two fingerprints: raises "SchemaDriftError" on mismatch (or warns if HAKUMI_ALLOW_SCHEMA_DRIFT is set). "drift_allowed?" checks env var. |
+| "schema_drift_error.rb" | "SchemaDriftError" | Raised when boot fingerprint does not match DB. Message includes truncated fingerprints and remediation commands. Bypassed via HAKUMI_ALLOW_SCHEMA_DRIFT=1 env var (emergency only). |
 
 ## File Tree
 
@@ -123,6 +134,8 @@ lib/
     │   ├── foreign_key_info.rb
     │   ├── generator.rb
     │   ├── generator_assoc.rb
+    │   ├── generator_enum.rb
+    │   ├── generator_options.rb
     │   ├── generator_validation.rb
     │   ├── hakumi_type.rb
     │   ├── mysql_schema_reader.rb
@@ -131,6 +144,8 @@ lib/
     │   ├── table_info.rb
     │   ├── template_local.rb
     │   ├── type_map.rb
+    │   ├── type_registry.rb
+    │   ├── type_scaffold.rb
     │   └── type_maps/
     │       ├── mysql.rb
     │       ├── postgresql.rb
@@ -146,13 +161,18 @@ lib/
     ├── expr.rb
     ├── field.rb
     ├── field/
+    │   ├── bool_array_field.rb
     │   ├── bool_field.rb
     │   ├── comparable_field.rb
     │   ├── date_field.rb
     │   ├── decimal_field.rb
+    │   ├── enum_field.rb
+    │   ├── float_array_field.rb
     │   ├── float_field.rb
+    │   ├── int_array_field.rb
     │   ├── int_field.rb
     │   ├── json_field.rb
+    │   ├── str_array_field.rb
     │   ├── str_field.rb
     │   ├── text_field.rb
     │   └── time_field.rb
@@ -165,6 +185,15 @@ lib/
     ├── relation_query.rb
     ├── sql_compiler.rb
     ├── sql_compiler_expr.rb
+    ├── migration.rb
+    ├── migration/
+    │   ├── column_definition.rb
+    │   ├── file_generator.rb
+    │   ├── runner.rb
+    │   ├── schema_fingerprint.rb
+    │   ├── sql_generator.rb
+    │   └── table_definition.rb
+    ├── schema_drift_error.rb
     ├── stale_object_error.rb
     ├── tasks.rb
     ├── validation_error.rb

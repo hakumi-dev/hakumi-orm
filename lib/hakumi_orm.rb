@@ -55,6 +55,7 @@ require_relative "hakumi_orm/preload_node"
 
 require_relative "hakumi_orm/errors"
 require_relative "hakumi_orm/stale_object_error"
+require_relative "hakumi_orm/schema_drift_error"
 require_relative "hakumi_orm/validation_error"
 require_relative "hakumi_orm/adapter/timeout_error"
 require_relative "hakumi_orm/adapter/connection_pool"

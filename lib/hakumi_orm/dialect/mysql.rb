@@ -39,6 +39,21 @@ module HakumiORM
         :mysql
       end
 
+      sig { override.returns(T::Boolean) }
+      def supports_advisory_lock?
+        true
+      end
+
+      sig { override.returns(T.nilable(String)) }
+      def advisory_lock_sql
+        "SELECT GET_LOCK('hakumi_migrate', 10)"
+      end
+
+      sig { override.returns(T.nilable(String)) }
+      def advisory_unlock_sql
+        "SELECT RELEASE_LOCK('hakumi_migrate')"
+      end
+
       sig { override.params(bind: ::HakumiORM::Bind).returns(::HakumiORM::PGValue) }
       def encode_bind(bind)
         case bind

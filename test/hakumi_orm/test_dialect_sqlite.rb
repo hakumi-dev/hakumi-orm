@@ -37,4 +37,17 @@ class TestDialectSqlite < HakumiORM::TestCase
   test "name is :sqlite" do
     assert_equal :sqlite, @dialect.name
   end
+
+  test "supports DDL transactions (SQLite DDL is fully rollback-safe)" do
+    assert_predicate @dialect, :supports_ddl_transactions?
+  end
+
+  test "does not support advisory lock" do
+    refute_predicate @dialect, :supports_advisory_lock?
+  end
+
+  test "advisory lock SQL returns nil" do
+    assert_nil @dialect.advisory_lock_sql
+    assert_nil @dialect.advisory_unlock_sql
+  end
 end
