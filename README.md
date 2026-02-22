@@ -86,6 +86,7 @@ app/db/generated/          <-- always overwritten by codegen
     new_record.rb          # UserRecord::New -- pre-persist record (validate!)
     validated_record.rb    # UserRecord::Validated -- validated record (save!)
     base_contract.rb       # UserRecord::BaseContract -- overridable validation hooks
+    variant_base.rb        # UserRecord::VariantBase -- delegation base for user-defined variants
     relation.rb            # UserRelation -- typed query builder
   post/
     ...
@@ -160,7 +161,7 @@ new_user = User.build(name: "Alice", email: "alice@example.com", active: true)
 # new_user is UserRecord::New -- no `id` attribute at all
 
 validated = new_user.validate!
-# validated is UserRecord::Validated -- contract passed, New is frozen
+# validated is UserRecord::Validated -- contract passed, New is immutable
 
 user = validated.save!
 # user is UserRecord -- `id` is Integer, guaranteed non-nil
@@ -342,7 +343,7 @@ new_user.class           # => UserRecord::New
 
 #### `validate! -> Record::Validated`
 
-Run `Contract.on_all` and `Contract.on_create` validations. Returns a frozen `Record::Validated` on success, raises `ValidationError` on failure.
+Run `Contract.on_all` and `Contract.on_create` validations. Returns an immutable `Record::Validated` on success, raises `ValidationError` on failure.
 
 ```ruby
 validated = new_user.validate!
@@ -596,7 +597,7 @@ new_user.class   # => UserRecord::New (no id attribute)
 
 # Validate it -- runs on_all + on_create contract hooks
 validated = new_user.validate!
-validated.class  # => UserRecord::Validated (frozen, immutable)
+validated.class  # => UserRecord::Validated (immutable)
 
 # Persist it -- runs on_persist, then INSERT RETURNING * hydrates a full record
 user = validated.save!
@@ -673,6 +674,130 @@ rescue HakumiORM::ValidationError => e
   e.errors.count     # => 2
 end
 ```
+
+### Record Variants
+
+In a typical ORM, every nullable column is `T.nilable(X)` everywhere. If your `performance_reviews` table has `score integer NULL`, then `review.score` is always `T.nilable(Integer)` -- even when your business logic guarantees it's present for completed reviews. You end up sprinkling `T.must` or nil checks everywhere.
+
+Record Variants solve this with **real static typing** -- the variant constructor demands non-nil values via keyword arguments, and Sorbet verifies every call site at compile time. No runtime assertions disguised as type safety.
+
+The codegen generates a `Record::VariantBase` that delegates all columns. You subclass it, add `attr_reader` for narrowed fields, and declare them as non-nil kwargs:
+
+```ruby
+# app/models/performance_review/completed.rb
+class PerformanceReview::Completed < PerformanceReviewRecord::VariantBase
+  extend T::Sig
+
+  sig { returns(Integer) }
+  attr_reader :score
+
+  sig { returns(Time) }
+  attr_reader :completed_at
+
+  sig { params(record: PerformanceReviewRecord, score: Integer, completed_at: Time).void }
+  def initialize(record:, score:, completed_at:)
+    super(record: record)
+    @score = T.let(score, Integer)
+    @completed_at = T.let(completed_at, Time)
+  end
+end
+```
+
+The `T.let` here is **not a cast** -- `score` is already `Integer` by the method signature. Sorbet verifies this statically. If someone tries to pass `nil`, it's a **compile-time error**, not a runtime crash.
+
+The `as_*` methods use flow typing on local variables -- Sorbet verifies the narrowing:
+
+```ruby
+# app/models/performance_review.rb
+class PerformanceReview < PerformanceReviewRecord
+  extend T::Sig
+
+  sig { returns(T.nilable(Completed)) }
+  def as_completed
+    s  = score
+    ca = completed_at
+    return nil unless s && ca
+
+    Completed.new(record: self, score: s, completed_at: ca)
+  end
+
+  sig { returns(Completed) }
+  def as_completed!
+    as_completed || raise(HakumiORM::Error, "not a completed review")
+  end
+end
+```
+
+After `return nil unless s && ca`, Sorbet knows both locals are non-nil. The `Completed.new` call is statically verified to pass the correct types. No casts, no `T.must`.
+
+Before and after:
+
+```ruby
+review = PerformanceReview.find(1)
+review.score              # => T.nilable(Integer) -- Sorbet forces you to handle nil
+
+completed = review.as_completed!
+completed.score           # => Integer -- guaranteed non-nil, statically verified
+completed.completed_at    # => Time
+completed.title           # => String (delegated via VariantBase)
+```
+
+Variants can form a **progressive inheritance chain** that models domain progression. Each level only declares what it narrows; parent narrowings are inherited:
+
+```ruby
+# Draft → base (no narrowing)
+class PerformanceReview::Draft < PerformanceReviewRecord::VariantBase
+end
+
+# Started → narrows started_at
+class PerformanceReview::Started < PerformanceReview::Draft
+  sig { returns(Time) }
+  attr_reader :started_at
+
+  sig { params(record: PerformanceReviewRecord, started_at: Time).void }
+  def initialize(record:, started_at:)
+    super(record: record)
+    @started_at = T.let(started_at, Time)
+  end
+end
+
+# Completed → inherits started_at from Started, narrows score + completed_at
+class PerformanceReview::Completed < PerformanceReview::Started
+  sig { returns(Integer) }
+  attr_reader :score
+
+  sig { returns(Time) }
+  attr_reader :completed_at
+
+  sig { params(record: PerformanceReviewRecord, started_at: Time, score: Integer, completed_at: Time).void }
+  def initialize(record:, started_at:, score:, completed_at:)
+    super(record: record, started_at: started_at)
+    @score = T.let(score, Integer)
+    @completed_at = T.let(completed_at, Time)
+  end
+end
+```
+
+This also supports **branching** -- not just linear progression:
+
+```
+Draft
+├── Started
+│   ├── Completed
+│   └── Cancelled
+└── Rejected
+```
+
+`Completed` and `Cancelled` both inherit from `Started` (both have `started_at`), but `Rejected` branches from `Draft` directly. Sorbet enforces this: a `Rejected` is **not** a `Started`, and the type checker prevents you from treating it as one.
+
+Key points:
+- **Real static typing** -- variant constructors demand non-nil kwargs; Sorbet verifies call sites at compile time
+- **No `T.must`** -- `T.let` in constructors is a declaration, not a cast (types already match)
+- **No metaprogramming** -- you write the variant classes yourself, full control
+- **Progressive inheritance** -- variants chain (`Completed < Started < Draft`), narrowing accumulates
+- **Branching** -- model tree-shaped domain logic, not just linear state machines
+- **`typed: strict`** -- every file, every variant, fully verified
+- **`VariantBase` is codegen** -- mechanical delegation of all columns, always regenerated, never edited
 
 ### Type Casting
 

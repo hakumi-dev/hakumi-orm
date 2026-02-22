@@ -52,6 +52,17 @@ module HakumiORM
         find_result(sql)
       end
 
+      def prepare(name, sql)
+        @prepared ||= {}
+        @prepared[name] = sql
+      end
+
+      def exec_prepared(name, params)
+        sql = (@prepared || {})[name] || ""
+        @executed_queries << { sql: sql, params: params }
+        find_result(sql)
+      end
+
       def close = nil
 
       def last_sql

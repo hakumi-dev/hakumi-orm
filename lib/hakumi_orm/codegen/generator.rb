@@ -59,20 +59,22 @@ module HakumiORM
           File.write(File.join(table_dir, "new_record.rb"), build_new_record(table))
           File.write(File.join(table_dir, "validated_record.rb"), build_validated_record(table))
           File.write(File.join(table_dir, "base_contract.rb"), build_base_contract(table))
+          File.write(File.join(table_dir, "variant_base.rb"), build_variant_base(table))
           File.write(File.join(table_dir, "relation.rb"), build_relation(table, has_many_map))
         end
 
         File.write(File.join(@output_dir, "manifest.rb"), build_manifest)
 
-        generate_models! if @models_dir
-        generate_contracts! if @contracts_dir
+        md = @models_dir
+        generate_models!(md) if md
+        cd = @contracts_dir
+        generate_contracts!(cd) if cd
       end
 
       private
 
-      sig { void }
-      def generate_models!
-        models_dir = T.must(@models_dir)
+      sig { params(models_dir: String).void }
+      def generate_models!(models_dir)
         FileUtils.mkdir_p(models_dir)
 
         @tables.each_value do |table|
@@ -153,14 +155,14 @@ module HakumiORM
         pk_type = pk_col ? hakumi_type_for(pk_col).ruby_type_string(nullable: false) : "Integer"
 
         (has_many_map[table.name] || []).map do |info|
-          target_cls = classify(T.must(info[:source_table]))
+          target_cls = classify(info.fetch(:source_table))
           {
-            method_name: T.must(info[:source_table]),
+            method_name: info.fetch(:source_table),
             relation_class: qualify("#{target_cls}Relation"),
             record_class: qualify("#{target_cls}Record"),
             schema_module: qualify("#{target_cls}Schema"),
-            fk_const: T.must(info[:fk_column]).upcase,
-            fk_attr: T.must(info[:fk_column]),
+            fk_const: info.fetch(:fk_column).upcase,
+            fk_attr: info.fetch(:fk_column),
             pk_attr: table.primary_key || "id",
             pk_ruby_type: pk_type
           }
@@ -331,13 +333,13 @@ module HakumiORM
       sig { params(word: String).returns(String) }
       def singularize(word)
         if word.end_with?("ies")
-          "#{word[0..-4]}y"
+          "#{word.delete_suffix("ies")}y"
         elsif word.end_with?("ves")
-          "#{word[0..-4]}f"
+          "#{word.delete_suffix("ves")}f"
         elsif word.end_with?("ses", "xes", "zes", "ches", "shes")
-          T.must(word[0..-3])
+          word.delete_suffix("es")
         elsif word.end_with?("s") && !word.end_with?("ss", "us", "is")
-          T.must(word[0..-2])
+          word.delete_suffix("s")
         else
           word
         end

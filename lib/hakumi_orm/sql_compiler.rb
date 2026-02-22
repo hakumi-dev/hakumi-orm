@@ -227,35 +227,35 @@ module HakumiORM
       case pred.op
       when :eq
         buf << qn << " = " << @dialect.bind_marker(idx)
-        binds << T.must(pred.binds[0])
+        binds << pred.binds.fetch(0)
         idx + 1
       when :neq
         buf << qn << " <> " << @dialect.bind_marker(idx)
-        binds << T.must(pred.binds[0])
+        binds << pred.binds.fetch(0)
         idx + 1
       when :gt
         buf << qn << " > " << @dialect.bind_marker(idx)
-        binds << T.must(pred.binds[0])
+        binds << pred.binds.fetch(0)
         idx + 1
       when :gte
         buf << qn << " >= " << @dialect.bind_marker(idx)
-        binds << T.must(pred.binds[0])
+        binds << pred.binds.fetch(0)
         idx + 1
       when :lt
         buf << qn << " < " << @dialect.bind_marker(idx)
-        binds << T.must(pred.binds[0])
+        binds << pred.binds.fetch(0)
         idx + 1
       when :lte
         buf << qn << " <= " << @dialect.bind_marker(idx)
-        binds << T.must(pred.binds[0])
+        binds << pred.binds.fetch(0)
         idx + 1
       when :like
         buf << qn << " LIKE " << @dialect.bind_marker(idx)
-        binds << T.must(pred.binds[0])
+        binds << pred.binds.fetch(0)
         idx + 1
       when :ilike
         buf << qn << " ILIKE " << @dialect.bind_marker(idx)
-        binds << T.must(pred.binds[0])
+        binds << pred.binds.fetch(0)
         idx + 1
       when :in
         buf << qn << " IN ("
@@ -278,8 +278,8 @@ module HakumiORM
       when :between
         buf << qn << " BETWEEN " << @dialect.bind_marker(idx)
         buf << " AND " << @dialect.bind_marker(idx + 1)
-        binds << T.must(pred.binds[0])
-        binds << T.must(pred.binds[1])
+        binds << pred.binds.fetch(0)
+        binds << pred.binds.fetch(1)
         idx + 2
       when :is_null
         buf << qn << " IS NULL"

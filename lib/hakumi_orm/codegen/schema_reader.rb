@@ -107,7 +107,7 @@ module HakumiORM
         result = @adapter.exec_params(PG_TABLES_SQL, [schema])
         i = T.let(0, Integer)
         while i < result.row_count
-          name = T.must(result.get_value(i, 0))
+          name = result.fetch_value(i, 0)
           tables[name] = TableInfo.new(name)
           i += 1
         end
@@ -119,14 +119,14 @@ module HakumiORM
         result = @adapter.exec_params(PG_COLUMNS_SQL, [schema])
         i = T.let(0, Integer)
         while i < result.row_count
-          tbl = tables[T.must(result.get_value(i, 0))]
+          tbl = tables[result.fetch_value(i, 0)]
           if tbl
             max_len_raw = result.get_value(i, 6)
             tbl.columns << ColumnInfo.new(
-              name: T.must(result.get_value(i, 1)),
-              data_type: T.must(result.get_value(i, 2)),
-              udt_name: T.must(result.get_value(i, 3)),
-              nullable: T.must(result.get_value(i, 4)) == "YES",
+              name: result.fetch_value(i, 1),
+              data_type: result.fetch_value(i, 2),
+              udt_name: result.fetch_value(i, 3),
+              nullable: result.fetch_value(i, 4) == "YES", # information_schema returns 'YES'/'NO', not boolean
               default: result.get_value(i, 5),
               max_length: max_len_raw&.to_i
             )
@@ -141,8 +141,8 @@ module HakumiORM
         result = @adapter.exec_params(PG_PRIMARY_KEYS_SQL, [schema])
         i = T.let(0, Integer)
         while i < result.row_count
-          tbl = tables[T.must(result.get_value(i, 0))]
-          tbl.primary_key = T.must(result.get_value(i, 1)) if tbl
+          tbl = tables[result.fetch_value(i, 0)]
+          tbl.primary_key = result.fetch_value(i, 1) if tbl
           i += 1
         end
         result.close
@@ -153,12 +153,12 @@ module HakumiORM
         result = @adapter.exec_params(PG_FOREIGN_KEYS_SQL, [schema])
         i = T.let(0, Integer)
         while i < result.row_count
-          tbl = tables[T.must(result.get_value(i, 0))]
+          tbl = tables[result.fetch_value(i, 0)]
           if tbl
             tbl.foreign_keys << ForeignKeyInfo.new(
-              column_name: T.must(result.get_value(i, 1)),
-              foreign_table: T.must(result.get_value(i, 2)),
-              foreign_column: T.must(result.get_value(i, 3))
+              column_name: result.fetch_value(i, 1),
+              foreign_table: result.fetch_value(i, 2),
+              foreign_column: result.fetch_value(i, 3)
             )
           end
           i += 1

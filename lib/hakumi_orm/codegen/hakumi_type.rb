@@ -62,6 +62,20 @@ module HakumiORM
       def text?
         self == String
       end
+
+      sig { returns(::String) }
+      def bind_class
+        case self
+        when Integer   then "::HakumiORM::IntBind"
+        when Float     then "::HakumiORM::FloatBind"
+        when Decimal   then "::HakumiORM::DecimalBind"
+        when Timestamp then "::HakumiORM::TimeBind"
+        when Date      then "::HakumiORM::DateBind"
+        when String    then "::HakumiORM::StrBind"
+        when Boolean   then "::HakumiORM::BoolBind"
+        else T.absurd(self)
+        end
+      end
     end
   end
 end

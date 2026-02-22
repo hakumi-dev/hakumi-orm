@@ -10,8 +10,11 @@ module <%= module_name %>
 
 <%= ind %>  ModelType = type_member {{ fixed: <%= qualified_record_class %> }}
 
-<%= ind %>  SQL_COUNT_ALL = T.let('<%= count_sql %>', String)
-<%= ind %>  STMT_COUNT_ALL = T.let('<%= stmt_count_name %>', String)
+<%= ind %>  sig { override.returns(T.nilable(String)) }
+<%= ind %>  def stmt_count_all = '<%= stmt_count_name %>'
+
+<%= ind %>  sig { override.returns(T.nilable(String)) }
+<%= ind %>  def sql_count_all = '<%= count_sql %>'
 
 <%= ind %>  sig { void }
 <%= ind %>  def initialize

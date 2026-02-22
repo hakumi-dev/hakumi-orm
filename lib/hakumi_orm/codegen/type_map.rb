@@ -22,10 +22,9 @@ module HakumiORM
         end
 
         # Generates a Ruby expression that casts a raw PG string to the
-        # correct Ruby type. For non-nullable columns, `raw_expr` is
-        # expected to come from `fetch_value` (returns String), so no
-        # T.must is needed. For nullable columns, it comes from
-        # `get_value` (returns T.nilable(String)).
+        # correct Ruby type. Non-nullable columns use `fetch_value`
+        # (returns String). Nullable columns use `get_value`
+        # (returns T.nilable(String)).
         sig { params(hakumi_type: HakumiType, raw_expr: String, nullable: T::Boolean).returns(String) }
         def cast_expression(hakumi_type, raw_expr, nullable:)
           case hakumi_type

@@ -4,6 +4,13 @@
 require "test_helper"
 
 class TestValidation < HakumiORM::TestCase
+  def setup
+    sc = UserRecord::Contract.singleton_class
+    %i[on_all on_create on_persist].each do |m|
+      sc.remove_method(m) if sc.method_defined?(m, false)
+    end
+  end
+
   # -- Errors -----------------------------------------------------------------
 
   test "Errors starts empty and valid" do
@@ -96,8 +103,6 @@ class TestValidation < HakumiORM::TestCase
 
     err = assert_raises(HakumiORM::ValidationError) { record.validate! }
     assert_includes err.errors.messages[:name], "cannot be blank"
-  ensure
-    UserRecord::Contract.define_singleton_method(:on_create) { |_record, _e| nil }
   end
 
   test "validate! raises ValidationError when on_all fails" do
@@ -109,8 +114,6 @@ class TestValidation < HakumiORM::TestCase
 
     err = assert_raises(HakumiORM::ValidationError) { record.validate! }
     assert_includes err.errors.messages[:email], "must contain @"
-  ensure
-    UserRecord::Contract.define_singleton_method(:on_all) { |_record, _e| nil }
   end
 
   test "validate! collects errors from both on_all and on_create" do
@@ -127,8 +130,5 @@ class TestValidation < HakumiORM::TestCase
     assert_includes err.errors.messages[:email], "is invalid"
     assert_includes err.errors.messages[:name], "too short"
     assert_equal 2, err.errors.count
-  ensure
-    UserRecord::Contract.define_singleton_method(:on_all) { |_record, _e| nil }
-    UserRecord::Contract.define_singleton_method(:on_create) { |_record, _e| nil }
   end
 end

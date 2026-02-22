@@ -104,10 +104,7 @@ module HakumiORM
       return preloaded.first if preloaded
 
       compiled = build_select(adapter.dialect, limit_override: 1)
-      result = adapter.exec_params(compiled.sql, compiled.pg_params)
-      hydrate(result).first
-    ensure
-      result&.close
+      use_result(adapter.exec_params(compiled.sql, compiled.pg_params)) { |r| hydrate(r).first }
     end
 
     sig { params(adapter: Adapter::Base).returns(Integer) }
@@ -115,30 +112,25 @@ module HakumiORM
       preloaded = @_preloaded_results
       return preloaded.length if preloaded
 
-      if @where_exprs.empty? && self.class.const_defined?(:STMT_COUNT_ALL)
-        stmt = T.unsafe(self.class).const_get(:STMT_COUNT_ALL)
-        sql = T.unsafe(self.class).const_get(:SQL_COUNT_ALL)
-        adapter.prepare(stmt, sql)
-        result = adapter.exec_prepared(stmt, [])
-      else
-        compiled = adapter.dialect.compiler.count(
-          table: @table_name,
-          where_expr: combined_where
-        )
-        result = adapter.exec_params(compiled.sql, compiled.pg_params)
-      end
-      T.must(result.get_value(0, 0)).to_i
-    ensure
-      result&.close
+      stmt = stmt_count_all
+      sql = sql_count_all
+      result = if @where_exprs.empty? && stmt && sql
+                 adapter.prepare(stmt, sql)
+                 adapter.exec_prepared(stmt, [])
+               else
+                 compiled = adapter.dialect.compiler.count(
+                   table: @table_name,
+                   where_expr: combined_where
+                 )
+                 adapter.exec_params(compiled.sql, compiled.pg_params)
+               end
+      use_result(result) { |r| r.fetch_value(0, 0).to_i }
     end
 
     sig { params(field: FieldRef, adapter: Adapter::Base).returns(T::Array[T.nilable(String)]) }
     def pluck_raw(field, adapter: HakumiORM.adapter)
       compiled = build_select(adapter.dialect, columns_override: [field])
-      result = adapter.exec_params(compiled.sql, compiled.pg_params)
-      result.column_values(0)
-    ensure
-      result&.close
+      use_result(adapter.exec_params(compiled.sql, compiled.pg_params)) { |r| r.column_values(0) }
     end
 
     sig { params(adapter: Adapter::Base).returns(Integer) }
@@ -147,10 +139,7 @@ module HakumiORM
         table: @table_name,
         where_expr: combined_where
       )
-      result = adapter.exec_params(compiled.sql, compiled.pg_params)
-      result.affected_rows
-    ensure
-      result&.close
+      use_result(adapter.exec_params(compiled.sql, compiled.pg_params), &:affected_rows)
     end
 
     sig { params(assignments: T::Array[Assignment], adapter: Adapter::Base).returns(Integer) }
@@ -160,10 +149,7 @@ module HakumiORM
         assignments: assignments,
         where_expr: combined_where
       )
-      result = adapter.exec_params(compiled.sql, compiled.pg_params)
-      result.affected_rows
-    ensure
-      result&.close
+      use_result(adapter.exec_params(compiled.sql, compiled.pg_params), &:affected_rows)
     end
 
     sig { params(adapter: Adapter::Base).returns(CompiledQuery) }
@@ -184,8 +170,7 @@ module HakumiORM
       cursor_name = "hakumi_cursor_#{object_id}"
 
       adapter.exec("BEGIN")
-      declare_sql = "DECLARE #{cursor_name} CURSOR FOR #{compiled.sql}"
-      adapter.exec_params(declare_sql, compiled.pg_params)
+      adapter.exec_params("DECLARE #{cursor_name} CURSOR FOR #{compiled.sql}", compiled.pg_params)
 
       loop do
         result = adapter.exec("FETCH #{batch_size} FROM #{cursor_name}")
@@ -201,28 +186,42 @@ module HakumiORM
       adapter.exec("COMMIT") rescue nil # rubocop:disable Style/RescueModifier
     end
 
+    sig { overridable.returns(T.nilable(String)) }
+    def stmt_count_all = nil
+
+    sig { overridable.returns(T.nilable(String)) }
+    def sql_count_all = nil
+
     sig { overridable.params(records: T::Array[ModelType], names: T::Array[Symbol], adapter: Adapter::Base).void }
     def run_preloads(records, names, adapter); end
 
     private
 
+    sig do
+      type_parameters(:R)
+        .params(result: Adapter::Result, blk: T.proc.params(arg0: Adapter::Result).returns(T.type_parameter(:R)))
+        .returns(T.type_parameter(:R))
+    end
+    def use_result(result, &blk)
+      blk.call(result)
+    ensure
+      result.close
+    end
+
     sig { params(adapter: Adapter::Base).returns(T::Array[ModelType]) }
     def fetch_records(adapter)
       compiled = build_select(adapter.dialect)
-      result = adapter.exec_params(compiled.sql, compiled.pg_params)
-      hydrate(result)
-    ensure
-      result&.close
+      use_result(adapter.exec_params(compiled.sql, compiled.pg_params)) { |r| hydrate(r) }
     end
 
     sig { returns(T.nilable(Expr)) }
     def combined_where
       return nil if @where_exprs.empty?
 
-      result = T.let(T.must(@where_exprs[0]), Expr)
+      result = T.let(@where_exprs.fetch(0), Expr)
       i = T.let(1, Integer)
       while i < @where_exprs.length
-        result = AndExpr.new(result, T.must(@where_exprs[i]))
+        result = AndExpr.new(result, @where_exprs.fetch(i))
         i += 1
       end
       result

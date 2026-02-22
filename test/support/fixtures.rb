@@ -185,10 +185,63 @@ class UserRecord
   end
 end
 
+class UserRecord
+  class VariantBase
+    extend T::Sig
+
+    sig { returns(Integer) }
+    def id = @record.id
+
+    sig { returns(String) }
+    def name = @record.name
+
+    sig { returns(String) }
+    def email = @record.email
+
+    sig { returns(T.nilable(Integer)) }
+    def age = @record.age
+
+    sig { returns(T::Boolean) }
+    def active = @record.active
+
+    sig { params(record: UserRecord).void }
+    def initialize(record:)
+      @record = T.let(record, UserRecord)
+    end
+
+    protected
+
+    sig { returns(UserRecord) }
+    attr_reader :record
+  end
+end
+
+# Example user-defined variant: narrows `age` from T.nilable(Integer) to Integer
+class UserRecord
+  class WithAge < VariantBase
+    extend T::Sig
+
+    sig { returns(Integer) }
+    attr_reader :age
+
+    sig { params(record: UserRecord, age: Integer).void }
+    def initialize(record:, age:)
+      super(record: record)
+      @age = T.let(age, Integer)
+    end
+  end
+end
+
 class UserRelation < HakumiORM::Relation
   extend T::Sig
 
   ModelType = type_member { { fixed: UserRecord } }
+
+  sig { override.returns(T.nilable(String)) }
+  def stmt_count_all = "hakumi_users_count"
+
+  sig { override.returns(T.nilable(String)) }
+  def sql_count_all = 'SELECT COUNT(*) FROM "users"'
 
   sig { void }
   def initialize

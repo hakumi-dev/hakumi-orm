@@ -6,7 +6,12 @@ require "test_helper"
 class TestRelation < HakumiORM::TestCase
   def setup
     @adapter = HakumiORM::Test::MockAdapter.new
+    @prev_adapter = HakumiORM.config.adapter
     HakumiORM.adapter = @adapter
+  end
+
+  def teardown
+    HakumiORM.config.adapter = @prev_adapter
   end
 
   test "to_a hydrates typed UserRecord objects from raw string rows" do
@@ -65,6 +70,23 @@ class TestRelation < HakumiORM::TestCase
 
     assert_equal 42, UserRecord.all.count(adapter: @adapter)
     assert_includes @adapter.last_sql, "COUNT(*)"
+  end
+
+  test "count without WHERE uses prepared statement path" do
+    @adapter.stub_result("COUNT(*)", [["99"]])
+
+    result = UserRecord.all.count(adapter: @adapter)
+
+    assert_equal 99, result
+  end
+
+  test "count with WHERE falls back to dynamic SQL" do
+    @adapter.stub_default([["5"]])
+
+    result = UserRecord.where(UserSchema::ACTIVE.eq(true)).count(adapter: @adapter)
+
+    assert_equal 5, result
+    assert_includes @adapter.last_sql, "WHERE"
   end
 
   test "multiple where calls are combined with AND" do

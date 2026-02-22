@@ -43,8 +43,8 @@ class TestCodegen < HakumiORM::TestCase
 
       %w[
         user/checkable.rb user/schema.rb user/record.rb user/new_record.rb
-        user/validated_record.rb user/base_contract.rb user/relation.rb
-        manifest.rb
+        user/validated_record.rb user/base_contract.rb user/variant_base.rb
+        user/relation.rb manifest.rb
       ].each do |file|
         assert_path_exists File.join(dir, file), "Missing #{file}"
       end
@@ -129,6 +129,9 @@ class TestCodegen < HakumiORM::TestCase
       assert_includes code, "ModelType = type_member {{ fixed: UserRecord }}"
       assert_includes code, "UserSchema::TABLE_NAME"
       assert_includes code, "UserRecord.from_result"
+      assert_includes code, "def stmt_count_all"
+      assert_includes code, "def sql_count_all"
+      assert_includes code, 'SELECT COUNT(*) FROM "users"'
     end
   end
 
@@ -139,7 +142,8 @@ class TestCodegen < HakumiORM::TestCase
 
       %w[
         user/checkable.rb user/schema.rb user/record.rb user/new_record.rb
-        user/validated_record.rb user/base_contract.rb user/relation.rb
+        user/validated_record.rb user/base_contract.rb user/variant_base.rb
+        user/relation.rb
       ].each do |file|
         code = File.read(File.join(dir, file))
 
@@ -175,9 +179,30 @@ class TestCodegen < HakumiORM::TestCase
 
       code = File.read(File.join(dir, "manifest.rb"))
 
-      %w[checkable schema record new_record validated_record base_contract relation].each do |name|
+      %w[checkable schema record new_record validated_record base_contract variant_base relation].each do |name|
         assert_includes code, "require_relative \"user/#{name}\""
       end
+    end
+  end
+
+  test "variant_base delegates all columns including pk" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      code = File.read(File.join(dir, "user/variant_base.rb"))
+
+      assert_includes code, "class VariantBase"
+      assert_includes code, "def id = @record.id"
+      assert_includes code, "def name = @record.name"
+      assert_includes code, "def age = @record.age"
+      assert_includes code, "returns(T.nilable(Integer))"
+      assert_includes code, "returns(Integer)"
+      assert_includes code, "returns(String)"
+      assert_includes code, "params(record: UserRecord)"
+      assert_includes code, "def initialize(record:)"
+      assert_includes code, "attr_reader :record"
+      refute_includes code, "T.must"
     end
   end
 
