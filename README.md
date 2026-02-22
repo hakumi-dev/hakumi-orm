@@ -236,7 +236,7 @@ Associations are generated automatically from foreign keys. "has_many" returns a
 | Rake task | "rails db:migrate" etc. | "rake hakumi:generate" |
 | Dirty tracking | Automatic (mutable) | "diff(other)" / "changed_from?(other)" (immutable snapshots) |
 | Timestamps | Automatic "created_at"/"updated_at" | Configurable via "created_at_column" / "updated_at_column" |
-| Migrations | Built-in | Not included (use standalone tools) |
+| Migrations | Built-in | Built-in: dialect-aware DSL, timestamped files, advisory locks |
 
 ## Installation
 
@@ -321,6 +321,7 @@ end
 | "models_dir" | "nil" | Directory for model stubs ("User < UserRecord"). Generated **once**, never overwritten. "nil" = skip. |
 | "contracts_dir" | "nil" | Directory for contract stubs ("UserRecord::Contract"). Generated **once**, never overwritten. "nil" = skip. |
 | "module_name" | "nil" | Wraps all generated code in a namespace ("App::User", "App::UserRecord", etc.). |
+| "migrations_path" | ""db/migrate"" | Directory where migration files are read from and generated into. |
 
 All generated methods ("find", "where", "save!", associations, etc.) default to "HakumiORM.adapter", so you never pass the adapter manually.
 
@@ -1074,7 +1075,29 @@ Available DSL methods inside "up"/"down":
 | "remove_foreign_key(from, to, ...)" | Drop FK constraint. Options: "column:". |
 | "execute(sql)" | Run raw SQL. |
 
-"TableDefinition" sugar methods: "t.string", "t.text", "t.integer", "t.bigint", "t.float", "t.decimal", "t.boolean", "t.date", "t.datetime", "t.timestamp", "t.binary", "t.json", "t.jsonb", "t.uuid", "t.inet", "t.cidr", "t.hstore", "t.integer_array", "t.string_array", "t.float_array", "t.boolean_array", "t.timestamps", "t.references".
+"TableDefinition" sugar methods: "t.string", "t.text", "t.integer", "t.bigint", "t.float", "t.decimal", "t.boolean", "t.date", "t.datetime", "t.timestamp", "t.binary", "t.json", "t.jsonb", "t.uuid", "t.inet", "t.cidr", "t.hstore", "t.integer_array", "t.string_array", "t.float_array", "t.boolean_array", "t.timestamps", "t.references", "t.primary_key".
+
+"t.references" accepts an optional "column:" keyword for tables with irregular plurals:
+
+```ruby
+t.references "people", foreign_key: true, column: "person_id"
+```
+
+"t.primary_key" declares a composite primary key on tables with "id: false":
+
+```ruby
+create_table("user_roles", id: false) do |t|
+  t.integer "user_id", null: false
+  t.integer "role_id", null: false
+  t.primary_key %w[user_id role_id]
+end
+```
+
+Column types are validated early -- passing an unknown type raises immediately with a list of all valid types.
+
+Auto-generated identifier names (indexes, foreign key constraints) are validated against dialect limits (PostgreSQL: 63 chars, MySQL: 64 chars) to prevent cryptic database errors.
+
+Migration names are validated on generation -- only lowercase letters, digits, and underscores are accepted. Names starting with digits or containing hyphens/spaces are rejected with a clear error.
 
 All SQL is dialect-aware -- the same migration produces correct SQL for PostgreSQL, MySQL, and SQLite.
 
@@ -1099,6 +1122,16 @@ class AddEmailIndexConcurrently < HakumiORM::Migration
   end
 end
 ```
+
+#### Concurrency safety
+
+The migration Runner acquires a database-level advisory lock before running migrations or rollbacks. This prevents two processes from executing migrations simultaneously:
+
+- PostgreSQL: "pg_advisory_lock(hash)"
+- MySQL: "GET_LOCK(name, timeout)"
+- SQLite: no lock needed (single-process)
+
+The lock is always released in an "ensure" block.
 
 #### Configuration
 
