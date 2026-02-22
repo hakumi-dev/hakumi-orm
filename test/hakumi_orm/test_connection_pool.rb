@@ -107,7 +107,7 @@ class TestConnectionPool < HakumiORM::TestCase
 
     sleep 0.05
 
-    assert_raises(HakumiORM::Adapter::ConnectionPool::TimeoutError) do
+    assert_raises(HakumiORM::Adapter::TimeoutError) do
       tiny_pool.exec("SELECT 1")
     end
 

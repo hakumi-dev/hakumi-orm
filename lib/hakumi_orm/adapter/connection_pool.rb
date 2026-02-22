@@ -6,8 +6,6 @@ module HakumiORM
     class ConnectionPool < Base
       extend T::Sig
 
-      class TimeoutError < HakumiORM::Error; end
-
       sig { override.returns(Dialect::Base) }
       attr_reader :dialect
 

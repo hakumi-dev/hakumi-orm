@@ -1193,7 +1193,41 @@ The result of `to_sql`. Contains the raw SQL and bind parameters without executi
 
 ## Architecture
 
-All source code lives under `lib/hakumi_orm/`. Every file is Sorbet `typed: strict`. See [`lib/hakumi_orm/README.md`](lib/hakumi_orm/README.md) for a full reference of every module, class, and public API.
+All source code lives under `lib/hakumi_orm/`. Every file is Sorbet `typed: strict`. One class per file, except `sealed!` hierarchies (`Bind`, `Expr`) where all subclasses are co-located for exhaustive `T.absurd` checks.
+
+```
+lib/hakumi_orm/
+├── adapter/              # Database adapters (PostgreSQL, MySQL, SQLite)
+│   ├── base.rb           #   Abstract base, transaction/savepoint support
+│   ├── result.rb         #   Abstract result interface
+│   ├── postgresql.rb     #   PG::Connection wrapper
+│   ├── mysql.rb          #   Mysql2::Client wrapper
+│   ├── sqlite.rb         #   SQLite3::Database wrapper
+│   ├── connection_pool.rb#   Thread-safe pool (reentrant, configurable)
+│   └── timeout_error.rb  #   Pool timeout error
+├── dialect/              # SQL dialect abstraction
+│   ├── postgresql.rb     #   $1/$2 markers, double-quote quoting
+│   ├── mysql.rb          #   ? markers, backtick quoting
+│   └── sqlite.rb         #   ? markers, double-quote quoting
+├── field/                # Typed field constants (one per file)
+│   ├── comparable_field.rb#  gt/gte/lt/lte/between
+│   ├── text_field.rb     #   like/ilike
+│   ├── int_field.rb, float_field.rb, decimal_field.rb, ...
+│   └── json_field.rb     #   JSON/JSONB field
+├── codegen/              # Code generation from live schema
+│   ├── generator.rb      #   ERB template engine
+│   ├── schema_reader.rb  #   PostgreSQL schema reader
+│   ├── mysql_schema_reader.rb  # MySQL schema reader
+│   ├── sqlite_schema_reader.rb # SQLite schema reader
+│   └── type_maps/        #   DB type → HakumiType per dialect
+├── bind.rb               # Sealed bind hierarchy (9 subclasses)
+├── expr.rb               # Sealed expression tree (6 subclasses)
+├── sql_compiler.rb       # Expr → parameterized SQL
+├── relation.rb           # Fluent query builder
+└── ...
+```
+
+See [`lib/hakumi_orm/README.md`](lib/hakumi_orm/README.md) for a full reference of every module, class, and public API.
 
 ## Development
 

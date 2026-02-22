@@ -3,49 +3,6 @@
 
 module HakumiORM
   module Codegen
-    class ColumnInfo < T::Struct
-      const :name, String
-      const :data_type, String
-      const :udt_name, String
-      const :nullable, T::Boolean
-      const :default, T.nilable(String)
-      const :max_length, T.nilable(Integer)
-    end
-
-    class ForeignKeyInfo < T::Struct
-      const :column_name, String
-      const :foreign_table, String
-      const :foreign_column, String
-    end
-
-    class TableInfo
-      extend T::Sig
-
-      sig { returns(String) }
-      attr_reader :name
-
-      sig { returns(T::Array[ColumnInfo]) }
-      attr_reader :columns
-
-      sig { returns(T::Array[ForeignKeyInfo]) }
-      attr_reader :foreign_keys
-
-      sig { returns(T::Array[String]) }
-      attr_reader :unique_columns
-
-      sig { returns(T.nilable(String)) }
-      attr_accessor :primary_key
-
-      sig { params(name: String).void }
-      def initialize(name)
-        @name = T.let(name, String)
-        @columns = T.let([], T::Array[ColumnInfo])
-        @foreign_keys = T.let([], T::Array[ForeignKeyInfo])
-        @unique_columns = T.let([], T::Array[String])
-        @primary_key = T.let(nil, T.nilable(String))
-      end
-    end
-
     class SchemaReader
       extend T::Sig
 
@@ -140,7 +97,7 @@ module HakumiORM
               name: result.fetch_value(i, 1),
               data_type: result.fetch_value(i, 2),
               udt_name: result.fetch_value(i, 3),
-              nullable: result.fetch_value(i, 4) == "YES", # information_schema returns 'YES'/'NO', not boolean
+              nullable: result.fetch_value(i, 4) == "YES",
               default: result.get_value(i, 5),
               max_length: max_len_raw&.to_i
             )

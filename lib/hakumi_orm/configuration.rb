@@ -90,9 +90,11 @@ module HakumiORM
         require_relative "adapter/postgresql"
         Adapter::Postgresql.connect(build_connection_params(database))
       when :mysql
+        require_relative "adapter/mysql_result"
         require_relative "adapter/mysql"
         Adapter::Mysql.connect(build_mysql_params(database))
       when :sqlite
+        require_relative "adapter/sqlite_result"
         require_relative "adapter/sqlite"
         Adapter::Sqlite.connect(database)
       else
