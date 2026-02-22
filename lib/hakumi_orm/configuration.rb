@@ -66,7 +66,7 @@ module HakumiORM
       @port = T.let(nil, T.nilable(Integer))
       @username = T.let(nil, T.nilable(String))
       @password = T.let(nil, T.nilable(String))
-      @output_dir = T.let("app/db/generated", String)
+      @output_dir = T.let("db/generated", String)
       @models_dir = T.let(nil, T.nilable(String))
       @contracts_dir = T.let(nil, T.nilable(String))
       @module_name = T.let(nil, T.nilable(String))
@@ -78,6 +78,24 @@ module HakumiORM
       @connection_options = T.let({}, T::Hash[String, String])
       @named_databases = T.let({}, T::Hash[Symbol, DatabaseConfig])
       @named_adapters = T.let({}, T::Hash[Symbol, Adapter::Base])
+    end
+
+    LOG_LEVELS = T.let({
+      debug: ::Logger::DEBUG,
+      info: ::Logger::INFO,
+      warn: ::Logger::WARN,
+      error: ::Logger::ERROR,
+      fatal: ::Logger::FATAL
+    }.freeze, T::Hash[Symbol, Integer])
+
+    sig { params(level: Symbol).void }
+    def log_level=(level)
+      valid_levels = LOG_LEVELS.keys
+      numeric = LOG_LEVELS.fetch(level) do
+        raise ArgumentError, "Invalid log level: #{level.inspect}. Use: #{valid_levels.join(", ")}"
+      end
+      @logger = ::Logger.new($stdout, progname: "HakumiORM")
+      @logger.level = numeric
     end
 
     sig { params(url: String).void }
@@ -186,6 +204,7 @@ module HakumiORM
     def connect_from_config(db_config)
       case db_config.adapter_name
       when :postgresql
+        require_relative "adapter/postgresql_result"
         require_relative "adapter/postgresql"
         Adapter::Postgresql.connect(pg_params(db_config))
       when :mysql

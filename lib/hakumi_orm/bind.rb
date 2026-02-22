@@ -21,15 +21,15 @@ module HakumiORM
   class IntBind < Bind
     extend T::Sig
 
-    sig { returns(Integer) }
+    sig { returns(T.nilable(Integer)) }
     attr_reader :value
 
-    sig { params(value: Integer).void }
+    sig { params(value: T.nilable(Integer)).void }
     def initialize(value)
-      @value = T.let(value, Integer)
+      @value = T.let(value, T.nilable(Integer))
     end
 
-    sig { override.returns(Integer) }
+    sig { override.returns(PGValue) }
     def pg_value
       @value
     end

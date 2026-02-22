@@ -6,9 +6,9 @@ module HakumiORM
     module SinatraConfig
       extend T::Sig
 
-      sig { params(config: Configuration, root: T.nilable(String), logger: T.nilable(::Logger)).void }
-      def self.apply_defaults(config, root: nil, logger: nil)
-        config.logger = logger if logger
+      sig { params(config: Configuration, root: T.nilable(String), log_level: Symbol).void }
+      def self.apply_defaults(config, root: nil, log_level: :info)
+        config.log_level = log_level
 
         return unless root
 

@@ -11,15 +11,17 @@ module HakumiORM
       MARKER_START_RE = T.let(/^# == Schema Information ==\s*$/, Regexp)
       MARKER_END_RE = T.let(/^# == End Schema Information ==\s*$/, Regexp)
 
+      AssocHash = T.type_alias { T::Hash[Symbol, T.any(String, T::Boolean)] }
+
       class Context < T::Struct
         const :table, TableInfo
         const :dialect, Dialect::Base
-        const :has_many, T::Array[T::Hash[Symbol, String]]
-        const :has_one, T::Array[T::Hash[Symbol, String]]
+        const :has_many, T::Array[AssocHash]
+        const :has_one, T::Array[AssocHash]
         const :belongs_to, T::Array[BelongsToEntry]
-        const :has_many_through, T::Array[T::Hash[Symbol, String]]
-        const :custom_has_many, T::Array[T::Hash[Symbol, String]]
-        const :custom_has_one, T::Array[T::Hash[Symbol, String]]
+        const :has_many_through, T::Array[AssocHash]
+        const :custom_has_many, T::Array[AssocHash]
+        const :custom_has_one, T::Array[AssocHash]
       end
 
       sig { params(model_path: String, ctx: Context).void }
@@ -116,7 +118,7 @@ module HakumiORM
         lines.concat(assoc_lines)
       end
 
-      sig { params(out: T::Array[String], assocs: T::Array[T::Hash[Symbol, String]], table_name: String).void }
+      sig { params(out: T::Array[String], assocs: T::Array[AssocHash], table_name: String).void }
       def self.append_fk_has_many_lines(out, assocs, table_name)
         assocs.each do |a|
           out << assoc_line("has_many", a[:method_name].to_s,
@@ -124,7 +126,7 @@ module HakumiORM
         end
       end
 
-      sig { params(out: T::Array[String], assocs: T::Array[T::Hash[Symbol, String]], table_name: String).void }
+      sig { params(out: T::Array[String], assocs: T::Array[AssocHash], table_name: String).void }
       def self.append_fk_has_one_lines(out, assocs, table_name)
         assocs.each do |a|
           out << assoc_line("has_one", a[:method_name].to_s,
@@ -140,7 +142,7 @@ module HakumiORM
         end
       end
 
-      sig { params(out: T::Array[String], assocs: T::Array[T::Hash[Symbol, String]]).void }
+      sig { params(out: T::Array[String], assocs: T::Array[AssocHash]).void }
       def self.append_through_lines(out, assocs)
         assocs.each do |a|
           out << assoc_line("has_many", a[:method_name].to_s, "through: #{a[:join_table]}")
@@ -150,7 +152,7 @@ module HakumiORM
       sig do
         params(
           out: T::Array[String],
-          assocs: T::Array[T::Hash[Symbol, String]],
+          assocs: T::Array[AssocHash],
           kind: String,
           source_table: String
         ).void
@@ -158,7 +160,7 @@ module HakumiORM
       def self.append_custom_assoc_lines(out, assocs, kind, source_table)
         assocs.each do |a|
           target = a[:target_table] || a[:method_name]
-          ob = a[:order_by_const]
+          ob = a[:order_by_const]&.to_s
           detail = "custom: #{target}.#{a[:fk_attr]} -> #{source_table}.#{a[:pk_attr]}"
           detail = "#{detail}, order: #{ob.downcase}" if ob
           out << assoc_line(kind, a[:method_name].to_s, detail)
@@ -193,14 +195,14 @@ module HakumiORM
         end
       end
 
-      sig { params(out: T::Array[String], assocs: T::Array[T::Hash[Symbol, String]]).void }
+      sig { params(out: T::Array[String], assocs: T::Array[AssocHash]).void }
       def self.append_cli_through(out, assocs)
         assocs.each do |a|
           out << "  #{"through".ljust(8)}#{"has_many".ljust(12)}:#{a[:method_name].to_s.ljust(22)} via #{a[:join_table]}"
         end
       end
 
-      sig { params(out: T::Array[String], assocs: T::Array[T::Hash[Symbol, String]], kind: String, table_name: String).void }
+      sig { params(out: T::Array[String], assocs: T::Array[AssocHash], kind: String, table_name: String).void }
       def self.append_cli_fk(out, assocs, kind, table_name)
         assocs.each do |a|
           mapping = "#{a[:method_name]}.#{a[:fk_attr]} -> #{table_name}.#{a[:pk_attr]}"
@@ -208,7 +210,7 @@ module HakumiORM
         end
       end
 
-      sig { params(out: T::Array[String], assocs: T::Array[T::Hash[Symbol, String]], kind: String, table_name: String).void }
+      sig { params(out: T::Array[String], assocs: T::Array[AssocHash], kind: String, table_name: String).void }
       def self.append_cli_custom(out, assocs, kind, table_name)
         assocs.each do |a|
           mapping = "#{a[:target_table]}.#{a[:fk_attr]} -> #{table_name}.#{a[:pk_attr]}"

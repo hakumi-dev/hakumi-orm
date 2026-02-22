@@ -12,8 +12,22 @@ module HakumiORM
   class Migration
     extend T::Sig
 
+    NameLike = T.type_alias { T.any(String, Symbol) }
+    DefaultValue = T.type_alias { T.nilable(T.any(String, Integer, Float, T::Boolean)) }
+
     class << self
       extend T::Sig
+
+      sig { params(value: DefaultValue).returns(T.nilable(String)) }
+      def coerce_default(value)
+        case value
+        when nil then nil
+        when true then "true"
+        when false then "false"
+        when Integer, Float then value.to_s
+        when String then "'#{value.gsub("'", "''")}'"
+        end
+      end
 
       sig { void }
       def disable_ddl_transaction!
@@ -40,74 +54,74 @@ module HakumiORM
     sig { void }
     def down; end
 
-    sig { params(name: String, id: T.any(Symbol, FalseClass), blk: T.nilable(T.proc.params(t: TableDefinition).void)).void }
+    sig { params(name: NameLike, id: T.any(Symbol, FalseClass), blk: T.nilable(T.proc.params(t: TableDefinition).void)).void }
     def create_table(name, id: :bigserial, &blk)
-      table_def = TableDefinition.new(name, id: id)
+      table_def = TableDefinition.new(name.to_s, id: id)
       blk&.call(table_def)
       sqls = SqlGenerator.create_table_with_fks(table_def, dialect)
       sqls.each { |sql| adapter.exec(sql) }
     end
 
-    sig { params(name: String).void }
+    sig { params(name: NameLike).void }
     def drop_table(name)
-      adapter.exec(SqlGenerator.drop_table(name, dialect))
+      adapter.exec(SqlGenerator.drop_table(name.to_s, dialect))
     end
 
-    sig { params(old_name: String, new_name: String).void }
+    sig { params(old_name: NameLike, new_name: NameLike).void }
     def rename_table(old_name, new_name)
-      adapter.exec(SqlGenerator.rename_table(old_name, new_name, dialect))
+      adapter.exec(SqlGenerator.rename_table(old_name.to_s, new_name.to_s, dialect))
     end
 
-    sig { params(table: String, col_name: String, type: Symbol, null: T::Boolean, default: T.nilable(String), limit: T.nilable(Integer), precision: T.nilable(Integer), scale: T.nilable(Integer)).void }
+    sig { params(table: NameLike, col_name: NameLike, type: Symbol, null: T::Boolean, default: DefaultValue, limit: T.nilable(Integer), precision: T.nilable(Integer), scale: T.nilable(Integer)).void }
     def add_column(table, col_name, type, null: true, default: nil, limit: nil, precision: nil, scale: nil)
       col = ColumnDefinition.new(
-        name: col_name, type: type, null: null, default: default,
+        name: col_name.to_s, type: type, null: null, default: Migration.coerce_default(default),
         limit: limit, precision: precision, scale: scale
       )
-      adapter.exec(SqlGenerator.add_column(table, col, dialect))
+      adapter.exec(SqlGenerator.add_column(table.to_s, col, dialect))
     end
 
-    sig { params(table: String, col_name: String).void }
+    sig { params(table: NameLike, col_name: NameLike).void }
     def remove_column(table, col_name)
-      adapter.exec(SqlGenerator.remove_column(table, col_name, dialect))
+      adapter.exec(SqlGenerator.remove_column(table.to_s, col_name.to_s, dialect))
     end
 
-    sig { params(table: String, col_name: String, type: Symbol, null: T::Boolean, default: T.nilable(String), precision: T.nilable(Integer), scale: T.nilable(Integer)).void }
+    sig { params(table: NameLike, col_name: NameLike, type: Symbol, null: T::Boolean, default: DefaultValue, precision: T.nilable(Integer), scale: T.nilable(Integer)).void }
     def change_column(table, col_name, type, null: true, default: nil, precision: nil, scale: nil)
       col = ColumnDefinition.new(
-        name: col_name, type: type, null: null, default: default,
+        name: col_name.to_s, type: type, null: null, default: Migration.coerce_default(default),
         precision: precision, scale: scale
       )
-      adapter.exec(SqlGenerator.change_column(table, col, dialect))
+      adapter.exec(SqlGenerator.change_column(table.to_s, col, dialect))
     end
 
-    sig { params(table: String, old_name: String, new_name: String).void }
+    sig { params(table: NameLike, old_name: NameLike, new_name: NameLike).void }
     def rename_column(table, old_name, new_name)
-      adapter.exec(SqlGenerator.rename_column(table, old_name, new_name, dialect))
+      adapter.exec(SqlGenerator.rename_column(table.to_s, old_name.to_s, new_name.to_s, dialect))
     end
 
-    sig { params(table: String, columns: T::Array[String], unique: T::Boolean, name: T.nilable(String)).void }
+    sig { params(table: NameLike, columns: T::Array[NameLike], unique: T::Boolean, name: T.nilable(String)).void }
     def add_index(table, columns, unique: false, name: nil)
-      adapter.exec(SqlGenerator.add_index(table, columns, dialect: dialect, unique: unique, name: name))
+      adapter.exec(SqlGenerator.add_index(table.to_s, columns.map(&:to_s), dialect: dialect, unique: unique, name: name))
     end
 
-    sig { params(table: String, columns: T::Array[String], name: T.nilable(String)).void }
+    sig { params(table: NameLike, columns: T::Array[NameLike], name: T.nilable(String)).void }
     def remove_index(table, columns, name: nil)
-      adapter.exec(SqlGenerator.remove_index(table, columns, dialect: dialect, name: name))
+      adapter.exec(SqlGenerator.remove_index(table.to_s, columns.map(&:to_s), dialect: dialect, name: name))
     end
 
-    sig { params(from_table: String, to_table: String, column: String, primary_key: String, on_delete: T.nilable(Symbol)).void }
+    sig { params(from_table: NameLike, to_table: NameLike, column: NameLike, primary_key: String, on_delete: T.nilable(Symbol)).void }
     def add_foreign_key(from_table, to_table, column:, primary_key: "id", on_delete: nil)
       sql = SqlGenerator.add_foreign_key(
-        from_table, to_table,
-        column: column, dialect: dialect, primary_key: primary_key, on_delete: on_delete
+        from_table.to_s, to_table.to_s,
+        column: column.to_s, dialect: dialect, primary_key: primary_key, on_delete: on_delete
       )
       adapter.exec(sql)
     end
 
-    sig { params(from_table: String, to_table: String, column: T.nilable(String)).void }
+    sig { params(from_table: NameLike, to_table: NameLike, column: T.nilable(NameLike)).void }
     def remove_foreign_key(from_table, to_table, column: nil)
-      adapter.exec(SqlGenerator.remove_foreign_key(from_table, to_table, dialect: dialect, column: column))
+      adapter.exec(SqlGenerator.remove_foreign_key(from_table.to_s, to_table.to_s, dialect: dialect, column: column&.to_s))
     end
 
     sig { params(sql: String).void }

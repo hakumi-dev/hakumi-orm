@@ -121,13 +121,22 @@ class TestRailsConfig < Minitest::Test
     HakumiORM.reset_config!
   end
 
-  def test_sets_logger
-    logger = Logger.new($stdout)
+  def test_sets_log_level
     config = HakumiORM.config
 
-    HakumiORM::Framework::RailsConfig.apply_defaults(config, logger: logger)
+    HakumiORM::Framework::RailsConfig.apply_defaults(config, log_level: :debug)
 
-    assert_equal logger, config.logger
+    assert_instance_of ::Logger, config.logger
+    assert_equal ::Logger::DEBUG, config.logger.level
+  end
+
+  def test_default_log_level_is_info
+    config = HakumiORM.config
+
+    HakumiORM::Framework::RailsConfig.apply_defaults(config)
+
+    assert_instance_of ::Logger, config.logger
+    assert_equal ::Logger::INFO, config.logger.level
   end
 
   def test_sets_models_dir_when_nil
@@ -167,14 +176,6 @@ class TestRailsConfig < Minitest::Test
 
     assert_equal "lib/contracts", config.contracts_dir
   end
-
-  def test_nil_logger_by_default
-    config = HakumiORM.config
-
-    HakumiORM::Framework::RailsConfig.apply_defaults(config)
-
-    assert_nil config.logger
-  end
 end
 
 class TestSinatraConfig < Minitest::Test
@@ -187,13 +188,22 @@ class TestSinatraConfig < Minitest::Test
     HakumiORM.reset_config!
   end
 
-  def test_sets_logger
-    logger = Logger.new($stdout)
+  def test_sets_log_level
     config = HakumiORM.config
 
-    HakumiORM::Framework::SinatraConfig.apply_defaults(config, logger: logger)
+    HakumiORM::Framework::SinatraConfig.apply_defaults(config, log_level: :warn)
 
-    assert_equal logger, config.logger
+    assert_instance_of ::Logger, config.logger
+    assert_equal ::Logger::WARN, config.logger.level
+  end
+
+  def test_default_log_level_is_info
+    config = HakumiORM.config
+
+    HakumiORM::Framework::SinatraConfig.apply_defaults(config)
+
+    assert_instance_of ::Logger, config.logger
+    assert_equal ::Logger::INFO, config.logger.level
   end
 
   def test_sets_paths_from_root
@@ -213,15 +223,6 @@ class TestSinatraConfig < Minitest::Test
     HakumiORM::Framework::SinatraConfig.apply_defaults(config)
 
     assert_equal original_output, config.output_dir
-  end
-
-  def test_skips_logger_when_nil
-    config = HakumiORM.config
-    config.logger = nil
-
-    HakumiORM::Framework::SinatraConfig.apply_defaults(config)
-
-    assert_nil config.logger
   end
 end
 

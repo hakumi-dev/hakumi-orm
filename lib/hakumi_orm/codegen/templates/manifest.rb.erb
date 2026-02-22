@@ -6,6 +6,9 @@
 require_relative "enums/<%= ef %>"
 <%- end -%>
 <%- table_names.each do |name| -%>
+<%- if internal_names.include?(name) -%>
+require_relative "<%= name %>/schema"
+<%- else -%>
 require_relative "<%= name %>/checkable"
 require_relative "<%= name %>/schema"
 require_relative "<%= name %>/record"
@@ -14,4 +17,5 @@ require_relative "<%= name %>/validated_record"
 require_relative "<%= name %>/base_contract"
 require_relative "<%= name %>/variant_base"
 require_relative "<%= name %>/relation"
+<%- end -%>
 <%- end -%>

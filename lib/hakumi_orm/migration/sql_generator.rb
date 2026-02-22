@@ -62,32 +62,47 @@ module HakumiORM
         end
       end
 
-      sig { params(table_def: TableDefinition, dialect: Dialect::Base).returns(String) }
-      def self.create_table(table_def, dialect)
+      sig { params(table_def: TableDefinition, dialect: Dialect::Base, inline_fks: T::Array[T::Hash[Symbol, String]]).returns(String) }
+      def self.create_table(table_def, dialect, inline_fks: [])
+        parts = build_column_parts(table_def, dialect)
+        inline_fks.each { |fk| parts << fk_clause(fk, dialect) }
+        "CREATE TABLE #{quote_id(dialect, table_def.name)} (#{parts.join(", ")})"
+      end
+
+      sig { params(table_def: TableDefinition, dialect: Dialect::Base).returns(T::Array[String]) }
+      def self.build_column_parts(table_def, dialect)
         parts = T.let([], T::Array[String])
         parts << "#{quote_id(dialect, "id")} #{pk_type_sql(table_def.id_type, dialect)}" if table_def.id_type && table_def.id_type != false
-
-        table_def.columns.each do |col|
-          parts << column_sql(col, dialect)
-        end
+        table_def.columns.each { |col| parts << column_sql(col, dialect) }
 
         cpk = table_def.composite_primary_key
         if cpk && !cpk.empty?
           pk_cols = cpk.map { |c| quote_id(dialect, c) }.join(", ")
           parts << "PRIMARY KEY (#{pk_cols})"
         end
+        parts
+      end
 
-        "CREATE TABLE #{quote_id(dialect, table_def.name)} (#{parts.join(", ")})"
+      sig { params(foreign_key: T::Hash[Symbol, String], dialect: Dialect::Base).returns(String) }
+      def self.fk_clause(foreign_key, dialect)
+        col = quote_id(dialect, foreign_key.fetch(:column))
+        ref_table = quote_id(dialect, foreign_key.fetch(:to_table))
+        ref_pk = quote_id(dialect, foreign_key.fetch(:primary_key))
+        "FOREIGN KEY (#{col}) REFERENCES #{ref_table} (#{ref_pk})"
       end
 
       sig { params(table_def: TableDefinition, dialect: Dialect::Base).returns(T::Array[String]) }
       def self.create_table_with_fks(table_def, dialect)
-        sqls = [create_table(table_def, dialect)]
-        table_def.foreign_keys.each do |fk|
-          sqls << add_foreign_key(
-            table_def.name, fk.fetch(:to_table),
-            column: fk.fetch(:column), dialect: dialect, primary_key: fk.fetch(:primary_key)
-          )
+        if dialect.name == :sqlite
+          sqls = [create_table(table_def, dialect, inline_fks: table_def.foreign_keys)]
+        else
+          sqls = [create_table(table_def, dialect)]
+          table_def.foreign_keys.each do |fk|
+            sqls << add_foreign_key(
+              table_def.name, fk.fetch(:to_table),
+              column: fk.fetch(:column), dialect: dialect, primary_key: fk.fetch(:primary_key)
+            )
+          end
         end
         sqls
       end

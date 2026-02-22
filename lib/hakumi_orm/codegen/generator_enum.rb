@@ -66,18 +66,20 @@ module HakumiORM
 
       sig { params(table: TableInfo).returns(T::Array[String]) }
       def build_cast_lines(table)
+        pk = table.primary_key
         table.columns.each_with_index.map do |col, ci|
+          nullable = col.name == pk ? false : col.nullable
           ev = col.enum_values
           if ev
             enum_cls = qualify(enum_class_name(col.udt_name))
             raw = "c#{ci}[i]"
-            if col.nullable
+            if nullable
               "((_hv = #{raw}).nil? ? nil : #{enum_cls}.deserialize(_hv))"
             else
               "#{enum_cls}.deserialize(#{raw})"
             end
           else
-            TypeMap.cast_expression(hakumi_type_for(col), "c#{ci}[i]", nullable: col.nullable)
+            TypeMap.cast_expression(hakumi_type_for(col), "c#{ci}[i]", nullable: nullable)
           end
         end
       end

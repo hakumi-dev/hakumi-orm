@@ -11,6 +11,8 @@ module HakumiORM
         FileUtils.mkdir_p(contracts_dir)
 
         @tables.each_value do |table|
+          next if @internal_tables.include?(table.name)
+
           contract_path = File.join(contracts_dir, "#{singularize(table.name)}_contract.rb")
           next if File.exist?(contract_path)
 
@@ -46,7 +48,7 @@ module HakumiORM
           elsif col.enum_values
             "::HakumiORM::StrBind.new(T.cast(@record.#{col.name}.serialize, String)).pg_value"
           else
-            "#{hakumi_type_for(col).bind_class}.new(@record.#{col.name}).pg_value"
+            nullable_bind_expr(col, "@record.#{col.name}")
           end
         end.join(", ")
 
@@ -149,9 +151,19 @@ module HakumiORM
           elsif col.enum_values
             "::HakumiORM::StrBind.new(T.cast(#{col.name}.serialize, String)).pg_value"
           else
-            "#{hakumi_type_for(col).bind_class}.new(#{col.name}).pg_value"
+            nullable_bind_expr(col, col.name)
           end
         end.join(", ")
+      end
+
+      sig { params(col: ColumnInfo, accessor: String).returns(String) }
+      def nullable_bind_expr(col, accessor)
+        bind_cls = hakumi_type_for(col).bind_class
+        if col.nullable
+          "((_hv = #{accessor}).nil? ? nil : #{bind_cls}.new(_hv).pg_value)"
+        else
+          "#{bind_cls}.new(#{accessor}).pg_value"
+        end
       end
 
       sig { params(table: TableInfo).returns(T.nilable(ColumnInfo)) }
@@ -243,7 +255,7 @@ module HakumiORM
                record_class_name: qualify(record_cls),
                to_h_value_type: to_h_value_type(table),
                as_json_value_type: as_json_value_type(table),
-               all_columns: table.columns.map { |c| { name: c.name, ruby_type: ruby_type(c) } })
+               all_columns: table.columns.map { |c| { name: c.name, ruby_type: record_ruby_type(table, c) } })
       end
     end
   end

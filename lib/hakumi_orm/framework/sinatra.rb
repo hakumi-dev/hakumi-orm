@@ -12,12 +12,10 @@ module HakumiORM
         HakumiORM::Framework.current = :sinatra
 
         root = app.settings.respond_to?(:root) ? app.settings.root : nil
-        logger = app.settings.respond_to?(:logger) ? app.settings.logger : nil
 
         HakumiORM::Framework::SinatraConfig.apply_defaults(
           HakumiORM.config,
-          root: root,
-          logger: logger
+          root: root
         )
       end
     end

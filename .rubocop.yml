@@ -29,14 +29,14 @@ Metrics/AbcSize:
     - "lib/hakumi_orm/relation.rb"
 
 Metrics/ClassLength:
-  Max: 300
+  Max: 310
   CountAsOne:
     - heredoc
   Exclude:
     - "test/**/*"
 
 Metrics/ModuleLength:
-  Max: 200
+  Max: 220
 
 Metrics/BlockLength:
   Exclude:

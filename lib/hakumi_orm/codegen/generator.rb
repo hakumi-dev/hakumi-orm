@@ -36,6 +36,7 @@ module HakumiORM
         @created_at_column = T.let(options.created_at_column, T.nilable(String))
         @updated_at_column = T.let(options.updated_at_column, T.nilable(String))
         @custom_associations = T.let(options.custom_associations, T::Hash[String, T::Array[CustomAssociation]])
+        @internal_tables = T.let(options.internal_tables.to_set, T::Set[String])
 
         normalize_column_order!
       end
@@ -58,8 +59,10 @@ module HakumiORM
           table_dir = File.join(@output_dir, singularize(table.name))
           FileUtils.mkdir_p(table_dir)
 
-          File.write(File.join(table_dir, "checkable.rb"), build_checkable(table))
           File.write(File.join(table_dir, "schema.rb"), build_schema(table))
+          next if @internal_tables.include?(table.name)
+
+          File.write(File.join(table_dir, "checkable.rb"), build_checkable(table))
           File.write(File.join(table_dir, "record.rb"), build_record(table, has_many_map, has_one_map, through_map))
           File.write(File.join(table_dir, "new_record.rb"), build_new_record(table))
           File.write(File.join(table_dir, "validated_record.rb"), build_validated_record(table))
@@ -86,6 +89,8 @@ module HakumiORM
         FileUtils.mkdir_p(models_dir)
 
         @tables.each_value do |table|
+          next if @internal_tables.include?(table.name)
+
           model_path = File.join(models_dir, "#{singularize(table.name)}.rb")
           next if File.exist?(model_path)
 
@@ -93,9 +98,9 @@ module HakumiORM
         end
       end
 
-      sig { returns(T::Hash[String, T::Array[T::Hash[Symbol, String]]]) }
+      sig { returns(AssocMap) }
       def compute_has_many
-        result = T.let({}, T::Hash[String, T::Array[T::Hash[Symbol, String]]])
+        result = T.let({}, AssocMap)
         @tables.each_value do |table|
           table.foreign_keys.each do |fk|
             next if table.unique_columns.include?(fk.column_name)
@@ -107,9 +112,9 @@ module HakumiORM
         result
       end
 
-      sig { returns(T::Hash[String, T::Array[T::Hash[Symbol, String]]]) }
+      sig { returns(AssocMap) }
       def compute_has_one
-        result = T.let({}, T::Hash[String, T::Array[T::Hash[Symbol, String]]])
+        result = T.let({}, AssocMap)
         @tables.each_value do |table|
           table.foreign_keys.each do |fk|
             next unless table.unique_columns.include?(fk.column_name)
@@ -151,9 +156,9 @@ module HakumiORM
       sig do
         params(
           table: TableInfo,
-          has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]],
-          has_one_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]],
-          through_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]
+          has_many_map: AssocMap,
+          has_one_map: AssocMap,
+          through_map: AssocMap
         ).returns(String)
       end
       def build_record(table, has_many_map, has_one_map, through_map)
@@ -166,6 +171,8 @@ module HakumiORM
 
         hm = build_has_many_assocs(table, has_many_map) + build_custom_has_many(table, @custom_associations)
         ho = build_has_one_assocs(table, has_one_map) + build_custom_has_one(table, @custom_associations)
+        direct_names = (hm + ho).to_set { |a| a[:method_name] }
+        hmt = build_has_many_through_assocs(table, through_map).reject { |a| direct_names.include?(a[:method_name]) }
 
         render("record",
                module_name: @module_name,
@@ -173,15 +180,15 @@ module HakumiORM
                record_class_name: qualify(record_cls),
                to_h_value_type: to_h_value_type(table),
                as_json_value_type: as_json_value_type(table),
-               columns: table.columns.map { |c| { name: c.name, ruby_type: ruby_type(c), json_expr: json_expr(c) } },
-               init_sig_params: table.columns.map { |c| "#{c.name}: #{ruby_type(c)}" }.join(", "),
+               columns: table.columns.map { |c| { name: c.name, ruby_type: record_ruby_type(table, c), json_expr: json_expr(c) } },
+               init_sig_params: table.columns.map { |c| "#{c.name}: #{record_ruby_type(table, c)}" }.join(", "),
                init_args: table.columns.map { |c| "#{c.name}:" }.join(", "),
                cast_lines: build_cast_lines(table),
                last_cast_index: table.columns.length - 1,
                qualified_relation: qualify("#{cls}Relation"),
                has_many: hm,
                has_one: ho,
-               has_many_through: build_has_many_through_assocs(table, through_map),
+               has_many_through: hmt,
                belongs_to: build_belongs_to_assocs(table),
                insert_all_prefix: "INSERT INTO #{@dialect.quote_id(table.name)} (#{col_list}) VALUES ",
                insert_all_columns: ins_cols.map { |c| { name: c.name, is_enum: !c.enum_values.nil? } },
@@ -238,8 +245,8 @@ module HakumiORM
       sig do
         params(
           table: TableInfo,
-          has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]],
-          has_one_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]
+          has_many_map: AssocMap,
+          has_one_map: AssocMap
         ).returns(String)
       end
       def build_relation(table, has_many_map, has_one_map)
@@ -284,8 +291,11 @@ module HakumiORM
       sig { returns(String) }
       def build_manifest
         enum_types = collect_enum_types
+        all_names = @tables.keys.map { |n| singularize(n) }
+        internal_names = @internal_tables.to_set { |n| singularize(n) }
         render("manifest",
-               table_names: @tables.keys.map { |n| singularize(n) },
+               table_names: all_names,
+               internal_names: internal_names,
                enum_files: enum_types.keys)
       end
 
@@ -308,15 +318,22 @@ module HakumiORM
         end
       end
 
-      sig { params(col: ColumnInfo).returns(String) }
-      def ruby_type(col)
+      sig { params(col: ColumnInfo, force_non_nullable: T::Boolean).returns(String) }
+      def ruby_type(col, force_non_nullable: false)
+        nullable = force_non_nullable ? false : col.nullable
         ev = col.enum_values
         if ev
           base = qualify(enum_class_name(col.udt_name))
-          col.nullable ? "T.nilable(#{base})" : base
+          nullable ? "T.nilable(#{base})" : base
         else
-          hakumi_type_for(col).ruby_type_string(nullable: col.nullable)
+          hakumi_type_for(col).ruby_type_string(nullable: nullable)
         end
+      end
+
+      sig { params(table: TableInfo, col: ColumnInfo).returns(String) }
+      def record_ruby_type(table, col)
+        pk_non_nullable = table.primary_key == col.name
+        ruby_type(col, force_non_nullable: pk_non_nullable)
       end
 
       sig { params(table: TableInfo).returns(T::Array[ColumnInfo]) }

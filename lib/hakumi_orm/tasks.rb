@@ -141,7 +141,8 @@ module HakumiORM
           module_name: config.module_name,
           models_dir: config.models_dir,
           contracts_dir: config.contracts_dir,
-          custom_associations: custom_assocs
+          custom_associations: custom_assocs,
+          internal_tables: INTERNAL_TABLES
         )
         generator = HakumiORM::Codegen::Generator.new(tables, opts)
         generator.generate!
@@ -194,6 +195,8 @@ module HakumiORM
           custom_has_one: generator.send(:build_custom_has_one, table, custom_assocs)
         )
       end
+
+      INTERNAL_TABLES = %w[hakumi_migrations].freeze
 
       def read_schema(config, adapter)
         case config.adapter_name

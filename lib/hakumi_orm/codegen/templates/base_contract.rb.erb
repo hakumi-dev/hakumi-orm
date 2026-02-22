@@ -7,30 +7,33 @@ module <%= module_name %>
 <%- end -%>
 <%= ind %>class <%= record_class_name %>::BaseContract
 <%= ind %>  extend T::Sig
+<%= ind %>  extend T::Helpers
 
-<%= ind %>  sig { overridable.params(record: <%= record_class_name %>::Checkable, e: ::HakumiORM::Errors).void }
-<%= ind %>  def self.on_all(record, e); end
+<%= ind %>  abstract!
 
-<%= ind %>  sig { overridable.params(record: <%= record_class_name %>::New, e: ::HakumiORM::Errors).void }
-<%= ind %>  def self.on_create(record, e); end
+<%= ind %>  sig { overridable.params(_record: <%= record_class_name %>::Checkable, _e: ::HakumiORM::Errors).void }
+<%= ind %>  def self.on_all(_record, _e); end
 
-<%= ind %>  sig { overridable.params(record: <%= record_class_name %>::Checkable, e: ::HakumiORM::Errors).void }
-<%= ind %>  def self.on_update(record, e); end
+<%= ind %>  sig { overridable.params(_record: <%= record_class_name %>::New, _e: ::HakumiORM::Errors).void }
+<%= ind %>  def self.on_create(_record, _e); end
 
-<%= ind %>  sig { overridable.params(record: <%= record_class_name %>::Checkable, adapter: ::HakumiORM::Adapter::Base, e: ::HakumiORM::Errors).void }
-<%= ind %>  def self.on_persist(record, adapter, e); end
+<%= ind %>  sig { overridable.params(_record: <%= record_class_name %>::Checkable, _e: ::HakumiORM::Errors).void }
+<%= ind %>  def self.on_update(_record, _e); end
 
-<%= ind %>  sig { overridable.params(record: <%= record_class_name %>, e: ::HakumiORM::Errors).void }
-<%= ind %>  def self.on_destroy(record, e); end
+<%= ind %>  sig { overridable.params(_record: <%= record_class_name %>::Checkable, _adapter: ::HakumiORM::Adapter::Base, _e: ::HakumiORM::Errors).void }
+<%= ind %>  def self.on_persist(_record, _adapter, _e); end
 
-<%= ind %>  sig { overridable.params(record: <%= record_class_name %>, adapter: ::HakumiORM::Adapter::Base).void }
-<%= ind %>  def self.after_create(record, adapter); end
+<%= ind %>  sig { overridable.params(_record: <%= record_class_name %>, _e: ::HakumiORM::Errors).void }
+<%= ind %>  def self.on_destroy(_record, _e); end
 
-<%= ind %>  sig { overridable.params(record: <%= record_class_name %>, adapter: ::HakumiORM::Adapter::Base).void }
-<%= ind %>  def self.after_update(record, adapter); end
+<%= ind %>  sig { overridable.params(_record: <%= record_class_name %>, _adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def self.after_create(_record, _adapter); end
 
-<%= ind %>  sig { overridable.params(record: <%= record_class_name %>, adapter: ::HakumiORM::Adapter::Base).void }
-<%= ind %>  def self.after_destroy(record, adapter); end
+<%= ind %>  sig { overridable.params(_record: <%= record_class_name %>, _adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def self.after_update(_record, _adapter); end
+
+<%= ind %>  sig { overridable.params(_record: <%= record_class_name %>, _adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def self.after_destroy(_record, _adapter); end
 <%= ind %>end
 <%- if module_name -%>
 end

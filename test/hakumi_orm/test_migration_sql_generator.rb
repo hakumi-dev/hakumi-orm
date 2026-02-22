@@ -71,7 +71,7 @@ class TestMigrationSqlGenerator < HakumiORM::TestCase
 
   test "create_table with default value" do
     td = HakumiORM::Migration::TableDefinition.new("posts")
-    td.boolean "published", null: false, default: "false"
+    td.boolean "published", null: false, default: false
 
     sql = @gen.create_table(td, @pg)
 

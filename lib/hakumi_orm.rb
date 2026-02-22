@@ -47,8 +47,6 @@ require_relative "hakumi_orm/dialect/mysql"
 require_relative "hakumi_orm/dialect/sqlite"
 
 require_relative "hakumi_orm/adapter"
-require_relative "hakumi_orm/adapter/postgresql_result"
-require_relative "hakumi_orm/adapter/postgresql"
 
 require_relative "hakumi_orm/sql_compiler"
 require_relative "hakumi_orm/preload_node"

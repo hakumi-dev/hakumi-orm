@@ -76,7 +76,7 @@ User.columns  # discovered at runtime via method_missing
 In HakumiORM, every model is generated from the schema as typed, explicit code:
 
 ```
-app/db/generated/          <-- always overwritten by codegen
+db/generated/              <-- always overwritten by codegen
   user/
     checkable.rb           # UserRecord::Checkable -- interface for validatable fields
     schema.rb              # UserSchema -- typed Field constants
@@ -364,7 +364,7 @@ end
 
 ```ruby
 HakumiORM.configure do |config|
-  config.output_dir    = "app/db/generated"
+  config.output_dir    = "db/generated"
   config.models_dir    = "app/models"
   config.contracts_dir = "app/contracts"
   config.module_name   = "App"
@@ -383,7 +383,7 @@ end
 | "connection_options" | "{}" | Extra driver params (sslmode, connect_timeout, etc.). Set automatically from URL query params. |
 | "adapter" | auto | Set directly to skip lazy building. Takes precedence over connection params. |
 | "logger" | "nil" | "Logger" instance for SQL query logging. "nil" = no logging, zero overhead. |
-| "output_dir" | ""app/db/generated"" | Directory for generated schemas, records, and relations. |
+| "output_dir" | ""db/generated"" | Directory for generated schemas, records, and relations. |
 | "models_dir" | "nil" | Directory for model stubs. "nil" = skip. |
 | "contracts_dir" | "nil" | Directory for contract stubs. "nil" = skip. |
 | "module_name" | "nil" | Namespace wrapping for generated code. |
@@ -1553,7 +1553,7 @@ opts = HakumiORM::Codegen::GeneratorOptions.new(
 
 ### Custom Models
 
-Generated code lives in "app/db/generated/" and is always overwritten. Your models live in "app/models/" and are never touched after the initial stub generation:
+Generated code lives in "db/generated/" and is always overwritten. Your models live in "app/models/" and are never touched after the initial stub generation:
 
 ```ruby
 class User < UserRecord

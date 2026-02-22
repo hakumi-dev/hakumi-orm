@@ -219,30 +219,33 @@ end
 class UserRecord
   class BaseContract
     extend T::Sig
+    extend T::Helpers
 
-    sig { overridable.params(record: UserRecord::Checkable, e: HakumiORM::Errors).void }
-    def self.on_all(record, e); end
+    abstract!
 
-    sig { overridable.params(record: UserRecord::New, e: HakumiORM::Errors).void }
-    def self.on_create(record, e); end
+    sig { overridable.params(_record: UserRecord::Checkable, _e: HakumiORM::Errors).void }
+    def self.on_all(_record, _e); end
 
-    sig { overridable.params(record: UserRecord::Checkable, e: HakumiORM::Errors).void }
-    def self.on_update(record, e); end
+    sig { overridable.params(_record: UserRecord::New, _e: HakumiORM::Errors).void }
+    def self.on_create(_record, _e); end
 
-    sig { overridable.params(record: UserRecord::Checkable, adapter: HakumiORM::Adapter::Base, e: HakumiORM::Errors).void }
-    def self.on_persist(record, adapter, e); end
+    sig { overridable.params(_record: UserRecord::Checkable, _e: HakumiORM::Errors).void }
+    def self.on_update(_record, _e); end
 
-    sig { overridable.params(record: UserRecord, e: HakumiORM::Errors).void }
-    def self.on_destroy(record, e); end
+    sig { overridable.params(_record: UserRecord::Checkable, _adapter: HakumiORM::Adapter::Base, _e: HakumiORM::Errors).void }
+    def self.on_persist(_record, _adapter, _e); end
 
-    sig { overridable.params(record: UserRecord, adapter: HakumiORM::Adapter::Base).void }
-    def self.after_create(record, adapter); end
+    sig { overridable.params(_record: UserRecord, _e: HakumiORM::Errors).void }
+    def self.on_destroy(_record, _e); end
 
-    sig { overridable.params(record: UserRecord, adapter: HakumiORM::Adapter::Base).void }
-    def self.after_update(record, adapter); end
+    sig { overridable.params(_record: UserRecord, _adapter: HakumiORM::Adapter::Base).void }
+    def self.after_create(_record, _adapter); end
 
-    sig { overridable.params(record: UserRecord, adapter: HakumiORM::Adapter::Base).void }
-    def self.after_destroy(record, adapter); end
+    sig { overridable.params(_record: UserRecord, _adapter: HakumiORM::Adapter::Base).void }
+    def self.after_update(_record, _adapter); end
+
+    sig { overridable.params(_record: UserRecord, _adapter: HakumiORM::Adapter::Base).void }
+    def self.after_destroy(_record, _adapter); end
   end
 
   class Contract < BaseContract

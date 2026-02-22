@@ -307,7 +307,7 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
-  test "model stub references escape hatch and declarative approach" do
+  test "model stub has doc link and inherits from record" do
     Dir.mktmpdir do |dir|
       gen_dir = File.join(dir, "generated")
       models_dir = File.join(dir, "models")
@@ -317,10 +317,8 @@ class TestCodegen < HakumiORM::TestCase
 
       code = File.read(File.join(models_dir, "user.rb"))
 
-      assert_includes code, "custom_preload"
-      assert_includes code, "User.preload_custom_assoc"
-      refute_includes code, "UserRecord.preload_custom_assoc"
-      assert_includes code, "db/associations/"
+      assert_includes code, "class User < UserRecord"
+      assert_includes code, "docs/models.md"
     end
   end
 
@@ -369,10 +367,11 @@ class TestCodegen < HakumiORM::TestCase
       code = File.read(File.join(dir, "user/base_contract.rb"))
 
       assert_includes code, "class UserRecord::BaseContract"
+      assert_includes code, "abstract!"
       assert_includes code, "overridable"
-      assert_includes code, "def self.on_all"
-      assert_includes code, "def self.on_create"
-      assert_includes code, "def self.on_persist"
+      assert_includes code, "def self.on_all(_record, _e)"
+      assert_includes code, "def self.on_create(_record, _e)"
+      assert_includes code, "def self.on_persist(_record, _adapter, _e)"
       assert_includes code, "UserRecord::Checkable"
       assert_includes code, "UserRecord::New"
     end

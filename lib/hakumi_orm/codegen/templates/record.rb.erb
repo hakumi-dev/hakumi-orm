@@ -162,10 +162,18 @@ module <%= module_name %>
 <%- end -%>
 <%= ind %>    when :destroy
 <%- has_many.each do |assoc| -%>
+<%- if assoc[:target_has_pk] -%>
 <%= ind %>      <%= assoc[:method_name] %>.to_a(adapter: adapter).each { |r| r.delete!(adapter: adapter) }
+<%- else -%>
+<%= ind %>      adapter.exec_params(SQL_DELETE_<%= assoc[:method_name].upcase %>, [@<%= pk_attr %>]).close
+<%- end -%>
 <%- end -%>
 <%- has_one.each do |assoc| -%>
+<%- if assoc[:target_has_pk] -%>
 <%= ind %>      <%= assoc[:method_name] %>(adapter: adapter)&.delete!(adapter: adapter)
+<%- else -%>
+<%= ind %>      adapter.exec_params(SQL_DELETE_<%= assoc[:method_name].upcase %>, [@<%= pk_attr %>]).close
+<%- end -%>
 <%- end -%>
 <%= ind %>    end
 <%- if soft_delete -%>
@@ -194,10 +202,18 @@ module <%= module_name %>
 <%- end -%>
 <%= ind %>    when :destroy
 <%- has_many.each do |assoc| -%>
+<%- if assoc[:target_has_pk] -%>
 <%= ind %>      <%= assoc[:method_name] %>.to_a(adapter: adapter).each { |r| r.delete!(adapter: adapter) }
+<%- else -%>
+<%= ind %>      adapter.exec_params(SQL_DELETE_<%= assoc[:method_name].upcase %>, [@<%= pk_attr %>]).close
+<%- end -%>
 <%- end -%>
 <%- has_one.each do |assoc| -%>
+<%- if assoc[:target_has_pk] -%>
 <%= ind %>      <%= assoc[:method_name] %>(adapter: adapter)&.delete!(adapter: adapter)
+<%- else -%>
+<%= ind %>      adapter.exec_params(SQL_DELETE_<%= assoc[:method_name].upcase %>, [@<%= pk_attr %>]).close
+<%- end -%>
 <%- end -%>
 <%= ind %>    end
 <%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
@@ -369,7 +385,7 @@ module <%= module_name %>
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).returns(T.nilable(<%= assoc[:record_class] %>)) }
 <%= ind %>  def <%= assoc[:method_name] %>(adapter: ::HakumiORM.adapter)
 <%= ind %>    cached = @_preloaded_<%= assoc[:method_name] %>
-<%= ind %>    return cached&.first if cached
+<%= ind %>    return cached.first if cached
 
 <%- if assoc[:order_by_const] -%>
 <%= ind %>    <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.eq(@<%= assoc[:pk_attr] %>)).order(<%= assoc[:schema_module] %>::<%= assoc[:order_by_const] %>.desc).first(adapter: adapter)
@@ -453,7 +469,11 @@ module <%= module_name %>
 <%= ind %>  def self.preload_<%= assoc[:method_name] %>(records, adapter: ::HakumiORM.adapter)
 <%= ind %>    return if records.empty?
 
+<%- if assoc[:nullable] -%>
 <%= ind %>    fk_values = records.map { |r| r.<%= assoc[:fk_attr] %> }.compact.uniq
+<%- else -%>
+<%= ind %>    fk_values = records.map { |r| r.<%= assoc[:fk_attr] %> }.uniq
+<%- end -%>
 <%= ind %>    return if fk_values.empty?
 
 <%= ind %>    all_related = <%= assoc[:target_relation] %>.new.where(<%= assoc[:target_schema] %>::<%= assoc[:target_pk_const] %>.in_list(fk_values)).to_a(adapter: adapter)
@@ -461,8 +481,12 @@ module <%= module_name %>
 <%= ind %>    all_related.each { |r| indexed[r.<%= assoc[:target_pk_attr] %>] = r }
 
 <%= ind %>    records.each do |record|
+<%- if assoc[:nullable] -%>
 <%= ind %>      fk = record.<%= assoc[:fk_attr] %>
 <%= ind %>      record._preloaded_<%= assoc[:method_name] %> = fk ? [indexed[fk]].compact : []
+<%- else -%>
+<%= ind %>      record._preloaded_<%= assoc[:method_name] %> = [indexed[record.<%= assoc[:fk_attr] %>]].compact
+<%- end -%>
 <%= ind %>    end
 <%= ind %>  end
 <%- end -%>

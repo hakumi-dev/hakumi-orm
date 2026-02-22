@@ -36,7 +36,7 @@ class TestMigrationStructs < HakumiORM::TestCase
 
     td.string "name", null: false
     td.integer "age"
-    td.boolean "active", null: false, default: "true"
+    td.boolean "active", null: false, default: true
 
     assert_equal "users", td.name
     assert_equal :bigserial, td.id_type

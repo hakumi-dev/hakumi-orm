@@ -13,6 +13,7 @@ module HakumiORM
       const :created_at_column, T.nilable(String), default: "created_at"
       const :updated_at_column, T.nilable(String), default: "updated_at"
       const :custom_associations, T::Hash[String, T::Array[CustomAssociation]], default: {}
+      const :internal_tables, T::Array[String], default: []
     end
   end
 end

@@ -6,19 +6,14 @@ module HakumiORM
     class Generator
       private
 
-      sig do
-        params(
-          has_many_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]],
-          has_one_map: T::Hash[String, T::Array[T::Hash[Symbol, String]]]
-        ).returns(T::Hash[String, T::Array[String]])
-      end
+      sig { params(has_many_map: AssocMap, has_one_map: AssocMap).returns(T::Hash[String, T::Array[String]]) }
       def build_fk_assoc_names(has_many_map, has_one_map)
         result = T.let({}, T::Hash[String, T::Array[String]])
         has_many_map.each do |table_name, assocs|
-          (result[table_name] ||= []).concat(assocs.map { |a| a.fetch(:source_table) })
+          (result[table_name] ||= []).concat(assocs.map { |a| a.fetch(:source_table).to_s })
         end
         has_one_map.each do |table_name, assocs|
-          (result[table_name] ||= []).concat(assocs.map { |a| singularize(a.fetch(:source_table)) })
+          (result[table_name] ||= []).concat(assocs.map { |a| singularize(a.fetch(:source_table).to_s) })
         end
         result
       end
@@ -103,7 +98,7 @@ module HakumiORM
         params(
           table: TableInfo,
           custom_assocs: T::Hash[String, T::Array[CustomAssociation]]
-        ).returns(T::Array[T::Hash[Symbol, String]])
+        ).returns(T::Array[AssocEntry])
       end
       def build_custom_has_many(table, custom_assocs)
         (custom_assocs[table.name] || []).select { |a| a.kind == :has_many }.map do |a|
@@ -115,7 +110,7 @@ module HakumiORM
         params(
           table: TableInfo,
           custom_assocs: T::Hash[String, T::Array[CustomAssociation]]
-        ).returns(T::Array[T::Hash[Symbol, String]])
+        ).returns(T::Array[AssocEntry])
       end
       def build_custom_has_one(table, custom_assocs)
         (custom_assocs[table.name] || []).select { |a| a.kind == :has_one }.map do |a|
@@ -123,13 +118,21 @@ module HakumiORM
         end
       end
 
-      sig { params(table: TableInfo, a: CustomAssociation).returns(T::Hash[Symbol, String]) }
+      sig { params(table: TableInfo, a: CustomAssociation).returns(AssocEntry) }
       def build_custom_assoc_hash(table, a)
+        result = build_custom_assoc_base(table, a)
+        ob = a.order_by
+        result[:order_by_const] = ob.upcase if ob
+        result
+      end
+
+      sig { params(table: TableInfo, a: CustomAssociation).returns(AssocEntry) }
+      def build_custom_assoc_base(table, a)
         target_cls = classify(a.target_table)
+        target_table = @tables[a.target_table]
         pk_col = table.columns.find { |c| c.name == a.primary_key }
         pk_type = pk_col ? hakumi_type_for(pk_col).ruby_type_string(nullable: false) : "String"
-
-        result = {
+        {
           method_name: a.name,
           target_table: a.target_table,
           relation_class: qualify("#{target_cls}Relation"),
@@ -139,13 +142,9 @@ module HakumiORM
           fk_attr: a.foreign_key,
           pk_attr: a.primary_key,
           pk_ruby_type: pk_type,
-          delete_sql: assoc_delete_sql(a.target_table, a.foreign_key)
+          delete_sql: assoc_delete_sql(a.target_table, a.foreign_key),
+          target_has_pk: !target_table&.primary_key.nil?
         }
-
-        ob = a.order_by
-        result[:order_by_const] = ob.upcase if ob
-
-        result
       end
     end
   end
