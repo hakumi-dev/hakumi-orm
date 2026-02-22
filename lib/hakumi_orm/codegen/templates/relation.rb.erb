@@ -19,7 +19,24 @@ module <%= module_name %>
 <%= ind %>  sig { void }
 <%= ind %>  def initialize
 <%= ind %>    super(<%= qualified_schema %>::TABLE_NAME, <%= qualified_schema %>::ALL)
+<%- if soft_delete -%>
+<%= ind %>    @default_exprs << <%= qualified_schema %>::DELETED_AT.is_null
+<%- end -%>
 <%= ind %>  end
+<%- if soft_delete -%>
+
+<%= ind %>  sig { returns(T.self_type) }
+<%= ind %>  def with_deleted
+<%= ind %>    @default_exprs = []
+<%= ind %>    self
+<%= ind %>  end
+
+<%= ind %>  sig { returns(T.self_type) }
+<%= ind %>  def only_deleted
+<%= ind %>    @default_exprs = [<%= qualified_schema %>::DELETED_AT.is_not_null]
+<%= ind %>    self
+<%= ind %>  end
+<%- end -%>
 
 <%= ind %>  sig { override.params(result: ::HakumiORM::Adapter::Result).returns(T::Array[<%= qualified_record_class %>]) }
 <%= ind %>  def hydrate(result)

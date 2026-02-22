@@ -10,6 +10,7 @@ module HakumiORM
       const :nullable, T::Boolean
       const :default, T.nilable(String)
       const :max_length, T.nilable(Integer)
+      const :enum_values, T.nilable(T::Array[String]), default: nil
     end
   end
 end

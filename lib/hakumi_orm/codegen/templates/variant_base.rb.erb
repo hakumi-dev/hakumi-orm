@@ -22,6 +22,12 @@ module <%= module_name %>
 <%= ind %>    sig { returns(T::Hash[Symbol, <%= to_h_value_type %>]) }
 <%= ind %>    def to_h = @record.to_h
 
+<%= ind %>    sig { params(other: <%= record_class_name %>).returns(T::Boolean) }
+<%= ind %>    def changed_from?(other) = @record.changed_from?(other)
+
+<%= ind %>    sig { params(other: <%= record_class_name %>).returns(T::Hash[Symbol, T::Array[<%= to_h_value_type %>]]) }
+<%= ind %>    def diff(other) = @record.diff(other)
+
 <%= ind %>    sig { params(only: T.nilable(T::Array[Symbol]), except: T.nilable(T::Array[Symbol])).returns(T::Hash[String, <%= as_json_value_type %>]) }
 <%= ind %>    def as_json(only: nil, except: nil) = @record.as_json(only: only, except: except)
 

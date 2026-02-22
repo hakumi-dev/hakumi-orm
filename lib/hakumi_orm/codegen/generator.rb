@@ -21,10 +21,12 @@ module HakumiORM
           output_dir: T.nilable(String),
           module_name: T.nilable(String),
           models_dir: T.nilable(String),
-          contracts_dir: T.nilable(String)
+          contracts_dir: T.nilable(String),
+          soft_delete_tables: T::Array[String]
         ).void
       end
-      def initialize(tables, dialect: nil, output_dir: nil, module_name: nil, models_dir: nil, contracts_dir: nil)
+      def initialize(tables, dialect: nil, output_dir: nil, module_name: nil, models_dir: nil, contracts_dir: nil,
+                     soft_delete_tables: [])
         cfg = HakumiORM.config
 
         resolved_dialect = dialect
@@ -41,6 +43,7 @@ module HakumiORM
         @module_name = T.let(module_name || cfg.module_name, T.nilable(String))
         @models_dir = T.let(models_dir || cfg.models_dir, T.nilable(String))
         @contracts_dir = T.let(contracts_dir || cfg.contracts_dir, T.nilable(String))
+        @soft_delete_tables = T.let(soft_delete_tables.to_set, T::Set[String])
       end
 
       sig { void }
@@ -50,6 +53,9 @@ module HakumiORM
         has_many_map = compute_has_many
         has_one_map = compute_has_one
         through_map = compute_has_many_through
+
+        enum_types = collect_enum_types
+        generate_enum_files!(enum_types) unless enum_types.empty?
 
         @tables.each_value do |table|
           table_dir = File.join(@output_dir, singularize(table.name))
@@ -126,8 +132,12 @@ module HakumiORM
       sig { params(table: TableInfo).returns(String) }
       def build_schema(table)
         fields = table.columns.map do |col|
-          ht = hakumi_type_for(col)
-          field_cls = ht.field_class
+          ev = col.enum_values
+          field_cls = if ev
+                        "::HakumiORM::EnumField[#{qualify(enum_class_name(col.udt_name))}]"
+                      else
+                        hakumi_type_for(col).field_class
+                      end
           qn = escape_ruby_dq(@dialect.qualified_name(table.name, col.name))
           { const: col.name.upcase, field_cls: field_cls, name: col.name, qn: qn }
         end
@@ -173,40 +183,13 @@ module HakumiORM
                has_many_through: build_has_many_through_assocs(table, through_map),
                belongs_to: build_belongs_to_assocs(table),
                insert_all_prefix: "INSERT INTO #{@dialect.quote_id(table.name)} (#{col_list}) VALUES ",
-               insert_all_columns: ins_cols.map { |c| { name: c.name } },
+               insert_all_columns: ins_cols.map { |c| { name: c.name, is_enum: !c.enum_values.nil? } },
                supports_returning: @dialect.supports_returning?,
                returning_cols: returning_list,
                **build_find_locals(table, record_cls),
                **build_delete_locals(table),
                **build_update_locals(table, ins_cols),
                **build_build_locals(ins_cols, ins_cols.reject(&:nullable), ins_cols.select(&:nullable), record_cls))
-      end
-
-      sig do
-        params(
-          ins_cols: T::Array[ColumnInfo],
-          required_ins: T::Array[ColumnInfo],
-          optional_ins: T::Array[ColumnInfo],
-          _record_cls: String
-        ).returns(T::Hash[Symbol, T.nilable(String)])
-      end
-      def build_build_locals(ins_cols, required_ins, optional_ins, _record_cls)
-        return { build_sig_params: nil } if ins_cols.empty?
-
-        ordered = required_ins + optional_ins
-        {
-          build_sig_params: ordered.map { |c| "#{c.name}: #{ruby_type(c)}" }.join(", "),
-          build_args: (required_ins.map { |c| "#{c.name}:" } +
-                       optional_ins.map { |c| "#{c.name}: nil" }).join(", "),
-          build_forward: ins_cols.map { |c| "#{c.name}: #{c.name}" }.join(", ")
-        }
-      end
-
-      sig { params(table: TableInfo).returns(T::Array[String]) }
-      def build_cast_lines(table)
-        table.columns.each_with_index.map do |col, ci|
-          TypeMap.cast_expression(hakumi_type_for(col), "c#{ci}[i]", nullable: col.nullable)
-        end
       end
 
       sig { params(table: TableInfo, _record_cls: String).returns(T::Hash[Symbol, T.nilable(String)]) }
@@ -267,7 +250,9 @@ module HakumiORM
                       ho.map { |a| { method_name: a[:method_name], relation_class: a[:relation_class] } } +
                       bt.map { |a| { method_name: a[:method_name], relation_class: a[:target_relation] } }
 
+        has_soft_delete = soft_delete_column?(table)
         count_sql = "SELECT COUNT(*) FROM #{@dialect.quote_id(table.name)}"
+        count_sql += " WHERE #{@dialect.qualified_name(table.name, "deleted_at")} IS NULL" if has_soft_delete
 
         render("relation",
                module_name: @module_name,
@@ -277,6 +262,7 @@ module HakumiORM
                qualified_schema: qualify("#{cls}Schema"),
                count_sql: count_sql,
                stmt_count_name: "hakumi_#{table.name}_count",
+               soft_delete: has_soft_delete,
                preloadable_assocs: preloadable)
       end
 
@@ -295,7 +281,10 @@ module HakumiORM
 
       sig { returns(String) }
       def build_manifest
-        render("manifest", table_names: @tables.keys.map { |n| singularize(n) })
+        enum_types = collect_enum_types
+        render("manifest",
+               table_names: @tables.keys.map { |n| singularize(n) },
+               enum_files: enum_types.keys)
       end
 
       sig { returns(String) }
@@ -310,7 +299,13 @@ module HakumiORM
 
       sig { params(col: ColumnInfo).returns(String) }
       def ruby_type(col)
-        hakumi_type_for(col).ruby_type_string(nullable: col.nullable)
+        ev = col.enum_values
+        if ev
+          base = qualify(enum_class_name(col.udt_name))
+          col.nullable ? "T.nilable(#{base})" : base
+        else
+          hakumi_type_for(col).ruby_type_string(nullable: col.nullable)
+        end
       end
 
       sig { params(table: TableInfo).returns(T::Array[ColumnInfo]) }

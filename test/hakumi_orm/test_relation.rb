@@ -595,4 +595,56 @@ class TestRelation < HakumiORM::TestCase
 
     assert_instance_of UserRelation, rel
   end
+
+  test "changed_from? returns false for identical records" do
+    a = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+    b = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+
+    refute a.changed_from?(b)
+  end
+
+  test "changed_from? returns true when any field differs" do
+    a = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+    b = UserRecord.new(id: 1, name: "Bob", email: "a@b.com", age: 25, active: true)
+
+    assert a.changed_from?(b)
+  end
+
+  test "diff returns empty hash for identical records" do
+    a = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+    b = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+
+    assert_empty a.diff(b)
+  end
+
+  test "diff returns changed fields with old and new values" do
+    a = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+    b = UserRecord.new(id: 1, name: "Bob", email: "b@c.com", age: 25, active: true)
+
+    d = a.diff(b)
+
+    assert_equal 2, d.length
+    assert_equal %w[Alice Bob], d[:name]
+    assert_equal ["a@b.com", "b@c.com"], d[:email]
+    refute d.key?(:id)
+    refute d.key?(:age)
+  end
+
+  test "diff detects nil to value change" do
+    a = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: nil, active: true)
+    b = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 30, active: true)
+
+    d = a.diff(b)
+
+    assert_equal [nil, 30], d[:age]
+  end
+
+  test "diff detects value to nil change" do
+    a = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+    b = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: nil, active: true)
+
+    d = a.diff(b)
+
+    assert_equal [25, nil], d[:age]
+  end
 end

@@ -926,6 +926,188 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
+  test "record generates diff and changed_from? methods" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      record = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes record, "def changed_from?(other)"
+      assert_includes record, "def diff(other)"
+      assert_includes record, "@name != other.name"
+    end
+  end
+
+  test "variant_base delegates diff and changed_from?" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      variant = File.read(File.join(dir, "user/variant_base.rb"))
+
+      assert_includes variant, "def changed_from?(other)"
+      assert_includes variant, "def diff(other)"
+    end
+  end
+
+  test "soft delete generates delete! as UPDATE and really_delete! as DELETE" do
+    tables = build_table_with_soft_delete
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir, soft_delete_tables: ["articles"])
+      gen.generate!
+
+      record = File.read(File.join(dir, "article/record.rb"))
+
+      assert_includes record, "SQL_SOFT_DELETE_BY_PK"
+      assert_includes record, "def delete!"
+      assert_includes record, "def really_delete!"
+      assert_includes record, "def deleted?"
+      assert_includes record, "SQL_SOFT_DELETE_BY_PK"
+      assert_includes record, "SQL_DELETE_BY_PK"
+    end
+  end
+
+  test "soft delete relation adds default scope and with_deleted/only_deleted" do
+    tables = build_table_with_soft_delete
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir, soft_delete_tables: ["articles"])
+      gen.generate!
+
+      relation = File.read(File.join(dir, "article/relation.rb"))
+
+      assert_includes relation, "DELETED_AT.is_null"
+      assert_includes relation, "def with_deleted"
+      assert_includes relation, "def only_deleted"
+      assert_includes relation, "DELETED_AT.is_not_null"
+    end
+  end
+
+  test "soft delete count SQL includes deleted_at IS NULL" do
+    tables = build_table_with_soft_delete
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir, soft_delete_tables: ["articles"])
+      gen.generate!
+
+      relation = File.read(File.join(dir, "article/relation.rb"))
+
+      assert_includes relation, "IS NULL"
+      assert_includes relation, "deleted_at"
+    end
+  end
+
+  test "table without deleted_at does not get soft delete features" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      record = File.read(File.join(dir, "user/record.rb"))
+      relation = File.read(File.join(dir, "user/relation.rb"))
+
+      refute_includes record, "really_delete!"
+      refute_includes record, "SQL_SOFT_DELETE"
+      refute_includes relation, "with_deleted"
+      refute_includes relation, "only_deleted"
+    end
+  end
+
+  test "table with deleted_at but not in soft_delete_tables does not get soft delete" do
+    tables = build_table_with_soft_delete
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      record = File.read(File.join(dir, "article/record.rb"))
+      relation = File.read(File.join(dir, "article/relation.rb"))
+
+      refute_includes record, "really_delete!"
+      refute_includes record, "SQL_SOFT_DELETE"
+      refute_includes relation, "with_deleted"
+      refute_includes relation, "only_deleted"
+    end
+  end
+
+  test "enum column generates T::Enum class file" do
+    tables = build_table_with_enum
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      enum_code = File.read(File.join(dir, "enums/post_status.rb"))
+
+      assert_includes enum_code, "class PostStatusEnum < T::Enum"
+      assert_includes enum_code, 'DRAFT = new("draft")'
+      assert_includes enum_code, 'PUBLISHED = new("published")'
+      assert_includes enum_code, 'ARCHIVED = new("archived")'
+    end
+  end
+
+  test "enum column generates EnumField in schema" do
+    tables = build_table_with_enum
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      schema = File.read(File.join(dir, "post/schema.rb"))
+
+      assert_includes schema, "::HakumiORM::EnumField[PostStatusEnum]"
+    end
+  end
+
+  test "enum column types record attr as the enum class" do
+    tables = build_table_with_enum
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      record = File.read(File.join(dir, "post/record.rb"))
+
+      assert_includes record, "returns(PostStatusEnum)"
+      assert_includes record, "PostStatusEnum.deserialize"
+    end
+  end
+
+  test "nullable enum column generates T.nilable type and safe cast" do
+    tables = build_table_with_nullable_enum
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      record = File.read(File.join(dir, "task/record.rb"))
+
+      assert_includes record, "returns(T.nilable(TaskPriorityEnum))"
+      assert_includes record, "TaskPriorityEnum.deserialize(_hv)"
+    end
+  end
+
+  test "enum manifest requires enum files before table files" do
+    tables = build_table_with_enum
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      manifest = File.read(File.join(dir, "manifest.rb"))
+      enum_pos = manifest.index("enums/post_status")
+      table_pos = manifest.index("post/schema")
+
+      refute_nil enum_pos
+      refute_nil table_pos
+      assert_operator enum_pos, :<, table_pos
+    end
+  end
+
+  test "enum as_json serializes to string" do
+    tables = build_table_with_enum
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, dialect: @dialect, output_dir: dir)
+      gen.generate!
+
+      record = File.read(File.join(dir, "post/record.rb"))
+
+      assert_includes record, "@status.serialize"
+    end
+  end
+
   private
 
   def col(name, type: "integer", udt: "int4", nullable: false, default: nil, max_length: nil)
@@ -945,6 +1127,13 @@ class TestCodegen < HakumiORM::TestCase
 
   def fk_col(name)
     col(name)
+  end
+
+  def enum_col(name, udt_name, values, nullable: false)
+    HakumiORM::Codegen::ColumnInfo.new(
+      name: name, data_type: "USER-DEFINED", udt_name: udt_name,
+      nullable: nullable, default: nil, max_length: nil, enum_values: values
+    )
   end
 
   def fk(column_name, foreign_table, foreign_column = "id")
@@ -1021,6 +1210,27 @@ class TestCodegen < HakumiORM::TestCase
                          fks: [fk("profile_id", "profiles")],
                          unique: ["profile_id"])
     { "users" => users, "profiles" => profiles, "avatars" => avatars }
+  end
+
+  def build_table_with_soft_delete
+    articles = make_table("articles",
+                          columns: [pk_col("articles"), str_col("title"),
+                                    col("deleted_at", type: "timestamp with time zone", udt: "timestamptz", nullable: true)])
+    { "articles" => articles }
+  end
+
+  def build_table_with_enum
+    posts = make_table("posts",
+                       columns: [pk_col("posts"), str_col("title"),
+                                 enum_col("status", "post_status", %w[draft published archived])])
+    { "posts" => posts }
+  end
+
+  def build_table_with_nullable_enum
+    tasks = make_table("tasks",
+                       columns: [pk_col("tasks"), str_col("name"),
+                                 enum_col("priority", "task_priority", %w[low medium high], nullable: true)])
+    { "tasks" => tasks }
   end
 
   def build_users_posts_comments_tables

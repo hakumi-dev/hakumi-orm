@@ -53,6 +53,15 @@ module HakumiORM
         WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = $1
       SQL
 
+      PG_ENUM_VALUES_SQL = <<~SQL
+        SELECT t.typname, e.enumlabel
+        FROM pg_type t
+        JOIN pg_enum e ON t.oid = e.enumtypid
+        JOIN pg_namespace n ON t.typnamespace = n.oid
+        WHERE n.nspname = $1
+        ORDER BY t.typname, e.enumsortorder
+      SQL
+
       sig { params(adapter: Adapter::Base).void }
       def initialize(adapter)
         @adapter = T.let(adapter, Adapter::Base)
@@ -62,8 +71,9 @@ module HakumiORM
       def read_tables(schema: "public")
         tables = T.let({}, T::Hash[String, TableInfo])
 
+        enum_map = read_enum_values(schema)
         read_table_names(schema, tables)
-        read_columns(schema, tables)
+        read_columns(schema, tables, enum_map)
         read_primary_keys(schema, tables)
         read_unique_columns(schema, tables)
         read_foreign_keys(schema, tables)
@@ -85,21 +95,38 @@ module HakumiORM
         result.close
       end
 
-      sig { params(schema: String, tables: T::Hash[String, TableInfo]).void }
-      def read_columns(schema, tables)
+      sig { params(schema: String).returns(T::Hash[String, T::Array[String]]) }
+      def read_enum_values(schema)
+        enum_map = T.let({}, T::Hash[String, T::Array[String]])
+        result = @adapter.exec_params(PG_ENUM_VALUES_SQL, [schema])
+        i = T.let(0, Integer)
+        while i < result.row_count
+          type_name = result.fetch_value(i, 0)
+          label = result.fetch_value(i, 1)
+          (enum_map[type_name] ||= []) << label
+          i += 1
+        end
+        result.close
+        enum_map
+      end
+
+      sig { params(schema: String, tables: T::Hash[String, TableInfo], enum_map: T::Hash[String, T::Array[String]]).void }
+      def read_columns(schema, tables, enum_map)
         result = @adapter.exec_params(PG_COLUMNS_SQL, [schema])
         i = T.let(0, Integer)
         while i < result.row_count
           tbl = tables[result.fetch_value(i, 0)]
           if tbl
             max_len_raw = result.get_value(i, 6)
+            udt = result.fetch_value(i, 3)
             tbl.columns << ColumnInfo.new(
               name: result.fetch_value(i, 1),
               data_type: result.fetch_value(i, 2),
-              udt_name: result.fetch_value(i, 3),
+              udt_name: udt,
               nullable: result.fetch_value(i, 4) == "YES",
               default: result.get_value(i, 5),
-              max_length: max_len_raw&.to_i
+              max_length: max_len_raw&.to_i,
+              enum_values: enum_map[udt]
             )
           end
           i += 1

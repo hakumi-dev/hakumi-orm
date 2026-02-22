@@ -17,6 +17,7 @@ module HakumiORM
       @columns = T.let(columns, T::Array[FieldRef])
       @select_columns = T.let(nil, T.nilable(T::Array[FieldRef]))
       @where_exprs = T.let([], T::Array[Expr])
+      @default_exprs = T.let([], T::Array[Expr])
       @order_clauses = T.let([], T::Array[OrderClause])
       @joins = T.let([], T::Array[JoinClause])
       @limit_value = T.let(nil, T.nilable(Integer))
@@ -122,6 +123,12 @@ module HakumiORM
     sig { params(expr: Expr).returns(T.self_type) }
     def where_not(expr)
       @where_exprs << NotExpr.new(expr)
+      self
+    end
+
+    sig { returns(T.self_type) }
+    def unscoped
+      @default_exprs = []
       self
     end
 
@@ -284,7 +291,7 @@ module HakumiORM
     end
 
     sig { returns(T.nilable(Expr)) }
-    def combined_where = combine_exprs(@where_exprs)
+    def combined_where = combine_exprs(@default_exprs + @where_exprs)
 
     sig { returns(T.nilable(Expr)) }
     def combined_having = combine_exprs(@having_exprs)

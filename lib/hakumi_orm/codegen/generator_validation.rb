@@ -41,11 +41,12 @@ module HakumiORM
 
         insert_sql = build_insert_sql(table)
         validated_bind_list = ins_cols.map do |col|
-          bind_class = hakumi_type_for(col).bind_class
           if timestamp_auto_column?(col)
-            "#{bind_class}.new(::Time.now).pg_value"
+            "#{hakumi_type_for(col).bind_class}.new(::Time.now).pg_value"
+          elsif col.enum_values
+            "::HakumiORM::StrBind.new(T.cast(@record.#{col.name}.serialize, String)).pg_value"
           else
-            "#{bind_class}.new(@record.#{col.name}).pg_value"
+            "#{hakumi_type_for(col).bind_class}.new(@record.#{col.name}).pg_value"
           end
         end.join(", ")
 
@@ -143,11 +144,12 @@ module HakumiORM
       sig { params(user_cols: T::Array[ColumnInfo]).returns(String) }
       def build_update_bind_list(user_cols)
         user_cols.map do |col|
-          bind_class = hakumi_type_for(col).bind_class
           if col.name == "updated_at" && hakumi_type_for(col) == Codegen::HakumiType::Timestamp
-            "#{bind_class}.new(::Time.now).pg_value"
+            "#{hakumi_type_for(col).bind_class}.new(::Time.now).pg_value"
+          elsif col.enum_values
+            "::HakumiORM::StrBind.new(T.cast(#{col.name}.serialize, String)).pg_value"
           else
-            "#{bind_class}.new(#{col.name}).pg_value"
+            "#{hakumi_type_for(col).bind_class}.new(#{col.name}).pg_value"
           end
         end.join(", ")
       end
@@ -159,13 +161,24 @@ module HakumiORM
         end
       end
 
-      sig { params(table: TableInfo).returns(T::Hash[Symbol, T.nilable(String)]) }
-      def build_delete_locals(table)
-        pk = table.primary_key
-        return { delete_sql: nil, pk_attr: nil } unless pk
+      sig do
+        params(
+          ins_cols: T::Array[ColumnInfo],
+          required_ins: T::Array[ColumnInfo],
+          optional_ins: T::Array[ColumnInfo],
+          _record_cls: String
+        ).returns(T::Hash[Symbol, T.nilable(String)])
+      end
+      def build_build_locals(ins_cols, required_ins, optional_ins, _record_cls)
+        return { build_sig_params: nil } if ins_cols.empty?
 
-        sql = "DELETE FROM #{@dialect.quote_id(table.name)} WHERE #{@dialect.qualified_name(table.name, pk)} = #{@dialect.bind_marker(0)}"
-        { delete_sql: sql, pk_attr: pk }
+        ordered = required_ins + optional_ins
+        {
+          build_sig_params: ordered.map { |c| "#{c.name}: #{ruby_type(c)}" }.join(", "),
+          build_args: (required_ins.map { |c| "#{c.name}:" } +
+                       optional_ins.map { |c| "#{c.name}: nil" }).join(", "),
+          build_forward: ins_cols.map { |c| "#{c.name}: #{c.name}" }.join(", ")
+        }
       end
 
       sig { params(col: ColumnInfo).returns(T::Boolean) }
@@ -181,7 +194,12 @@ module HakumiORM
 
       sig { params(col: ColumnInfo).returns(String) }
       def json_expr(col)
-        hakumi_type_for(col).as_json_expr("@#{col.name}", nullable: col.nullable)
+        if col.enum_values
+          ivar = "@#{col.name}"
+          col.nullable ? "#{ivar}&.serialize&.to_s" : "#{ivar}.serialize.to_s"
+        else
+          hakumi_type_for(col).as_json_expr("@#{col.name}", nullable: col.nullable)
+        end
       end
 
       sig { params(table: TableInfo).returns(String) }
@@ -192,6 +210,8 @@ module HakumiORM
 
       sig { params(col: ColumnInfo).returns(String) }
       def json_ruby_type(col)
+        return "String" if col.enum_values
+
         ht = hakumi_type_for(col)
         case ht
         when HakumiType::Integer                then "Integer"

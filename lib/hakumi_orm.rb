@@ -32,6 +32,7 @@ require_relative "hakumi_orm/field/date_field"
 require_relative "hakumi_orm/field/str_field"
 require_relative "hakumi_orm/field/bool_field"
 require_relative "hakumi_orm/field/json_field"
+require_relative "hakumi_orm/field/enum_field"
 
 require_relative "hakumi_orm/assignment"
 require_relative "hakumi_orm/cast"

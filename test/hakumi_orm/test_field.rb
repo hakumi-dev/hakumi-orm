@@ -122,4 +122,39 @@ class TestField < HakumiORM::TestCase
     refute_respond_to field, :like
     assert_respond_to field, :is_null
   end
+
+  test "EnumField produces StrBind from T::Enum value" do
+    field = HakumiORM::EnumField.new(:status, "posts", "status", '"posts"."status"')
+    enum_val = TestStatusEnum::DRAFT
+    pred = field.eq(enum_val)
+
+    assert_instance_of HakumiORM::StrBind, pred.binds[0]
+    assert_equal :eq, pred.op
+    assert_equal "draft", pred.binds[0].pg_value
+  end
+
+  test "EnumField neq produces correct bind" do
+    field = HakumiORM::EnumField.new(:status, "posts", "status", '"posts"."status"')
+    pred = field.neq(TestStatusEnum::PUBLISHED)
+
+    assert_equal :neq, pred.op
+    assert_equal "published", pred.binds[0].pg_value
+  end
+
+  test "EnumField in_list produces multiple StrBinds" do
+    field = HakumiORM::EnumField.new(:status, "posts", "status", '"posts"."status"')
+    pred = field.in_list([TestStatusEnum::DRAFT, TestStatusEnum::PUBLISHED])
+
+    assert_equal :in, pred.op
+    assert_equal 2, pred.binds.length
+    assert_equal "draft", pred.binds[0].pg_value
+    assert_equal "published", pred.binds[1].pg_value
+  end
+
+  test "EnumField is_null / is_not_null work" do
+    field = HakumiORM::EnumField.new(:status, "posts", "status", '"posts"."status"')
+
+    assert_equal :is_null, field.is_null.op
+    assert_equal :is_not_null, field.is_not_null.op
+  end
 end

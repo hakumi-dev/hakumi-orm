@@ -112,6 +112,20 @@ module <%= module_name %>
 <%= ind %>    }
 <%= ind %>  end
 
+<%= ind %>  sig { params(other: <%= record_class_name %>).returns(T::Boolean) }
+<%= ind %>  def changed_from?(other)
+<%= ind %>    <%= columns.map { |c| "@#{c[:name]} != other.#{c[:name]}" }.join(" || ") %>
+<%= ind %>  end
+
+<%= ind %>  sig { params(other: <%= record_class_name %>).returns(T::Hash[Symbol, T::Array[<%= to_h_value_type %>]]) }
+<%= ind %>  def diff(other)
+<%= ind %>    h = T.let({}, T::Hash[Symbol, T::Array[<%= to_h_value_type %>]])
+<%- columns.each do |col| -%>
+<%= ind %>    h[:<%= col[:name] %>] = [@<%= col[:name] %>, other.<%= col[:name] %>] if @<%= col[:name] %> != other.<%= col[:name] %>
+<%- end -%>
+<%= ind %>    h
+<%= ind %>  end
+
 <%= ind %>  sig { params(only: T.nilable(T::Array[Symbol]), except: T.nilable(T::Array[Symbol])).returns(T::Hash[String, <%= as_json_value_type %>]) }
 <%= ind %>  def as_json(only: nil, except: nil)
 <%= ind %>    h = T.let({}, T::Hash[String, <%= as_json_value_type %>])
@@ -122,13 +136,47 @@ module <%= module_name %>
 <%= ind %>  end
 <%- if delete_sql -%>
 <%= ind %>  SQL_DELETE_BY_PK = T.let('<%= delete_sql %>', String)
+<%- if soft_delete_sql -%>
+<%= ind %>  SQL_SOFT_DELETE_BY_PK = T.let('<%= soft_delete_sql %>', String)
+<%- end -%>
 <%- (has_many + has_one).each do |assoc| -%>
 <%= ind %>  SQL_DELETE_<%= assoc[:method_name].upcase %> = T.let('<%= assoc[:delete_sql] %>', String)
 <%- end -%>
 
+<%- if soft_delete -%>
+<%= ind %>  sig { returns(T::Boolean) }
+<%= ind %>  def deleted? = !@deleted_at.nil?
+
+<%- end -%>
 <%- if has_many.any? || has_one.any? -%>
 <%= ind %>  sig { params(dependent: Symbol, adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def delete!(dependent: :none, adapter: ::HakumiORM.adapter)
+<%= ind %>    case dependent
+<%= ind %>    when :delete_all
+<%- (has_many + has_one).each do |assoc| -%>
+<%= ind %>      adapter.exec_params(SQL_DELETE_<%= assoc[:method_name].upcase %>, [@<%= pk_attr %>]).close
+<%- end -%>
+<%= ind %>    when :destroy
+<%- has_many.each do |assoc| -%>
+<%= ind %>      <%= assoc[:method_name] %>.to_a(adapter: adapter).each { |r| r.delete!(adapter: adapter) }
+<%- end -%>
+<%- has_one.each do |assoc| -%>
+<%= ind %>      <%= assoc[:method_name] %>(adapter: adapter)&.delete!(adapter: adapter)
+<%- end -%>
+<%= ind %>    end
+<%- if soft_delete -%>
+<%= ind %>    result = adapter.exec_params(SQL_SOFT_DELETE_BY_PK, [::HakumiORM::TimeBind.new(::Time.now).pg_value, @<%= pk_attr %>])
+<%- else -%>
+<%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
+<%- end -%>
+<%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
+<%= ind %>  ensure
+<%= ind %>    result&.close
+<%= ind %>  end
+<%- if soft_delete -%>
+
+<%= ind %>  sig { params(dependent: Symbol, adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def really_delete!(dependent: :none, adapter: ::HakumiORM.adapter)
 <%= ind %>    case dependent
 <%= ind %>    when :delete_all
 <%- (has_many + has_one).each do |assoc| -%>
@@ -147,6 +195,24 @@ module <%= module_name %>
 <%= ind %>  ensure
 <%= ind %>    result&.close
 <%= ind %>  end
+<%- end -%>
+<%- else -%>
+<%- if soft_delete -%>
+<%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def delete!(adapter: ::HakumiORM.adapter)
+<%= ind %>    result = adapter.exec_params(SQL_SOFT_DELETE_BY_PK, [::HakumiORM::TimeBind.new(::Time.now).pg_value, @<%= pk_attr %>])
+<%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
+<%= ind %>  ensure
+<%= ind %>    result&.close
+<%= ind %>  end
+
+<%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def really_delete!(adapter: ::HakumiORM.adapter)
+<%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
+<%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
+<%= ind %>  ensure
+<%= ind %>    result&.close
+<%= ind %>  end
 <%- else -%>
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def delete!(adapter: ::HakumiORM.adapter)
@@ -155,6 +221,7 @@ module <%= module_name %>
 <%= ind %>  ensure
 <%= ind %>    result&.close
 <%= ind %>  end
+<%- end -%>
 <%- end -%>
 
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).returns(<%= record_class_name %>) }
@@ -217,7 +284,11 @@ module <%= module_name %>
 <%- insert_all_columns.each_with_index do |col, ci| -%>
 <%= ind %>      buf << ", " if <%= ci %> > 0
 <%= ind %>      buf << dialect.bind_marker(idx)
+<%- if col[:is_enum] -%>
+<%= ind %>      binds << T.cast(rec.<%= col[:name] %>.serialize, String)
+<%- else -%>
 <%= ind %>      binds << rec.<%= col[:name] %>
+<%- end -%>
 <%= ind %>      idx += 1
 <%- end -%>
 <%= ind %>      buf << ")"

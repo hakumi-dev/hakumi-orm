@@ -1,6 +1,14 @@
 # typed: false
 # frozen_string_literal: true
 
+class TestStatusEnum < T::Enum
+  enums do
+    DRAFT = new("draft")
+    PUBLISHED = new("published")
+    ARCHIVED = new("archived")
+  end
+end
+
 module UserSchema
   ID = HakumiORM::IntField.new(:id, "users", "id", '"users"."id"').freeze
   NAME = HakumiORM::StrField.new(:name, "users", "name", '"users"."name"').freeze
@@ -130,6 +138,22 @@ class UserRecord
       age: @age,
       active: @active
     }
+  end
+
+  sig { params(other: UserRecord).returns(T::Boolean) }
+  def changed_from?(other)
+    @id != other.id || @name != other.name || @email != other.email || @age != other.age || @active != other.active
+  end
+
+  sig { params(other: UserRecord).returns(T::Hash[Symbol, T::Array[T.any(Integer, String, T.nilable(Integer), T::Boolean)]]) }
+  def diff(other)
+    h = T.let({}, T::Hash[Symbol, T::Array[T.any(Integer, String, T.nilable(Integer), T::Boolean)]])
+    h[:id] = [@id, other.id] if @id != other.id
+    h[:name] = [@name, other.name] if @name != other.name
+    h[:email] = [@email, other.email] if @email != other.email
+    h[:age] = [@age, other.age] if @age != other.age
+    h[:active] = [@active, other.active] if @active != other.active
+    h
   end
 
   sig { params(only: T.nilable(T::Array[Symbol]), except: T.nilable(T::Array[Symbol])).returns(T::Hash[String, T.nilable(T.any(String, Integer, T::Boolean))]) }
