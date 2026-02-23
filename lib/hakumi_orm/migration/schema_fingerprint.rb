@@ -29,8 +29,18 @@ module HakumiORM
         ENV.key?(DRIFT_ENV_VAR)
       end
 
+      SCHEMA_META_TABLE = "hakumi_schema_meta"
+
+      CREATE_META_SQL = T.let(<<~SQL, String)
+        CREATE TABLE IF NOT EXISTS hakumi_schema_meta (
+          fingerprint varchar(64) NOT NULL,
+          schema_data text NOT NULL,
+          generator_version varchar(20) NOT NULL
+        )
+      SQL
+
       sig { params(tables: T::Hash[String, Codegen::TableInfo]).returns(String) }
-      def self.compute(tables)
+      def self.build_canonical(tables)
         buf = "V:#{GENERATOR_VERSION}\n"
 
         tables.keys.sort.each do |table_name|
@@ -38,7 +48,120 @@ module HakumiORM
           append_table(buf, table_name, table)
         end
 
-        Digest::SHA256.hexdigest(buf)
+        buf
+      end
+
+      sig { params(tables: T::Hash[String, Codegen::TableInfo]).returns(String) }
+      def self.compute(tables)
+        Digest::SHA256.hexdigest(build_canonical(tables))
+      end
+
+      sig { params(adapter: Adapter::Base, fingerprint: String, canonical: String).void }
+      def self.store!(adapter, fingerprint, canonical)
+        adapter.exec(CREATE_META_SQL)
+        adapter.exec("DELETE FROM #{SCHEMA_META_TABLE}")
+        safe_fp = fingerprint.gsub("'", "''")
+        safe_data = canonical.gsub("'", "''")
+        safe_ver = GENERATOR_VERSION.gsub("'", "''")
+        adapter.exec(
+          "INSERT INTO #{SCHEMA_META_TABLE} (fingerprint, schema_data, generator_version) " \
+          "VALUES ('#{safe_fp}', '#{safe_data}', '#{safe_ver}')"
+        )
+      end
+
+      sig { params(adapter: Adapter::Base).returns(T.nilable(String)) }
+      def self.read_from_db(adapter)
+        result = adapter.exec("SELECT fingerprint FROM #{SCHEMA_META_TABLE} LIMIT 1")
+        return nil if result.row_count.zero?
+
+        value = result.get_value(0, 0)
+        result.close
+        value
+      rescue StandardError
+        nil
+      end
+
+      sig { params(adapter: Adapter::Base).returns(T.nilable(String)) }
+      def self.read_canonical_from_db(adapter)
+        result = adapter.exec("SELECT schema_data FROM #{SCHEMA_META_TABLE} LIMIT 1")
+        return nil if result.row_count.zero?
+
+        value = result.get_value(0, 0)
+        result.close
+        value
+      rescue StandardError
+        nil
+      end
+
+      sig { params(stored: String, live: String).returns(T::Array[String]) }
+      def self.diff_canonical(stored, live)
+        stored_tables = parse_canonical(stored)
+        live_tables = parse_canonical(live)
+        all_table_names = (stored_tables.keys + live_tables.keys).uniq.sort
+        lines = T.let([], T::Array[String])
+
+        all_table_names.each do |tname|
+          old_lines = stored_tables[tname] || []
+          new_lines = live_tables[tname] || []
+          table_diff = diff_table(tname, old_lines, new_lines)
+          lines.concat(table_diff) unless table_diff.empty?
+        end
+
+        lines
+      end
+
+      sig { params(canonical: String).returns(T::Hash[String, T::Array[String]]) }
+      private_class_method def self.parse_canonical(canonical)
+        result = T.let({}, T::Hash[String, T::Array[String]])
+        current_table = T.let(nil, T.nilable(String))
+
+        canonical.each_line do |line|
+          stripped = line.chomp
+          next if stripped.start_with?("V:")
+
+          if stripped.start_with?("T:")
+            current_table = stripped.split("|").first&.delete_prefix("T:")
+            result[current_table] = [stripped] if current_table
+          elsif current_table
+            (result[current_table] ||= []) << stripped
+          end
+        end
+
+        result
+      end
+
+      sig { params(table_name: String, old_lines: T::Array[String], new_lines: T::Array[String]).returns(T::Array[String]) }
+      private_class_method def self.diff_table(table_name, old_lines, new_lines)
+        old_set = old_lines.to_set
+        new_set = new_lines.to_set
+        return [] if old_set == new_set
+
+        removed = (old_set - new_set).sort
+        added = (new_set - old_set).sort
+        lines = T.let(["#{table_name}:"], T::Array[String])
+
+        removed.each { |l| lines << "  - #{format_line(l)}" }
+        added.each { |l| lines << "  + #{format_line(l)}" }
+
+        lines
+      end
+
+      sig { params(line: String).returns(String) }
+      private_class_method def self.format_line(line)
+        case line
+        when /\AC:(\w+)\|([^|]+)\|(\w+)\|(.*)\z/
+          null_str = Regexp.last_match(3) == "true" ? "nullable" : "not null"
+          default_str = Regexp.last_match(4).to_s.empty? ? "" : ", default: #{Regexp.last_match(4)}"
+          "#{Regexp.last_match(1)} (#{Regexp.last_match(2)}, #{null_str}#{default_str})"
+        when /\AFK:(\w+)->(\w+)\.(\w+)\z/
+          "FK: #{Regexp.last_match(1)} -> #{Regexp.last_match(2)}.#{Regexp.last_match(3)}"
+        when /\AUQ:(\w+)\z/
+          "UNIQUE: #{Regexp.last_match(1)}"
+        when /\AT:(\w+)\|PK:(.+)\z/
+          "table #{Regexp.last_match(1)} (PK: #{Regexp.last_match(2)})"
+        else
+          line
+        end
       end
 
       sig { params(buf: String, table_name: String, table: Codegen::TableInfo).void }

@@ -15,6 +15,7 @@ module HakumiORM
       const :custom_associations, T::Hash[String, T::Array[CustomAssociation]], default: {}
       const :user_enums, T::Hash[String, T::Array[EnumDefinition]], default: {}
       const :internal_tables, T::Array[String], default: []
+      const :schema_fingerprint, T.nilable(String), default: nil
     end
   end
 end

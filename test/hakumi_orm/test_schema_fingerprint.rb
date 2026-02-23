@@ -194,6 +194,190 @@ class TestSchemaFingerprint < HakumiORM::TestCase
     HakumiORM.config.logger = nil
   end
 
+  test "store! creates table and inserts fingerprint and canonical" do
+    adapter = HakumiORM::Test::MockAdapter.new
+    fp = "a" * 64
+    canonical = "V:1\nT:users|PK:id\nC:name|varchar|false|\n"
+
+    HakumiORM::Migration::SchemaFingerprint.store!(adapter, fp, canonical)
+
+    sqls = adapter.executed_queries.map { |q| q[:sql] }
+
+    assert(sqls.any? { |s| s.include?("CREATE TABLE IF NOT EXISTS hakumi_schema_meta") })
+    assert(sqls.any? { |s| s.include?("DELETE FROM hakumi_schema_meta") })
+    assert(sqls.any? { |s| s.include?("INSERT INTO hakumi_schema_meta") && s.include?(fp) })
+  end
+
+  test "read_from_db returns fingerprint when present" do
+    adapter = HakumiORM::Test::MockAdapter.new
+    adapter.stub_result("SELECT fingerprint FROM hakumi_schema_meta", [["abc123def456"]])
+
+    result = HakumiORM::Migration::SchemaFingerprint.read_from_db(adapter)
+
+    assert_equal "abc123def456", result
+  end
+
+  test "read_from_db returns nil when table is empty" do
+    adapter = HakumiORM::Test::MockAdapter.new
+
+    result = HakumiORM::Migration::SchemaFingerprint.read_from_db(adapter)
+
+    assert_nil result
+  end
+
+  test "read_from_db returns nil when table does not exist" do
+    adapter = HakumiORM::Test::MockAdapter.new
+    adapter.define_singleton_method(:exec) do |sql|
+      raise StandardError, "relation does not exist" if sql.include?("hakumi_schema_meta")
+
+      super(sql)
+    end
+
+    result = HakumiORM::Migration::SchemaFingerprint.read_from_db(adapter)
+
+    assert_nil result
+  end
+
+  test "boot check raises SchemaDriftError on fingerprint mismatch" do
+    adapter = HakumiORM::Test::MockAdapter.new
+    adapter.stub_result("SELECT fingerprint FROM hakumi_schema_meta", [["db_fingerprint_999"]])
+
+    config = HakumiORM.config
+    config.schema_fingerprint = "manifest_fingerprint_111"
+    config.adapter = adapter
+
+    new_config = HakumiORM::Configuration.new
+    new_config.schema_fingerprint = "manifest_fingerprint_111"
+    new_config.database = "testdb"
+    new_config.adapter_name = :sqlite
+
+    assert_raises(HakumiORM::SchemaDriftError) do
+      new_config.send(:verify_schema_fingerprint!, adapter)
+    end
+  ensure
+    HakumiORM.reset_config!
+  end
+
+  test "boot check passes when fingerprints match" do
+    adapter = HakumiORM::Test::MockAdapter.new
+    fp = HakumiORM::Migration::SchemaFingerprint.compute(build_tables)
+    adapter.stub_result("SELECT fingerprint FROM hakumi_schema_meta", [[fp]])
+
+    config = HakumiORM::Configuration.new
+    config.schema_fingerprint = fp
+
+    config.send(:verify_schema_fingerprint!, adapter)
+  end
+
+  test "boot check skips when no schema_fingerprint set" do
+    adapter = HakumiORM::Test::MockAdapter.new
+    adapter.stub_result("SELECT fingerprint FROM hakumi_schema_meta", [["anything"]])
+
+    config = HakumiORM::Configuration.new
+
+    config.send(:verify_schema_fingerprint!, adapter)
+
+    assert_empty adapter.executed_queries
+  end
+
+  test "boot check skips when meta table does not exist" do
+    adapter = HakumiORM::Test::MockAdapter.new
+
+    config = HakumiORM::Configuration.new
+    config.schema_fingerprint = "some_fingerprint"
+
+    config.send(:verify_schema_fingerprint!, adapter)
+  end
+
+  test "build_canonical returns deterministic string" do
+    tables = build_tables
+    c1 = HakumiORM::Migration::SchemaFingerprint.build_canonical(tables)
+    c2 = HakumiORM::Migration::SchemaFingerprint.build_canonical(build_tables)
+
+    assert_equal c1, c2
+    assert_includes c1, "T:users|PK:id"
+    assert_includes c1, "C:email|varchar|false|"
+  end
+
+  test "compute uses build_canonical internally" do
+    tables = build_tables
+    canonical = HakumiORM::Migration::SchemaFingerprint.build_canonical(tables)
+    fp = HakumiORM::Migration::SchemaFingerprint.compute(tables)
+
+    assert_equal Digest::SHA256.hexdigest(canonical), fp
+  end
+
+  test "read_canonical_from_db returns stored schema data" do
+    adapter = HakumiORM::Test::MockAdapter.new
+    adapter.stub_result("SELECT schema_data FROM hakumi_schema_meta", [["V:1\nT:users|PK:id\n"]])
+
+    result = HakumiORM::Migration::SchemaFingerprint.read_canonical_from_db(adapter)
+
+    assert_equal "V:1\nT:users|PK:id\n", result
+  end
+
+  test "read_canonical_from_db returns nil when empty" do
+    adapter = HakumiORM::Test::MockAdapter.new
+
+    result = HakumiORM::Migration::SchemaFingerprint.read_canonical_from_db(adapter)
+
+    assert_nil result
+  end
+
+  test "diff_canonical detects added column" do
+    stored = "V:1\nT:users|PK:id\nC:email|varchar|false|\nC:name|varchar|false|\n"
+    live = "V:1\nT:users|PK:id\nC:age|integer|true|\nC:email|varchar|false|\nC:name|varchar|false|\n"
+
+    diff = HakumiORM::Migration::SchemaFingerprint.diff_canonical(stored, live)
+
+    assert(diff.any? { |l| l.include?("+") && l.include?("age") })
+  end
+
+  test "diff_canonical detects removed column" do
+    stored = "V:1\nT:users|PK:id\nC:email|varchar|false|\nC:name|varchar|false|\n"
+    live = "V:1\nT:users|PK:id\nC:name|varchar|false|\n"
+
+    diff = HakumiORM::Migration::SchemaFingerprint.diff_canonical(stored, live)
+
+    assert(diff.any? { |l| l.include?("-") && l.include?("email") })
+  end
+
+  test "diff_canonical detects type change" do
+    stored = "V:1\nT:users|PK:id\nC:age|integer|true|\n"
+    live = "V:1\nT:users|PK:id\nC:age|bigint|true|\n"
+
+    diff = HakumiORM::Migration::SchemaFingerprint.diff_canonical(stored, live)
+
+    assert(diff.any? { |l| l.include?("-") && l.include?("integer") })
+    assert(diff.any? { |l| l.include?("+") && l.include?("bigint") })
+  end
+
+  test "diff_canonical detects added table" do
+    stored = "V:1\nT:users|PK:id\nC:name|varchar|false|\n"
+    live = "V:1\nT:posts|PK:id\nC:title|varchar|true|\nT:users|PK:id\nC:name|varchar|false|\n"
+
+    diff = HakumiORM::Migration::SchemaFingerprint.diff_canonical(stored, live)
+
+    assert(diff.any? { |l| l.include?("posts") })
+  end
+
+  test "diff_canonical returns empty when schemas match" do
+    canonical = "V:1\nT:users|PK:id\nC:name|varchar|false|\n"
+
+    diff = HakumiORM::Migration::SchemaFingerprint.diff_canonical(canonical, canonical)
+
+    assert_empty diff
+  end
+
+  test "diff_canonical formats FK lines" do
+    stored = "V:1\nT:posts|PK:id\nC:title|varchar|true|\n"
+    live = "V:1\nT:posts|PK:id\nC:title|varchar|true|\nFK:user_id->users.id\n"
+
+    diff = HakumiORM::Migration::SchemaFingerprint.diff_canonical(stored, live)
+
+    assert(diff.any? { |l| l.include?("FK:") && l.include?("user_id") })
+  end
+
   test "drift_allowed? returns false by default" do
     ENV.delete("HAKUMI_ALLOW_SCHEMA_DRIFT")
 

@@ -1,6 +1,7 @@
 # typed: false
 # frozen_string_literal: true
 
+require "digest"
 require "rake"
 
 module HakumiORM
@@ -46,14 +47,17 @@ module HakumiORM
         puts "HakumiORM: Scaffolded custom type '#{name}' in #{output_dir}"
       end
 
-      desc "Run pending migrations"
+      desc "Run pending migrations (set HAKUMI_SKIP_GENERATE=1 to skip auto-generate)"
       task :migrate do
         require "hakumi_orm"
         require "hakumi_orm/migration"
 
         runner = HakumiORM::Tasks.build_runner
         runner.migrate!
-        puts "HakumiORM: Migrations complete (version: #{runner.current_version || "none"})"
+        version = runner.current_version || "none"
+        puts "HakumiORM: Migrations complete (version: #{version})"
+
+        HakumiORM::Tasks.post_migrate_fingerprint!
       end
 
       desc "Rollback the last migration (usage: rake hakumi:rollback or rake hakumi:rollback[N])"
@@ -65,6 +69,8 @@ module HakumiORM
         runner = HakumiORM::Tasks.build_runner
         runner.rollback!(count: count)
         puts "HakumiORM: Rolled back #{count} migration(s) (version: #{runner.current_version || "none"})"
+
+        HakumiORM::Tasks.post_migrate_fingerprint!
       end
 
       namespace :migrate do
@@ -116,6 +122,25 @@ module HakumiORM
 
         HakumiORM::Tasks.list_associations(args[:table])
       end
+
+      desc "Scaffold model + contract for a table (usage: rake hakumi:scaffold[users])"
+      task :scaffold, [:table] do |_t, args|
+        require "hakumi_orm"
+
+        table = args[:table]
+        raise ArgumentError, "Usage: rake hakumi:scaffold[table_name]" unless table
+
+        HakumiORM::Tasks.run_scaffold(table)
+      end
+
+      desc "Check for schema drift between live DB and generated code"
+      task :check do
+        require "hakumi_orm"
+        require "hakumi_orm/codegen"
+        require "hakumi_orm/migration"
+
+        HakumiORM::Tasks.run_check
+      end
     end
 
     class << self
@@ -136,6 +161,10 @@ module HakumiORM
         custom_assocs = HakumiORM::Codegen::AssociationLoader.load(config.associations_path)
         user_enums = HakumiORM::Codegen::EnumLoader.load(config.enums_path)
 
+        user_tables = tables.except(*INTERNAL_TABLES)
+        canonical = HakumiORM::Migration::SchemaFingerprint.build_canonical(user_tables)
+        fingerprint = Digest::SHA256.hexdigest(canonical)
+
         opts = HakumiORM::Codegen::GeneratorOptions.new(
           dialect: adapter.dialect,
           output_dir: config.output_dir,
@@ -144,12 +173,68 @@ module HakumiORM
           contracts_dir: config.contracts_dir,
           custom_associations: custom_assocs,
           user_enums: user_enums,
-          internal_tables: INTERNAL_TABLES
+          internal_tables: INTERNAL_TABLES,
+          schema_fingerprint: fingerprint
         )
         generator = HakumiORM::Codegen::Generator.new(tables, opts)
         generator.generate!
 
+        HakumiORM::Migration::SchemaFingerprint.store!(adapter, fingerprint, canonical)
+
         puts "HakumiORM: Generated #{tables.size} table(s) into #{config.output_dir}"
+      end
+
+      def run_scaffold(table_name)
+        config = HakumiORM.config
+        generator = HakumiORM::ScaffoldGenerator.new(table_name, config)
+        created = generator.run!
+
+        if created.empty?
+          if config.models_dir.nil? && config.contracts_dir.nil?
+            puts "HakumiORM: Set config.models_dir and/or config.contracts_dir to scaffold files."
+          else
+            puts "HakumiORM: All files already exist for '#{table_name}'."
+          end
+        else
+          created.each { |f| puts "  create  #{f}" }
+        end
+      end
+
+      def post_migrate_fingerprint!
+        require "hakumi_orm/codegen"
+
+        config = HakumiORM.config
+        adapter = config.adapter
+        return unless adapter
+
+        checker = HakumiORM::SchemaDriftChecker.new(adapter, internal_tables: INTERNAL_TABLES)
+        checker.update_fingerprint!
+
+        if ENV.key?("HAKUMI_SKIP_GENERATE")
+          puts "HakumiORM: Fingerprint updated. Skipping auto-generate (HAKUMI_SKIP_GENERATE)."
+          puts "  Run 'rake hakumi:generate' to update generated code."
+          return
+        end
+
+        run_generate
+      end
+
+      def run_check
+        config = HakumiORM.config
+        adapter = config.adapter
+        raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
+
+        require "hakumi_orm/codegen"
+        checker = HakumiORM::SchemaDriftChecker.new(adapter, internal_tables: INTERNAL_TABLES)
+        messages = checker.check
+
+        if messages.empty?
+          puts "HakumiORM: Schema is in sync. No drift detected."
+          return
+        end
+
+        messages.each { |l| warn "HakumiORM: #{l}" }
+        exit 1
       end
 
       def list_associations(filter_table = nil)
@@ -159,62 +244,25 @@ module HakumiORM
 
         tables = read_schema(config, adapter)
         custom_assocs = HakumiORM::Codegen::AssociationLoader.load(config.associations_path)
-
-        opts = HakumiORM::Codegen::GeneratorOptions.new(
-          dialect: adapter.dialect, custom_associations: custom_assocs
-        )
+        opts = HakumiORM::Codegen::GeneratorOptions.new(dialect: adapter.dialect, custom_associations: custom_assocs)
         generator = HakumiORM::Codegen::Generator.new(tables, opts)
 
         tables.each_value do |table|
           next if filter_table && table.name != filter_table
 
-          print_table_associations(generator, table, custom_assocs)
+          ctx = HakumiORM::Codegen::ModelAnnotator.build_cli_context(generator, table, custom_assocs)
+          lines = HakumiORM::Codegen::ModelAnnotator.send(:build_assoc_lines_for_cli, ctx)
+          next if lines.empty?
+
+          puts "\n#{table.name}"
+          lines.each { |l| puts l }
         end
       end
 
-      def print_table_associations(generator, table, custom_assocs)
-        ctx = build_annotation_context(generator, table, custom_assocs)
-        lines = HakumiORM::Codegen::ModelAnnotator.send(:build_assoc_lines_for_cli, ctx)
-        return if lines.empty?
-
-        puts "\n#{table.name}"
-        lines.each { |l| puts l }
-      end
-
-      def build_annotation_context(generator, table, custom_assocs)
-        hm_map = generator.send(:compute_has_many)
-        ho_map = generator.send(:compute_has_one)
-        through_map = generator.send(:compute_has_many_through)
-
-        HakumiORM::Codegen::ModelAnnotator::Context.new(
-          table: table,
-          dialect: generator.instance_variable_get(:@dialect),
-          has_many: generator.send(:build_has_many_assocs, table, hm_map),
-          has_one: generator.send(:build_has_one_assocs, table, ho_map),
-          belongs_to: generator.send(:build_belongs_to_assocs, table),
-          has_many_through: generator.send(:build_has_many_through_assocs, table, through_map),
-          custom_has_many: generator.send(:build_custom_has_many, table, custom_assocs),
-          custom_has_one: generator.send(:build_custom_has_one, table, custom_assocs),
-          enum_predicates: generator.send(:build_enum_predicates, table)
-        )
-      end
-
-      INTERNAL_TABLES = %w[hakumi_migrations].freeze
+      INTERNAL_TABLES = %w[hakumi_migrations hakumi_schema_meta].freeze
 
       def read_schema(config, adapter)
-        case config.adapter_name
-        when :postgresql
-          HakumiORM::Codegen::SchemaReader.new(adapter).read_tables(schema: "public")
-        when :mysql
-          schema = config.database
-          raise HakumiORM::Error, "config.database is required for MySQL codegen" unless schema
-
-          HakumiORM::Codegen::MysqlSchemaReader.new(adapter).read_tables(schema: schema)
-        when :sqlite
-          HakumiORM::Codegen::SqliteSchemaReader.new(adapter).read_tables
-        else
-          raise HakumiORM::Error, "Unknown adapter_name: #{config.adapter_name}"
-        end
+        HakumiORM::SchemaDriftChecker.read_schema(config, adapter)
       end
     end
   end

@@ -48,6 +48,7 @@ module HakumiORM
         @custom_associations = T.let(options.custom_associations, T::Hash[String, T::Array[CustomAssociation]])
         @user_enums = T.let(options.user_enums, T::Hash[String, T::Array[EnumDefinition]])
         @internal_tables = T.let(options.internal_tables.to_set, T::Set[String])
+        @schema_fingerprint = T.let(options.schema_fingerprint, T.nilable(String))
         @integer_backed_enums = T.let(Set.new, T::Set[String])
 
         inject_user_enums!
@@ -306,13 +307,11 @@ module HakumiORM
 
       sig { returns(String) }
       def build_manifest
-        enum_types = collect_enum_types
-        all_names = @tables.keys.map { |n| singularize(n) }
-        internal_names = @internal_tables.to_set { |n| singularize(n) }
         render("manifest",
-               table_names: all_names,
-               internal_names: internal_names,
-               enum_files: enum_types.keys)
+               table_names: @tables.keys.map { |n| singularize(n) },
+               internal_names: @internal_tables.to_set { |n| singularize(n) },
+               enum_files: collect_enum_types.keys,
+               schema_fingerprint: @schema_fingerprint)
       end
 
       sig { returns(String) }

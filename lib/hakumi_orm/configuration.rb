@@ -55,6 +55,9 @@ module HakumiORM
     sig { returns(String) }
     attr_accessor :enums_path
 
+    sig { returns(T.nilable(String)) }
+    attr_accessor :schema_fingerprint
+
     sig { returns(T::Hash[String, String]) }
     attr_accessor :connection_options
 
@@ -77,6 +80,7 @@ module HakumiORM
       @migrations_path = T.let("db/migrate", String)
       @associations_path = T.let("db/associations", String)
       @enums_path = T.let("db/enums", String)
+      @schema_fingerprint = T.let(nil, T.nilable(String))
       @connection_options = T.let({}, T::Hash[String, String])
       @named_databases = T.let({}, T::Hash[Symbol, DatabaseConfig])
       @named_adapters = T.let({}, T::Hash[Symbol, Adapter::Base])
@@ -185,7 +189,20 @@ module HakumiORM
               "Unknown adapter_name: #{@adapter_name.inspect}. Supported: #{SUPPORTED_ADAPTERS.map(&:inspect).join(", ")}"
       end
 
-      @adapter = connect_from_config(primary_database_config(database))
+      new_adapter = connect_from_config(primary_database_config(database))
+      verify_schema_fingerprint!(new_adapter)
+      @adapter = new_adapter
+    end
+
+    sig { params(adapter: Adapter::Base).void }
+    def verify_schema_fingerprint!(adapter)
+      expected = @schema_fingerprint
+      return unless expected
+
+      actual = Migration::SchemaFingerprint.read_from_db(adapter)
+      return unless actual
+
+      Migration::SchemaFingerprint.check!(expected, actual)
     end
 
     sig { params(database: String).returns(DatabaseConfig) }

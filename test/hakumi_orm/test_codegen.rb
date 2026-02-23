@@ -251,6 +251,29 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
+  test "manifest includes schema_fingerprint when provided" do
+    Dir.mktmpdir do |dir|
+      fp = "a1b2c3d4" * 8
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir, schema_fingerprint: fp))
+      gen.generate!
+
+      code = File.read(File.join(dir, "manifest.rb"))
+
+      assert_includes code, "HakumiORM.config.schema_fingerprint = \"#{fp}\""
+    end
+  end
+
+  test "manifest omits schema_fingerprint when not provided" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
+      gen.generate!
+
+      code = File.read(File.join(dir, "manifest.rb"))
+
+      refute_includes code, "schema_fingerprint"
+    end
+  end
+
   test "variant_base delegates all columns including pk" do
     Dir.mktmpdir do |dir|
       gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
