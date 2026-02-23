@@ -87,10 +87,8 @@ module HakumiORM
         inner = value.map do |v|
           if v.nil?
             "NULL"
-          elsif v.include?(",") || v.include?('"') || v.include?("\\") || v.include?(" ")
-            "\"#{v.gsub("\\", "\\\\\\\\").gsub('"', '\\"')}\""
           else
-            v
+            "\"#{v.gsub("\\", "\\\\\\\\").gsub('"', '\\"')}\""
           end
         end
         "{#{inner.join(",")}}"

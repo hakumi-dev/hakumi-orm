@@ -112,13 +112,19 @@ module HakumiORM
 
     sig { params(expr: RawExpr, buf: String, binds: T::Array[Bind], idx: Integer).returns(Integer) }
     def compile_raw_expr(expr, buf, binds, idx)
-      fragment = expr.sql.dup
-      expr.binds.each do |b|
-        fragment.sub!("?", @dialect.bind_marker(idx))
-        binds << b
-        idx += 1
+      bind_offset = T.let(0, Integer)
+      compiled = expr.sql.gsub(RawExpr::SQL_QUOTED_OR_PLACEHOLDER) do |match|
+        if match == "?"
+          binds << expr.binds.fetch(bind_offset)
+          bind_offset += 1
+          marker = @dialect.bind_marker(idx)
+          idx += 1
+          marker
+        else
+          match
+        end
       end
-      buf << fragment
+      buf << compiled
       idx
     end
 
@@ -138,7 +144,13 @@ module HakumiORM
     def rebase_binds(sql, offset)
       return sql if offset.zero?
 
-      sql.gsub(/\$(\d+)/) { |_| @dialect.bind_marker(offset + (::Regexp.last_match(1).to_i - 1)) }
+      sql.gsub(SQL_QUOTED_OR_BIND_MARKER) do |match|
+        if match.start_with?("$")
+          @dialect.bind_marker(offset + (match.delete_prefix("$").to_i - 1))
+        else
+          match
+        end
+      end
     end
   end
 end

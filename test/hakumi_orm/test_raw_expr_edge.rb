@@ -40,15 +40,16 @@ class TestRawExprEdge < HakumiORM::TestCase
     assert_includes err.message, "bind count (2)"
   end
 
-  test "RawExpr with ? inside string literal requires matching bind count (known limitation)" do
-    err = assert_raises(ArgumentError) do
-      HakumiORM::RawExpr.new(
-        "data::text = '{\"key\": \"value?\"}' AND status = ?",
-        [HakumiORM::StrBind.new("active")]
-      )
-    end
+  test "RawExpr with ? inside string literal correctly counts only non-quoted placeholders" do
+    raw = HakumiORM::RawExpr.new(
+      "data::text = '{\"key\": \"value?\"}' AND status = ?",
+      [HakumiORM::StrBind.new("active")]
+    )
+    compiled = @compiler.select(table: "events", columns: [@id_field], where_expr: raw)
 
-    assert_includes err.message, "placeholder count (2)"
-    assert_includes err.message, "bind count (1)"
+    assert_includes compiled.sql, "value?"
+    assert_includes compiled.sql, "$1"
+    refute_includes compiled.sql, "$2"
+    assert_equal 1, compiled.binds.length
   end
 end

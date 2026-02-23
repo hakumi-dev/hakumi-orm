@@ -48,16 +48,34 @@ class TestArrayColumns < HakumiORM::TestCase
     assert_equal "{}", bind.pg_value
   end
 
-  test "StrArrayBind serializes with quoting" do
+  test "StrArrayBind always quotes non-NULL values" do
     bind = HakumiORM::StrArrayBind.new(["hello, world", "foo"])
 
-    assert_equal '{"hello, world",foo}', bind.pg_value
+    assert_equal '{"hello, world","foo"}', bind.pg_value
   end
 
   test "StrArrayBind handles empty array" do
     bind = HakumiORM::StrArrayBind.new([])
 
     assert_equal "{}", bind.pg_value
+  end
+
+  test "StrArrayBind handles values with curly braces" do
+    bind = HakumiORM::StrArrayBind.new(["{nested}", "normal"])
+
+    assert_equal '{"{nested}","normal"}', bind.pg_value
+  end
+
+  test "StrArrayBind handles values with newlines and tabs" do
+    bind = HakumiORM::StrArrayBind.new(%W[line1\nline2 tab\there])
+
+    assert_equal "{\"line1\nline2\",\"tab\there\"}", bind.pg_value
+  end
+
+  test "StrArrayBind handles NULL elements" do
+    bind = HakumiORM::StrArrayBind.new(["a", nil, "b"])
+
+    assert_equal '{"a",NULL,"b"}', bind.pg_value
   end
 
   test "FloatArrayBind serializes to PG array literal" do

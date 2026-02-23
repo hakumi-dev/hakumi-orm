@@ -378,4 +378,59 @@ class TestSqlCompiler < HakumiORM::TestCase
     assert_includes q.sql, "$2"
     assert_equal ["t", 21], q.pg_params
   end
+
+  test "raw expr skips ? inside single-quoted string literal" do
+    raw = HakumiORM::RawExpr.new("data = '?' AND name = ?", [HakumiORM::StrBind.new("Alice")])
+    q = @compiler.select(table: "users", columns: [UserSchema::ID], where_expr: raw)
+
+    assert_includes q.sql, "data = '?'"
+    assert_includes q.sql, "name = $1"
+    refute_includes q.sql, "$2"
+  end
+
+  test "raw expr skips ? inside double-quoted identifier" do
+    raw = HakumiORM::RawExpr.new("\"col?\" = ?", [HakumiORM::IntBind.new(1)])
+    q = @compiler.select(table: "users", columns: [UserSchema::ID], where_expr: raw)
+
+    assert_includes q.sql, '"col?"'
+    assert_includes q.sql, "$1"
+    refute_includes q.sql, "$2"
+  end
+
+  test "raw expr skips ? inside SQL line comment" do
+    raw = HakumiORM::RawExpr.new("1 = 1 -- is this true?", [])
+    q = @compiler.select(table: "users", columns: [UserSchema::ID], where_expr: raw)
+
+    assert_includes q.sql, "-- is this true?"
+    refute_includes q.sql, "$1"
+  end
+
+  test "raw expr skips ? inside block comment" do
+    raw = HakumiORM::RawExpr.new("/* what? */ age > ?", [HakumiORM::IntBind.new(18)])
+    q = @compiler.select(table: "users", columns: [UserSchema::ID], where_expr: raw)
+
+    assert_includes q.sql, "/* what? */"
+    assert_includes q.sql, "$1"
+    refute_includes q.sql, "$2"
+  end
+
+  test "RawExpr validation counts only non-quoted placeholders" do
+    assert_raises(ArgumentError) do
+      HakumiORM::RawExpr.new("data = '?' AND name = ?", [])
+    end
+
+    raw = HakumiORM::RawExpr.new("data = '?' AND name = ?", [HakumiORM::StrBind.new("x")])
+
+    assert_equal "data = '?' AND name = ?", raw.sql
+    assert_equal 1, raw.binds.length
+  end
+
+  test "raw expr with escaped quotes in string literal" do
+    raw = HakumiORM::RawExpr.new("data = 'it''s?' AND name = ?", [HakumiORM::StrBind.new("x")])
+    q = @compiler.select(table: "users", columns: [UserSchema::ID], where_expr: raw)
+
+    assert_includes q.sql, "it''s?"
+    assert_includes q.sql, "name = $1"
+    refute_includes q.sql, "$2"
+  end
 end

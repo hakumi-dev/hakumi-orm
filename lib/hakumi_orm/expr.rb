@@ -107,6 +107,11 @@ module HakumiORM
   class RawExpr < Expr
     extend T::Sig
 
+    SQL_QUOTED_OR_PLACEHOLDER = T.let(
+      %r{'(?:''|[^'])*'|"(?:""|[^"])*"|--[^\n]*|/\*(?:[^*]|\*(?!/))*\*/|\?},
+      Regexp
+    )
+
     sig { returns(String) }
     attr_reader :sql
 
@@ -115,7 +120,7 @@ module HakumiORM
 
     sig { params(sql: String, binds: T::Array[Bind]).void }
     def initialize(sql, binds = [])
-      placeholders = sql.count("?")
+      placeholders = sql.scan(SQL_QUOTED_OR_PLACEHOLDER).count("?")
       if placeholders != binds.length
         raise ArgumentError,
               "RawExpr placeholder count (#{placeholders}) does not match bind count (#{binds.length}) in: #{sql}"

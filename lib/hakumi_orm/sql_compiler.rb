@@ -12,6 +12,11 @@ module HakumiORM
       cross: " CROSS JOIN "
     }.freeze, T::Hash[Symbol, String])
 
+    SQL_QUOTED_OR_BIND_MARKER = T.let(
+      %r{'(?:''|[^'])*'|"(?:""|[^"])*"|--[^\n]*|/\*(?:[^*]|\*(?!/))*\*/|\$\d+},
+      Regexp
+    )
+
     sig { params(dialect: Dialect::Base).void }
     def initialize(dialect)
       @dialect = T.let(dialect, Dialect::Base)
