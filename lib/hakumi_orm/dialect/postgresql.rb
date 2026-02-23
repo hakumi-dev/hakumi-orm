@@ -66,21 +66,28 @@ module HakumiORM
         :postgresql
       end
 
-      # PG::TypeMapByColumn decodes boolean/time/date at C level, so these
-      # only run on the cold path (schema reads) where raw is always a String.
+      # PG::TypeMapByColumn decodes boolean/time/date at C level, delivering
+      # native Ruby types. The generated from_result still calls cast_* so
+      # these guards pass through pre-decoded values without re-parsing.
 
-      sig { override.params(raw: String).returns(T::Boolean) }
+      sig { override.params(raw: T.any(String, T::Boolean)).returns(T::Boolean) }
       def cast_boolean(raw)
+        return raw if raw.equal?(true) || raw.equal?(false)
+
         TRUTHY.include?(raw)
       end
 
-      sig { override.params(raw: String).returns(Time) }
+      sig { override.params(raw: T.any(String, Time)).returns(Time) }
       def cast_time(raw)
+        return raw if raw.is_a?(Time)
+
         ByteTime.parse_utc(raw)
       end
 
-      sig { override.params(raw: String).returns(Date) }
+      sig { override.params(raw: T.any(String, Date)).returns(Date) }
       def cast_date(raw)
+        return raw if raw.is_a?(Date)
+
         Date.new(raw[0, 4].to_i, raw[5, 2].to_i, raw[8, 2].to_i)
       end
     end
