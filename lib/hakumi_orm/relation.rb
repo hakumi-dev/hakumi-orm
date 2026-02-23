@@ -173,8 +173,7 @@ module HakumiORM
       stmt = stmt_count_all
       sql = sql_count_all
       result = if @where_exprs.empty? && @defaults_pristine && stmt && sql
-                 adapter.prepare(stmt, sql)
-                 adapter.exec_prepared(stmt, [])
+                 adapter.prepare_exec(stmt, sql, [])
                else
                  compiled = adapter.dialect.compiler.count(
                    table: @table_name,

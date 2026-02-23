@@ -52,6 +52,14 @@ module HakumiORM
         with_connection { |conn| conn.exec_prepared(name, params) }
       end
 
+      sig { override.params(name: String, sql: String, params: T::Array[PGValue]).returns(Result) }
+      def prepare_exec(name, sql, params)
+        with_connection do |conn|
+          conn.prepare(name, sql)
+          conn.exec_prepared(name, params)
+        end
+      end
+
       sig { override.params(requires_new: T::Boolean, blk: T.proc.params(adapter: Base).void).void }
       def transaction(requires_new: false, &blk)
         with_connection do |conn|

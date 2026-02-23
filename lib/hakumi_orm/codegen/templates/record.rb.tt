@@ -89,8 +89,7 @@ module <%= module_name %>
 
 <%= ind %>  sig { params(pk_value: <%= pk_ruby_type %>, adapter: ::HakumiORM::Adapter::Base).returns(T.nilable(<%= record_class_name %>)) }
 <%= ind %>  def self.find(pk_value, adapter: ::HakumiORM.adapter)
-<%= ind %>    adapter.prepare(STMT_FIND_BY_PK, SQL_FIND_BY_PK)
-<%= ind %>    result = adapter.exec_prepared(STMT_FIND_BY_PK, [pk_value])
+<%= ind %>    result = adapter.prepare_exec(STMT_FIND_BY_PK, SQL_FIND_BY_PK, [pk_value])
 <%= ind %>    return nil if result.row_count.zero?
 
 <%= ind %>    from_result(result, dialect: adapter.dialect).first
@@ -424,6 +423,7 @@ module <%= module_name %>
 <%= ind %>    from_result(result, dialect: dialect)
 <%- else -%>
 <%= ind %>    result.close
+<%= ind %>    result = nil
 <%= ind %>    first_id = adapter.last_insert_id
 <%= ind %>    count = records.length
 <%= ind %>    fetch = adapter.exec("SELECT <%= returning_cols %> FROM <%= insert_all_table %> WHERE <%= insert_all_pk %> >= #{first_id} AND <%= insert_all_pk %> < #{first_id + count} ORDER BY <%= insert_all_pk %>")
@@ -431,6 +431,9 @@ module <%= module_name %>
 <%- end -%>
 <%= ind %>  ensure
 <%= ind %>    result&.close
+<%- unless supports_returning -%>
+<%= ind %>    fetch&.close
+<%- end -%>
 <%= ind %>  end
 <%- end -%>
 <%- has_many.each do |assoc| -%>

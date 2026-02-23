@@ -136,6 +136,30 @@ class TestConnectionPool < HakumiORM::TestCase
     assert_equal 1, pool.available_connections
   end
 
+  test "prepare_exec runs both prepare and exec_prepared on same connection" do
+    prepare_on = nil
+    exec_on = nil
+
+    pool = HakumiORM::Adapter::ConnectionPool.new(size: 3, timeout: 1.0) do
+      adapter = HakumiORM::Test::MockAdapter.new
+      adapter.define_singleton_method(:prepare) do |name, sql|
+        prepare_on = object_id
+        super(name, sql)
+      end
+      adapter.define_singleton_method(:exec_prepared) do |name, params|
+        exec_on = object_id
+        super(name, params)
+      end
+      adapter
+    end
+
+    pool.prepare_exec("stmt_test", "SELECT 1", [])
+
+    refute_nil prepare_on
+    refute_nil exec_on
+    assert_equal prepare_on, exec_on
+  end
+
   test "timeout raises when pool is exhausted" do
     tiny_pool = HakumiORM::Adapter::ConnectionPool.new(size: 1, timeout: 0.1) do
       HakumiORM::Test::MockAdapter.new

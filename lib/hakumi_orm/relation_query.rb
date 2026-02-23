@@ -40,7 +40,8 @@ module HakumiORM
       cursor_name = "hakumi_cursor_#{object_id}"
 
       adapter.transaction do |_txn|
-        adapter.exec_params("DECLARE #{cursor_name} CURSOR FOR #{compiled.sql}", compiled.params_for(dialect))
+        declare_result = adapter.exec_params("DECLARE #{cursor_name} CURSOR FOR #{compiled.sql}", compiled.params_for(dialect))
+        declare_result.close
         begin
           loop do
             result = adapter.exec("FETCH #{batch_size} FROM #{cursor_name}")
@@ -53,7 +54,8 @@ module HakumiORM
           end
         ensure
           begin
-            adapter.exec("CLOSE #{cursor_name}")
+            close_result = adapter.exec("CLOSE #{cursor_name}")
+            close_result.close
           rescue StandardError
             nil
           end

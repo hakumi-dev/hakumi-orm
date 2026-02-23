@@ -50,7 +50,7 @@ module HakumiORM
       def inherited(subclass)
         super
         klass_name = subclass.name
-        @registry[klass_name] = T.unsafe(subclass) if klass_name
+        @registry[klass_name] = T.cast(subclass, T.class_of(Migration)) if klass_name
       end
     end
 
@@ -73,17 +73,17 @@ module HakumiORM
       table_def = TableDefinition.new(name.to_s, id: id)
       blk&.call(table_def)
       sqls = SqlGenerator.create_table_with_fks(table_def, dialect)
-      sqls.each { |sql| adapter.exec(sql) }
+      sqls.each { |sql| adapter.exec(sql).close }
     end
 
     sig { params(name: NameLike).void }
     def drop_table(name)
-      adapter.exec(SqlGenerator.drop_table(name.to_s, dialect))
+      adapter.exec(SqlGenerator.drop_table(name.to_s, dialect)).close
     end
 
     sig { params(old_name: NameLike, new_name: NameLike).void }
     def rename_table(old_name, new_name)
-      adapter.exec(SqlGenerator.rename_table(old_name.to_s, new_name.to_s, dialect))
+      adapter.exec(SqlGenerator.rename_table(old_name.to_s, new_name.to_s, dialect)).close
     end
 
     sig { params(table: NameLike, col_name: NameLike, type: Symbol, null: T::Boolean, default: DefaultValue, limit: T.nilable(Integer), precision: T.nilable(Integer), scale: T.nilable(Integer)).void }
@@ -92,12 +92,12 @@ module HakumiORM
         name: col_name.to_s, type: type, null: null, default: Migration.coerce_default(default),
         limit: limit, precision: precision, scale: scale
       )
-      adapter.exec(SqlGenerator.add_column(table.to_s, col, dialect))
+      adapter.exec(SqlGenerator.add_column(table.to_s, col, dialect)).close
     end
 
     sig { params(table: NameLike, col_name: NameLike).void }
     def remove_column(table, col_name)
-      adapter.exec(SqlGenerator.remove_column(table.to_s, col_name.to_s, dialect))
+      adapter.exec(SqlGenerator.remove_column(table.to_s, col_name.to_s, dialect)).close
     end
 
     sig { params(table: NameLike, col_name: NameLike, type: Symbol, null: T::Boolean, default: DefaultValue, precision: T.nilable(Integer), scale: T.nilable(Integer)).void }
@@ -106,22 +106,22 @@ module HakumiORM
         name: col_name.to_s, type: type, null: null, default: Migration.coerce_default(default),
         precision: precision, scale: scale
       )
-      adapter.exec(SqlGenerator.change_column(table.to_s, col, dialect))
+      adapter.exec(SqlGenerator.change_column(table.to_s, col, dialect)).close
     end
 
     sig { params(table: NameLike, old_name: NameLike, new_name: NameLike).void }
     def rename_column(table, old_name, new_name)
-      adapter.exec(SqlGenerator.rename_column(table.to_s, old_name.to_s, new_name.to_s, dialect))
+      adapter.exec(SqlGenerator.rename_column(table.to_s, old_name.to_s, new_name.to_s, dialect)).close
     end
 
     sig { params(table: NameLike, columns: T::Array[NameLike], unique: T::Boolean, name: T.nilable(String)).void }
     def add_index(table, columns, unique: false, name: nil)
-      adapter.exec(SqlGenerator.add_index(table.to_s, columns.map(&:to_s), dialect: dialect, unique: unique, name: name))
+      adapter.exec(SqlGenerator.add_index(table.to_s, columns.map(&:to_s), dialect: dialect, unique: unique, name: name)).close
     end
 
     sig { params(table: NameLike, columns: T::Array[NameLike], name: T.nilable(String)).void }
     def remove_index(table, columns, name: nil)
-      adapter.exec(SqlGenerator.remove_index(table.to_s, columns.map(&:to_s), dialect: dialect, name: name))
+      adapter.exec(SqlGenerator.remove_index(table.to_s, columns.map(&:to_s), dialect: dialect, name: name)).close
     end
 
     sig { params(from_table: NameLike, to_table: NameLike, column: NameLike, primary_key: String, on_delete: T.nilable(Symbol)).void }
@@ -130,17 +130,17 @@ module HakumiORM
         from_table.to_s, to_table.to_s,
         column: column.to_s, dialect: dialect, primary_key: primary_key, on_delete: on_delete
       )
-      adapter.exec(sql)
+      adapter.exec(sql).close
     end
 
     sig { params(from_table: NameLike, to_table: NameLike, column: T.nilable(NameLike)).void }
     def remove_foreign_key(from_table, to_table, column: nil)
-      adapter.exec(SqlGenerator.remove_foreign_key(from_table.to_s, to_table.to_s, dialect: dialect, column: column&.to_s))
+      adapter.exec(SqlGenerator.remove_foreign_key(from_table.to_s, to_table.to_s, dialect: dialect, column: column&.to_s)).close
     end
 
     sig { params(sql: String).void }
     def execute(sql)
-      adapter.exec(sql)
+      adapter.exec(sql).close
     end
 
     private

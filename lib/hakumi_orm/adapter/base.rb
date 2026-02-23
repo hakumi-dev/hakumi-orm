@@ -37,6 +37,12 @@ module HakumiORM
         true
       end
 
+      sig { overridable.params(name: String, sql: String, params: T::Array[PGValue]).returns(Result) }
+      def prepare_exec(name, sql, params)
+        prepare(name, sql)
+        exec_prepared(name, params)
+      end
+
       sig { overridable.returns(Integer) }
       def last_insert_id
         raise HakumiORM::Error, "#{self.class.name} does not support last_insert_id (use RETURNING instead)"
@@ -112,19 +118,19 @@ module HakumiORM
         frames = T.let([], T.nilable(T::Array[TxFrame]))
         @tx_frames = frames
         push_tx_frame
-        exec("BEGIN")
+        exec("BEGIN").close
         @txn_depth = 1
         blk.call(self)
       rescue StandardError
         begin
-          exec("ROLLBACK")
+          exec("ROLLBACK").close
         rescue StandardError
           nil
         end
         fire_callbacks(frames.flat_map { |f| f[:after_rollback] }) if frames
         raise
       else
-        exec("COMMIT")
+        exec("COMMIT").close
         fire_callbacks(frames.flat_map { |f| f[:after_commit] }) if frames
       ensure
         @txn_depth = 0
@@ -146,12 +152,12 @@ module HakumiORM
       def run_savepoint_transaction(depth, &blk)
         sp = "hakumi_sp_#{depth}"
         push_tx_frame
-        exec("SAVEPOINT #{sp}")
+        exec("SAVEPOINT #{sp}").close
         @txn_depth = depth + 1
         blk.call(self)
       rescue StandardError
         begin
-          exec("ROLLBACK TO SAVEPOINT #{sp}")
+          exec("ROLLBACK TO SAVEPOINT #{sp}").close
         rescue StandardError
           nil
         end
@@ -162,7 +168,7 @@ module HakumiORM
         end
         raise
       else
-        exec("RELEASE SAVEPOINT #{sp}")
+        exec("RELEASE SAVEPOINT #{sp}").close
         frames = @tx_frames
         if frames
           frame = frames.pop

@@ -258,6 +258,41 @@ class TestMigrationRunner < HakumiORM::TestCase
     assert_includes sqls, "SIGMA_UP"
   end
 
+  test "migrate includes version recording inside transaction" do
+    write_migration("20260101000000_tau_step.rb", "TauStep", "TAU_UP", "TAU_DOWN")
+
+    @runner.migrate!
+    sqls = executed_sqls
+
+    begin_idx = sqls.index("BEGIN")
+    insert_idx = sqls.index { |s| s.include?("INSERT") && s.include?("hakumi_migrations") }
+    commit_idx = sqls.index("COMMIT")
+
+    refute_nil begin_idx
+    refute_nil insert_idx
+    refute_nil commit_idx
+    assert_operator begin_idx, :<, insert_idx, "version INSERT should come after BEGIN"
+    assert_operator insert_idx, :<, commit_idx, "version INSERT should come before COMMIT"
+  end
+
+  test "rollback includes version removal inside transaction" do
+    write_migration("20260101000000_upsilon_step.rb", "UpsilonStep", "UPSILON_UP", "UPSILON_DOWN")
+
+    @adapter.stub_result("SELECT version", [["20260101000000"]])
+    @runner.rollback!
+    sqls = executed_sqls
+
+    begin_idx = sqls.index("BEGIN")
+    delete_idx = sqls.index { |s| s.include?("DELETE") && s.include?("hakumi_migrations") }
+    commit_idx = sqls.index("COMMIT")
+
+    refute_nil begin_idx
+    refute_nil delete_idx
+    refute_nil commit_idx
+    assert_operator begin_idx, :<, delete_idx, "version DELETE should come after BEGIN"
+    assert_operator delete_idx, :<, commit_idx, "version DELETE should come before COMMIT"
+  end
+
   test "disable_ddl_transaction! migration skips transaction wrapper" do
     content = <<~RUBY
       # typed: false

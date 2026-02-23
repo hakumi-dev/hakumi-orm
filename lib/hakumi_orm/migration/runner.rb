@@ -84,7 +84,7 @@ module HakumiORM
 
       sig { void }
       def ensure_table!
-        @adapter.exec(CREATE_TABLE_SQL)
+        @adapter.exec(CREATE_TABLE_SQL).close
       end
 
       sig { returns(T::Array[String]) }
@@ -120,26 +120,37 @@ module HakumiORM
       def run_up(file_info)
         klass = load_migration(file_info)
         migration = klass.new(@adapter)
-        wrap_in_transaction(klass) { migration.up }
-        record_version(file_info.version, file_info.name)
+        if transactional_migration?(klass)
+          @adapter.transaction do |_adapter|
+            migration.up
+            record_version(file_info.version, file_info.name)
+          end
+        else
+          log_ddl_warning unless klass.ddl_transaction_disabled?
+          migration.up
+          record_version(file_info.version, file_info.name)
+        end
       end
 
       sig { params(file_info: FileInfo).void }
       def run_down(file_info)
         klass = load_migration(file_info)
         migration = klass.new(@adapter)
-        wrap_in_transaction(klass) { migration.down }
-        remove_version(file_info.version)
+        if transactional_migration?(klass)
+          @adapter.transaction do |_adapter|
+            migration.down
+            remove_version(file_info.version)
+          end
+        else
+          log_ddl_warning unless klass.ddl_transaction_disabled?
+          migration.down
+          remove_version(file_info.version)
+        end
       end
 
-      sig { params(klass: T.class_of(Migration), blk: T.proc.void).void }
-      def wrap_in_transaction(klass, &blk)
-        if klass.ddl_transaction_disabled? || !@adapter.dialect.supports_ddl_transactions?
-          log_ddl_warning unless klass.ddl_transaction_disabled?
-          blk.call
-        else
-          @adapter.transaction { |_adapter| blk.call }
-        end
+      sig { params(klass: T.class_of(Migration)).returns(T::Boolean) }
+      def transactional_migration?(klass)
+        !klass.ddl_transaction_disabled? && @adapter.dialect.supports_ddl_transactions?
       end
 
       sig { params(blk: T.proc.void).void }
@@ -152,11 +163,11 @@ module HakumiORM
 
         lock_sql = dialect.advisory_lock_sql
         unlock_sql = dialect.advisory_unlock_sql
-        @adapter.exec(lock_sql) if lock_sql
+        @adapter.exec(lock_sql).close if lock_sql
         begin
           blk.call
         ensure
-          @adapter.exec(unlock_sql) if unlock_sql
+          @adapter.exec(unlock_sql).close if unlock_sql
         end
       end
 
