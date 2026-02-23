@@ -525,6 +525,30 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
+  test "has_many preload sets inverse belongs_to" do
+    tables = build_users_and_posts_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
+      gen.generate!
+
+      user_code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes user_code, "child._preloaded_user = [parent] if parent"
+    end
+  end
+
+  test "has_one preload sets inverse belongs_to" do
+    tables = build_users_and_profile_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
+      gen.generate!
+
+      user_code = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes user_code, "child._preloaded_user = [parent] if parent"
+    end
+  end
+
   test "has_one generates singular accessor when FK has unique constraint" do
     tables = build_users_and_profile_tables
     Dir.mktmpdir do |dir|

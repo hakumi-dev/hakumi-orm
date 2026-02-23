@@ -313,6 +313,92 @@ class TestCustomAssociations < HakumiORM::TestCase
     end
   end
 
+  # -- Scoping -------------------------------------------------------------
+
+  test "associate DSL accepts scope parameter" do
+    HakumiORM.clear_associations!
+
+    HakumiORM.associate("users") do |a|
+      a.has_many "published_articles", target: "articles", foreign_key: "author_email",
+                                       primary_key: "email", scope: "ArticleSchema::PUBLISHED.eq(true)"
+    end
+
+    result = HakumiORM.drain_associations!
+    hm = result["users"][0]
+
+    assert_equal "ArticleSchema::PUBLISHED.eq(true)", hm.scope
+  end
+
+  test "scoped has_many generates .where(scope) in accessor" do
+    tables = build_users_articles_tables
+    tables["articles"].columns << col("published", type: "boolean", udt: "bool")
+
+    scoped_assoc = HakumiORM::Codegen::CustomAssociation.new(
+      name: "published_articles", target_table: "articles", foreign_key: "author_email",
+      primary_key: "email", kind: :has_many, scope: "ArticleSchema::PUBLISHED.eq(true)"
+    )
+
+    Dir.mktmpdir do |dir|
+      generate(tables, output_dir: dir, custom_associations: { "users" => [scoped_assoc] })
+
+      record = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes record, "def published_articles"
+      assert_includes record, ".where(ArticleSchema::PUBLISHED.eq(true))"
+    end
+  end
+
+  test "scoped has_many generates .where(scope) in preloader" do
+    tables = build_users_articles_tables
+    tables["articles"].columns << col("published", type: "boolean", udt: "bool")
+
+    scoped_assoc = HakumiORM::Codegen::CustomAssociation.new(
+      name: "published_articles", target_table: "articles", foreign_key: "author_email",
+      primary_key: "email", kind: :has_many, scope: "ArticleSchema::PUBLISHED.eq(true)"
+    )
+
+    Dir.mktmpdir do |dir|
+      generate(tables, output_dir: dir, custom_associations: { "users" => [scoped_assoc] })
+
+      record = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes record, "def self.preload_published_articles"
+      assert_match(/in_list.*\.where\(ArticleSchema::PUBLISHED\.eq\(true\)\)\.to_a/, record)
+    end
+  end
+
+  test "scoped has_one generates .where(scope) in accessor" do
+    tables = build_users_articles_tables
+
+    scoped_assoc = HakumiORM::Codegen::CustomAssociation.new(
+      name: "latest_published", target_table: "articles", foreign_key: "author_email",
+      primary_key: "email", kind: :has_one, scope: "ArticleSchema::PUBLISHED.eq(true)"
+    )
+
+    Dir.mktmpdir do |dir|
+      generate(tables, output_dir: dir, custom_associations: { "users" => [scoped_assoc] })
+
+      record = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes record, "def latest_published"
+      assert_includes record, ".where(ArticleSchema::PUBLISHED.eq(true)).first"
+    end
+  end
+
+  test "unscoped associations do not include extra .where chain" do
+    tables = build_users_articles_tables
+
+    assocs = { "users" => [assoc("articles", target: "articles", foreign_key: "author_email", primary_key: "email")] }
+
+    Dir.mktmpdir do |dir|
+      generate(tables, output_dir: dir, custom_associations: assocs)
+
+      record = File.read(File.join(dir, "user/record.rb"))
+
+      refute_match(/\.eq\(@email\)\)\.where\(/, record)
+    end
+  end
+
   # -- Helpers -------------------------------------------------------------
 
   private

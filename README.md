@@ -1466,6 +1466,45 @@ HakumiORM.configure do |c|
 end
 ```
 
+### Schema Drift and Pending Migration Detection
+
+HakumiORM protects against running with stale generated code or unapplied migrations. Three layers of detection:
+
+**Boot check (automatic, every app start):**
+
+On first adapter access, HakumiORM performs two checks:
+
+1. **Schema fingerprint** -- Compares the SHA256 fingerprint embedded in the generated manifest against the one stored in "hakumi_schema_meta". Raises "SchemaDriftError" on mismatch.
+2. **Pending migrations** -- Scans migration files in "migrations_path" against applied versions in "hakumi_migrations". Raises "PendingMigrationError" if any are unapplied.
+
+Both checks only run when the generated manifest has set "schema_fingerprint" (i.e., during normal app boot, not during "rake hakumi:migrate").
+
+```
+HakumiORM::PendingMigrationError: 2 pending migration(s): 20260301000001, 20260301000002.
+  Run 'rake hakumi:migrate' to apply.
+```
+
+Environment variable bypass:
+
+- "HAKUMI_ALLOW_SCHEMA_DRIFT=1" -- skip fingerprint check (emergency only, logs warning instead of raising)
+
+**"hakumi:check" (CI and manual):**
+
+```bash
+bundle exec rake hakumi:check
+```
+
+Detects both pending migrations and schema drift with detailed output. Exit code 0 = clean, 1 = issues found. Ideal for CI pipelines:
+
+```yaml
+- run: bundle exec rake hakumi:migrate
+- run: bundle exec rake hakumi:check
+```
+
+**Auto-generate after migrate:**
+
+"hakumi:migrate" automatically runs "hakumi:generate" after applying migrations, keeping generated code in sync. Set "HAKUMI_SKIP_GENERATE=1" to skip.
+
 ### Rake Tasks
 
 Add to your "Rakefile":
@@ -1479,11 +1518,13 @@ Available tasks:
 ```bash
 bundle exec rake hakumi:install            # create initial project structure (dirs, config)
 bundle exec rake hakumi:generate           # generate models from DB schema + update annotations
-bundle exec rake hakumi:migrate            # run pending migrations
+bundle exec rake hakumi:migrate            # run pending migrations + auto-regenerate
 bundle exec rake hakumi:rollback[N]        # rollback N migrations
 bundle exec rake hakumi:migrate:status     # show migration status
 bundle exec rake hakumi:version            # show current schema version
 bundle exec rake hakumi:migration[name]    # scaffold new migration
+bundle exec rake hakumi:check              # detect schema drift + pending migrations (CI-friendly)
+bundle exec rake hakumi:scaffold[table]    # scaffold model + contract for a table
 bundle exec rake hakumi:type[name]         # scaffold custom type
 bundle exec rake hakumi:associations       # list all associations (FK + custom + through)
 bundle exec rake hakumi:associations[name] # list associations for one model
@@ -1983,17 +2024,6 @@ bundle exec rake test    # Minitest suite
 bundle exec rubocop      # Lint
 bundle exec srb tc       # Static type check
 ```
-
-### Integration Testing
-
-A "sandbox/" directory (gitignored) lets you test against a real PostgreSQL database:
-
-```bash
-createdb hakumi_sandbox
-bundle exec ruby sandbox/smoke_test.rb
-```
-
-This connects to a local database, creates tables, runs the code generator, loads the generated files, and exercises the full API: all predicates, relation methods, CRUD, associations, preloading, joins, and mutations.
 
 ## Contributing
 

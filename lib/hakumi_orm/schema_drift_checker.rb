@@ -38,6 +38,29 @@ module HakumiORM
 
     sig { returns(T::Array[String]) }
     def check
+      lines = T.let([], T::Array[String])
+      lines.concat(check_pending_migrations)
+      lines.concat(check_schema_drift)
+      lines
+    end
+
+    private
+
+    sig { returns(T::Array[String]) }
+    def check_pending_migrations
+      config = HakumiORM.config
+      pending = Migration::SchemaFingerprint.pending_migrations(@adapter, config.migrations_path)
+      return [] if pending.empty?
+
+      lines = T.let(["#{pending.size} pending migration(s):"], T::Array[String])
+      pending.each { |v| lines << "  - #{v}" }
+      lines << ""
+      lines << "  Run 'rake hakumi:migrate' to apply."
+      lines
+    end
+
+    sig { returns(T::Array[String]) }
+    def check_schema_drift
       stored_fp = Migration::SchemaFingerprint.read_from_db(@adapter)
       return ["No schema fingerprint stored. Run 'rake hakumi:generate' first."] unless stored_fp
 
@@ -62,8 +85,6 @@ module HakumiORM
       lines << "  Run 'rake hakumi:generate' to update generated code."
       lines
     end
-
-    private
 
     sig { returns([String, String]) }
     def compute_live

@@ -13,6 +13,7 @@ module HakumiORM
       const :primary_key, String
       const :kind, Symbol
       const :order_by, T.nilable(String), default: nil
+      const :scope, T.nilable(String), default: nil
     end
   end
 end

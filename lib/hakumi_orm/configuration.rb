@@ -191,6 +191,7 @@ module HakumiORM
 
       new_adapter = connect_from_config(primary_database_config(database))
       verify_schema_fingerprint!(new_adapter)
+      verify_no_pending_migrations!(new_adapter)
       @adapter = new_adapter
     end
 
@@ -203,6 +204,16 @@ module HakumiORM
       return unless actual
 
       Migration::SchemaFingerprint.check!(expected, actual)
+    end
+
+    sig { params(adapter: Adapter::Base).void }
+    def verify_no_pending_migrations!(adapter)
+      return unless @schema_fingerprint
+
+      pending = Migration::SchemaFingerprint.pending_migrations(adapter, @migrations_path)
+      return if pending.empty?
+
+      raise PendingMigrationError, pending
     end
 
     sig { params(database: String).returns(DatabaseConfig) }

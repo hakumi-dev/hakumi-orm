@@ -93,6 +93,40 @@ module HakumiORM
         nil
       end
 
+      MIGRATION_FILE_RE = T.let(/\A(\d{14})_\w+\.rb\z/, Regexp)
+
+      sig { params(adapter: Adapter::Base, migrations_path: String).returns(T::Array[String]) }
+      def self.pending_migrations(adapter, migrations_path)
+        return [] unless Dir.exist?(migrations_path)
+
+        applied = read_applied_versions(adapter)
+        file_versions = scan_file_versions(migrations_path)
+        file_versions - applied
+      end
+
+      sig { params(adapter: Adapter::Base).returns(T::Array[String]) }
+      def self.read_applied_versions(adapter)
+        result = adapter.exec("SELECT version FROM hakumi_migrations ORDER BY version")
+        versions = T.let([], T::Array[String])
+        i = T.let(0, Integer)
+        while i < result.row_count
+          versions << result.fetch_value(i, 0)
+          i += 1
+        end
+        result.close
+        versions
+      rescue StandardError
+        []
+      end
+
+      sig { params(path: String).returns(T::Array[String]) }
+      def self.scan_file_versions(path)
+        Dir.children(path).filter_map do |f|
+          match = f.match(MIGRATION_FILE_RE)
+          match ? match[1] : nil
+        end.sort
+      end
+
       sig { params(stored: String, live: String).returns(T::Array[String]) }
       def self.diff_canonical(stored, live)
         stored_tables = parse_canonical(stored)

@@ -119,10 +119,13 @@ module HakumiORM
       def build_has_many_assocs(table, assoc_map)
         pk_type = pk_type_for(table)
         pk_attr = table.primary_key || "id"
+        inverse = compute_inverse_name(table)
         assocs = (assoc_map[table.name] || []).map do |info|
           src = str(info, :source_table)
           fk_c = str(info, :fk_column)
-          build_fk_assoc_entry(src, src, fk_c, pk_attr, pk_type)
+          entry = build_fk_assoc_entry(src, src, fk_c, pk_attr, pk_type)
+          entry[:inverse_method] = inverse if inverse && has_belongs_to?(src, table.name, fk_c)
+          entry
         end
         assocs.sort_by { |a| a[:method_name].to_s }
       end
@@ -131,12 +134,30 @@ module HakumiORM
       def build_has_one_assocs(table, assoc_map)
         pk_type = pk_type_for(table)
         pk_attr = table.primary_key || "id"
+        inverse = compute_inverse_name(table)
         assocs = (assoc_map[table.name] || []).map do |info|
           src = str(info, :source_table)
           fk_c = str(info, :fk_column)
-          build_fk_assoc_entry(singularize(src), src, fk_c, pk_attr, pk_type)
+          entry = build_fk_assoc_entry(singularize(src), src, fk_c, pk_attr, pk_type)
+          entry[:inverse_method] = inverse if inverse && has_belongs_to?(src, table.name, fk_c)
+          entry
         end
         assocs.sort_by { |a| a[:method_name].to_s }
+      end
+
+      sig { params(table: TableInfo).returns(T.nilable(String)) }
+      def compute_inverse_name(table)
+        return nil unless table.primary_key
+
+        singularize(table.name)
+      end
+
+      sig { params(source_table_name: String, foreign_table: String, fk_column: String).returns(T::Boolean) }
+      def has_belongs_to?(source_table_name, foreign_table, fk_column)
+        source = @tables[source_table_name]
+        return false unless source
+
+        source.foreign_keys.any? { |fk| fk.column_name == fk_column && fk.foreign_table == foreign_table }
       end
 
       sig { params(table: TableInfo).returns(String) }

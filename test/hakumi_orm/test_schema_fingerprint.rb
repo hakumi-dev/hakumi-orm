@@ -289,6 +289,90 @@ class TestSchemaFingerprint < HakumiORM::TestCase
     config.send(:verify_schema_fingerprint!, adapter)
   end
 
+  test "pending_migrations returns versions not yet applied" do
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "20240101000000_create_users.rb"), "")
+      File.write(File.join(dir, "20240102000000_add_email.rb"), "")
+
+      adapter = HakumiORM::Test::MockAdapter.new
+      adapter.stub_result("SELECT version FROM hakumi_migrations", [["20240101000000"]])
+
+      pending = HakumiORM::Migration::SchemaFingerprint.pending_migrations(adapter, dir)
+
+      assert_equal ["20240102000000"], pending
+    end
+  end
+
+  test "pending_migrations returns empty when all applied" do
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "20240101000000_create_users.rb"), "")
+
+      adapter = HakumiORM::Test::MockAdapter.new
+      adapter.stub_result("SELECT version FROM hakumi_migrations", [["20240101000000"]])
+
+      pending = HakumiORM::Migration::SchemaFingerprint.pending_migrations(adapter, dir)
+
+      assert_empty pending
+    end
+  end
+
+  test "pending_migrations returns empty when dir does not exist" do
+    adapter = HakumiORM::Test::MockAdapter.new
+
+    pending = HakumiORM::Migration::SchemaFingerprint.pending_migrations(adapter, "/tmp/nonexistent_#{Process.pid}")
+
+    assert_empty pending
+  end
+
+  test "pending_migrations returns all versions when table does not exist" do
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "20240101000000_create_users.rb"), "")
+
+      adapter = HakumiORM::Test::MockAdapter.new
+      adapter.define_singleton_method(:exec) do |sql|
+        raise StandardError, "table does not exist" if sql.include?("hakumi_migrations")
+
+        super(sql)
+      end
+
+      pending = HakumiORM::Migration::SchemaFingerprint.pending_migrations(adapter, dir)
+
+      assert_equal ["20240101000000"], pending
+    end
+  end
+
+  test "boot check raises PendingMigrationError when migrations pending" do
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "20240101000000_create_users.rb"), "")
+
+      adapter = HakumiORM::Test::MockAdapter.new
+      adapter.stub_result("SELECT fingerprint FROM hakumi_schema_meta", [["abc"]])
+
+      config = HakumiORM::Configuration.new
+      config.schema_fingerprint = "abc"
+      config.migrations_path = dir
+
+      assert_raises(HakumiORM::PendingMigrationError) do
+        config.send(:verify_no_pending_migrations!, adapter)
+      end
+    end
+  end
+
+  test "boot check skips pending migration check when no schema_fingerprint set" do
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "20240101000000_create_users.rb"), "")
+
+      adapter = HakumiORM::Test::MockAdapter.new
+
+      config = HakumiORM::Configuration.new
+      config.migrations_path = dir
+
+      config.send(:verify_no_pending_migrations!, adapter)
+
+      assert_empty adapter.executed_queries
+    end
+  end
+
   test "build_canonical returns deterministic string" do
     tables = build_tables
     c1 = HakumiORM::Migration::SchemaFingerprint.build_canonical(tables)

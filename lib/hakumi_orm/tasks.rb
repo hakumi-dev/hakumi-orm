@@ -30,6 +30,7 @@ module HakumiORM
       task :generate do
         require "hakumi_orm"
         require "hakumi_orm/codegen"
+        require "hakumi_orm/migration"
 
         HakumiORM::Tasks.run_generate
       end

@@ -381,7 +381,7 @@ module <%= module_name %>
 <%= ind %>    if cached
 <%= ind %>      return <%= assoc[:relation_class] %>.new._set_preloaded(cached)
 <%= ind %>    end
-<%= ind %>    <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.eq(@<%= assoc[:pk_attr] %>))
+<%= ind %>    <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.eq(@<%= assoc[:pk_attr] %>))<%= assoc[:scope_expr] ? ".where(#{assoc[:scope_expr]})" : "" %>
 <%= ind %>  end
 
 <%= ind %>  sig { params(records: T::Array[<%= record_class_name %>], adapter: ::HakumiORM::Adapter::Base).void }
@@ -391,13 +391,23 @@ module <%= module_name %>
 <%= ind %>    ids = records.map { |r| r.<%= assoc[:pk_attr] %> }.uniq
 <%= ind %>    return if ids.empty?
 
-<%= ind %>    all_related = <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.in_list(ids)).to_a(adapter: adapter)
+<%= ind %>    all_related = <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.in_list(ids))<%= assoc[:scope_expr] ? ".where(#{assoc[:scope_expr]})" : "" %>.to_a(adapter: adapter)
 <%= ind %>    grouped = T.let({}, T::Hash[<%= assoc[:pk_ruby_type] %>, T::Array[<%= assoc[:record_class] %>]])
 <%= ind %>    all_related.each do |related|
 <%= ind %>      key = related.<%= assoc[:fk_attr] %>
 <%= ind %>      (grouped[key] ||= []) << related
 <%= ind %>    end
 
+<%- if assoc[:inverse_method] -%>
+<%= ind %>    indexed_parents = T.let({}, T::Hash[<%= assoc[:pk_ruby_type] %>, <%= record_class_name %>])
+<%= ind %>    records.each { |r| indexed_parents[r.<%= assoc[:pk_attr] %>] = r }
+
+<%= ind %>    all_related.each do |child|
+<%= ind %>      parent = indexed_parents[child.<%= assoc[:fk_attr] %>]
+<%= ind %>      child._preloaded_<%= assoc[:inverse_method] %> = [parent] if parent
+<%= ind %>    end
+
+<%- end -%>
 <%= ind %>    records.each do |record|
 <%= ind %>      record._preloaded_<%= assoc[:method_name] %> = grouped[record.<%= assoc[:pk_attr] %>] || []
 <%= ind %>    end
@@ -410,10 +420,11 @@ module <%= module_name %>
 <%= ind %>    cached = @_preloaded_<%= assoc[:method_name] %>
 <%= ind %>    return cached.first if cached
 
+<%- scope_chain = assoc[:scope_expr] ? ".where(#{assoc[:scope_expr]})" : "" -%>
 <%- if assoc[:order_by_const] -%>
-<%= ind %>    <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.eq(@<%= assoc[:pk_attr] %>)).order(<%= assoc[:schema_module] %>::<%= assoc[:order_by_const] %>.desc).first(adapter: adapter)
+<%= ind %>    <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.eq(@<%= assoc[:pk_attr] %>))<%= scope_chain %>.order(<%= assoc[:schema_module] %>::<%= assoc[:order_by_const] %>.desc).first(adapter: adapter)
 <%- else -%>
-<%= ind %>    <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.eq(@<%= assoc[:pk_attr] %>)).first(adapter: adapter)
+<%= ind %>    <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.eq(@<%= assoc[:pk_attr] %>))<%= scope_chain %>.first(adapter: adapter)
 <%- end -%>
 <%= ind %>  end
 
@@ -425,13 +436,23 @@ module <%= module_name %>
 <%= ind %>    return if ids.empty?
 
 <%- if assoc[:order_by_const] -%>
-<%= ind %>    all_related = <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.in_list(ids)).order(<%= assoc[:schema_module] %>::<%= assoc[:order_by_const] %>.desc).to_a(adapter: adapter)
+<%= ind %>    all_related = <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.in_list(ids))<%= scope_chain %>.order(<%= assoc[:schema_module] %>::<%= assoc[:order_by_const] %>.desc).to_a(adapter: adapter)
 <%- else -%>
-<%= ind %>    all_related = <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.in_list(ids)).to_a(adapter: adapter)
+<%= ind %>    all_related = <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.in_list(ids))<%= scope_chain %>.to_a(adapter: adapter)
 <%- end -%>
 <%= ind %>    indexed = T.let({}, T::Hash[<%= assoc[:pk_ruby_type] %>, <%= assoc[:record_class] %>])
 <%= ind %>    all_related.each { |r| indexed[r.<%= assoc[:fk_attr] %>] = r }
 
+<%- if assoc[:inverse_method] -%>
+<%= ind %>    indexed_parents = T.let({}, T::Hash[<%= assoc[:pk_ruby_type] %>, <%= record_class_name %>])
+<%= ind %>    records.each { |r| indexed_parents[r.<%= assoc[:pk_attr] %>] = r }
+
+<%= ind %>    all_related.each do |child|
+<%= ind %>      parent = indexed_parents[child.<%= assoc[:fk_attr] %>]
+<%= ind %>      child._preloaded_<%= assoc[:inverse_method] %> = [parent] if parent
+<%= ind %>    end
+
+<%- end -%>
 <%= ind %>    records.each do |record|
 <%= ind %>      related = indexed[record.<%= assoc[:pk_attr] %>]
 <%= ind %>      record._preloaded_<%= assoc[:method_name] %> = related ? [related] : []

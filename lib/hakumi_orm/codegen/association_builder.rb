@@ -19,42 +19,31 @@ module HakumiORM
       end
 
       sig do
-        params(
-          name: String,
-          target: String,
-          foreign_key: String,
-          primary_key: String,
-          order_by: T.nilable(String)
-        ).void
+        params(name: String, opts: T.untyped).void
       end
-      def has_many(name, target:, foreign_key:, primary_key:, order_by: nil)
-        @associations << CustomAssociation.new(
-          name: name,
-          target_table: target,
-          foreign_key: foreign_key,
-          primary_key: primary_key,
-          kind: :has_many,
-          order_by: order_by
-        )
+      def has_many(name, **opts)
+        add_association(name, :has_many, opts)
       end
 
       sig do
-        params(
-          name: String,
-          target: String,
-          foreign_key: String,
-          primary_key: String,
-          order_by: T.nilable(String)
-        ).void
+        params(name: String, opts: T.untyped).void
       end
-      def has_one(name, target:, foreign_key:, primary_key:, order_by: nil)
+      def has_one(name, **opts)
+        add_association(name, :has_one, opts)
+      end
+
+      private
+
+      sig { params(name: String, kind: Symbol, opts: T::Hash[Symbol, T.untyped]).void }
+      def add_association(name, kind, opts)
         @associations << CustomAssociation.new(
           name: name,
-          target_table: target,
-          foreign_key: foreign_key,
-          primary_key: primary_key,
-          kind: :has_one,
-          order_by: order_by
+          target_table: String(opts.fetch(:target)),
+          foreign_key: String(opts.fetch(:foreign_key)),
+          primary_key: String(opts.fetch(:primary_key)),
+          kind: kind,
+          order_by: opts[:order_by]&.to_s,
+          scope: opts[:scope]&.to_s
         )
       end
     end

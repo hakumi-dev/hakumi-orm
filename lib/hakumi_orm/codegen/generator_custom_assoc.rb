@@ -123,6 +123,8 @@ module HakumiORM
         result = build_custom_assoc_base(table, a)
         ob = a.order_by
         result[:order_by_const] = ob.upcase if ob
+        sc = a.scope
+        result[:scope_expr] = sc if sc
         result
       end
 
