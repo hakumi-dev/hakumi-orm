@@ -21,6 +21,41 @@
   <a href="https://ruby-doc.org/"><img src="https://img.shields.io/badge/ruby-%3E%3D%203.2-CC342D.svg?logo=ruby" alt="Ruby >= 3.2" /></a>
 </p>
 
+---
+
+## Table of Contents
+
+| | |
+|---|---|
+| [About](#about) | Design principles and overview |
+| [Quick Look](#quick-look) | Code sample at a glance |
+| [How It Compares to ActiveRecord](#how-it-compares-to-activerecord) | Side-by-side comparison |
+| [Installation](#installation) | Gem setup and requirements |
+| [Configuration](#configuration) | Database connections, paths, options |
+| [Code Generation](#code-generation) | Generate models from live schema |
+| [Custom Models](#custom-models) | Your editable model layer |
+| [Querying](#querying) | Relations, field predicates, expressions, joins |
+| [CRUD Operations](#crud-operations) | Create, read, update, delete |
+| [Associations](#associations) | has_many, has_one, belongs_to, through, preloading |
+| [Contracts and Lifecycle Hooks](#contracts-and-lifecycle-hooks) | Validation, before/after hooks |
+| [Record Variants](#record-variants) | Typed state narrowing for nullable columns |
+| [Transactions](#transactions) | Savepoints, after_commit/after_rollback hooks |
+| [Optimistic Locking](#optimistic-locking) | lock_version and StaleObjectError |
+| [Soft Delete](#soft-delete) | Logical deletion with scopes |
+| [Automatic Timestamps](#automatic-timestamps) | created_at / updated_at auto-set |
+| [Data Types](#data-types) | Enums, JSON/JSONB, UUID, arrays, custom types |
+| [Migrations](#migrations) | Dialect-aware DSL, DDL transactions, advisory locks |
+| [Schema Drift Detection](#schema-drift-and-pending-migration-detection) | Fingerprint checks and pending migration guards |
+| [Connection Pooling](#connection-pooling) | Thread-safe pool for multi-threaded apps |
+| [Multi-Database Support](#multi-database-support) | Named databases, replicas, block switching |
+| [Query Logging](#query-logging) | SQL logging with bind params and timing |
+| [Rake Tasks](#rake-tasks) | All available rake commands |
+| [Low-Level Reference](#low-level-reference) | Type casting, CompiledQuery |
+| [Architecture](#architecture) | Source tree and module layout |
+| [Development](#development) | Setup, CI, testing |
+
+---
+
 ## About
 
 HakumiORM generates fully typed models, query builders, and hydration code directly from your database schema. Every generated file is Sorbet "typed: strict" with **zero** "T.untyped", "T.unsafe", or "T.must" in the output.
@@ -86,51 +121,15 @@ db/generated/              <-- always overwritten by codegen
     base_contract.rb       # UserRecord::BaseContract -- overridable validation hooks
     variant_base.rb        # UserRecord::VariantBase -- delegation base for user-defined variants
     relation.rb            # UserRelation -- typed query builder
-  performance_review/
-    ...
-    variant_base.rb        # PerformanceReviewRecord::VariantBase
   manifest.rb              # require_relative for all files
 
 app/models/                <-- generated once, never overwritten; yours to edit
   user.rb                  # class User < UserRecord
-  user/                    # variants live in a subfolder matching the model name
-    with_bio.rb            # User::WithBio < UserRecord::VariantBase
   post.rb                  # class Post < PostRecord
-  performance_review.rb    # class PerformanceReview < PerformanceReviewRecord
-  performance_review/      # variant subclasses (user-defined, not codegen)
-    draft.rb               # PerformanceReview::Draft < PerformanceReviewRecord::VariantBase
-    started.rb             # PerformanceReview::Started < PerformanceReview::Draft
-    completed.rb           # PerformanceReview::Completed < PerformanceReview::Started
-    cancelled.rb           # PerformanceReview::Cancelled < PerformanceReview::Started
-    rejected.rb            # PerformanceReview::Rejected < PerformanceReview::Draft
 
 app/contracts/             <-- generated once, never overwritten
   user_contract.rb         # UserRecord::Contract < UserRecord::BaseContract
   post_contract.rb         # PostRecord::Contract < PostRecord::BaseContract
-```
-
-The "models/" files are your public API. They inherit from the generated records and are where you add custom logic:
-
-```ruby
-# app/models/user.rb (generated once, then yours to edit)
-class User < UserRecord
-  def display_name
-    "#{name} <#{email}>"
-  end
-
-  def published_posts
-    posts.where(PostSchema::PUBLISHED.eq(true))
-  end
-end
-```
-
-You interact with "User", not "UserRecord":
-
-```ruby
-user = User.find(1)
-user.published_posts.to_a
-new_user = User.build(name: "Alice", email: "alice@example.com", active: true)
-new_user.validate!.save!
 ```
 
 ### Querying
@@ -260,9 +259,7 @@ bundle install
 - Sorbet runtime ("sorbet-runtime" gem, pulled automatically)
 - A database driver ("pg", "mysql2", or "sqlite3") depending on your target
 
-## Usage
-
-### Configuration
+## Configuration
 
 Configure HakumiORM once at boot. The adapter connects automatically when first needed.
 
@@ -395,37 +392,7 @@ end
 
 All generated methods ("find", "where", "save!", associations, etc.) default to "HakumiORM.adapter", so you never pass the adapter manually.
 
-### Query Logging
-
-Enable SQL logging to see every query, its bind parameters, and execution time:
-
-```ruby
-HakumiORM.configure do |config|
-  config.log_level = :debug
-end
-```
-
-Output:
-
-```
-D, [2026-02-22] DEBUG -- : [HakumiORM] (0.42ms) SELECT "users".* FROM "users" WHERE "users"."active" = $1 ["t"]
-```
-
-Set to "nil" (default) to disable logging entirely with zero overhead.
-
-For production or advanced use cases, inject any logger that implements "HakumiORM::Loggable" (defines "debug", "info", "warn", "error", "fatal"). Ruby's "::Logger" satisfies this interface out of the box:
-
-```ruby
-HakumiORM.configure do |config|
-  config.logger = Rails.logger           # share with Rails
-  config.logger = Logger.new("log/sql.log", "daily")  # file with rotation
-  config.logger = MyCustomLogger.new     # any Loggable implementor
-end
-```
-
-Available log levels for "log_level=": ":debug", ":info", ":warn", ":error", ":fatal".
-
-### Code Generation
+## Code Generation
 
 Generate model files from your live database schema:
 
@@ -452,132 +419,81 @@ opts = HakumiORM::Codegen::GeneratorOptions.new(
 generator = HakumiORM::Codegen::Generator.new(tables, opts)
 ```
 
-## API Reference
+### When to Regenerate
 
-### Record Class Methods
+| Action | Requires regeneration? |
+|---|---|
+| Run a migration (add/remove column, table, FK) | Yes (automatic if using "hakumi:migrate") |
+| Add/change a custom association in "db/associations/" | Yes |
+| Add a scope to a Relation | No |
+| Edit a Contract hook | No |
+| Override "custom_preload" (escape hatch) | No |
+| Change "GeneratorOptions" (soft delete, timestamps) | Yes |
 
-These methods are generated on every record class (e.g., "UserRecord", and inherited by "User").
+Regeneration also updates model annotations ("# == Schema Information ==" block) with the latest schema and associations.
 
-#### "find(pk_value) -> T.nilable(Record)"
+## Custom Models
 
-Find a record by primary key. Returns "nil" if not found.
+Generated code lives in "db/generated/" and is always overwritten. Your models live in "app/models/" and are never touched after the initial stub generation:
 
 ```ruby
-user = User.find(42)     # => UserRecord or nil
+class User < UserRecord
+  extend T::Sig
+
+  sig { returns(String) }
+  def display_name
+    "#{name} <#{email}>"
+  end
+
+  sig { returns(PostRelation) }
+  def published_posts
+    posts.where(PostSchema::PUBLISHED.eq(true))
+  end
+end
 ```
 
-#### "find_by(expr) -> T.nilable(Record)"
-
-Find the first record matching an expression. Sugar for ".where(expr).first".
+The "models/" files are your public API. They inherit from the generated records and are where you add custom logic. You interact with "User", not "UserRecord":
 
 ```ruby
-user = User.find_by(UserSchema::EMAIL.eq("alice@example.com"))
-```
-
-#### "exists?(expr) -> Boolean"
-
-Check if any record matches. Compiles "SELECT 1 ... LIMIT 1" for efficiency.
-
-```ruby
-User.exists?(UserSchema::EMAIL.eq("alice@example.com"))  # => true or false
-```
-
-#### "where(expr) -> Relation"
-
-Start a filtered query. Returns a chainable "Relation".
-
-```ruby
-User.where(UserSchema::ACTIVE.eq(true))
-```
-
-#### "all -> Relation"
-
-Return a "Relation" for all rows in the table.
-
-```ruby
-User.all.to_a            # => T::Array[UserRecord]
-```
-
-#### "build(...) -> Record::New"
-
-Create a new unpersisted record with keyword arguments. Returns a "Record::New" instance (no "id").
-
-```ruby
+user = User.find(1)
+user.published_posts.to_a
 new_user = User.build(name: "Alice", email: "alice@example.com", active: true)
-new_user.class           # => UserRecord::New
+new_user.validate!.save!
 ```
 
-### Record Instance Methods
+## Querying
 
-#### "update!(...) -> Record"
-
-Update a persisted record's attributes. Takes keyword arguments for each column (defaults to current values for unchanged fields). Validates via "Contract.on_all", "Contract.on_update", and "Contract.on_persist", then executes "UPDATE ... RETURNING *". Returns a new hydrated "Record".
-
-```ruby
-updated_user = user.update!(name: "Bob", active: false)
-updated_user.name        # => "Bob"
-updated_user.id          # => same id, guaranteed
-```
-
-#### "delete! -> void"
-
-Delete a persisted record by primary key. Raises "HakumiORM::Error" if no rows are affected (record was already deleted).
-
-```ruby
-user.delete!
-```
-
-#### "reload! -> Record"
-
-Re-fetch the record from the database by primary key. Returns a new "Record" instance with fresh data. Raises if the record no longer exists.
-
-```ruby
-fresh = user.reload!
-fresh.name               # => current DB value
-```
-
-#### "to_h -> Hash"
-
-Convert the record to a hash keyed by column name. The value type is a union of all column types (no "T.untyped").
-
-```ruby
-user.to_h
-# => { id: 1, name: "Alice", email: "alice@example.com", age: 25, active: true }
-```
-
-### Record::New Instance Methods
-
-#### "validate! -> Record::Validated"
-
-Run "Contract.on_all" and "Contract.on_create" validations. Returns an immutable "Record::Validated" on success, raises "ValidationError" on failure.
-
-```ruby
-validated = new_user.validate!
-validated.class          # => UserRecord::Validated
-```
-
-### Record::Validated Instance Methods
-
-#### "save!(adapter: HakumiORM.adapter) -> Record"
-
-Run "Contract.on_persist" validations, then persist via "INSERT ... RETURNING *". Returns a fully hydrated "Record" with "id". If the table has "created_at" / "updated_at" timestamp columns, they are automatically set to "Time.now".
-
-```ruby
-user = validated.save!
-user.id                  # => Integer (guaranteed)
-user.created_at          # => Time (auto-set)
-```
-
-### Relation Methods
+### Relations
 
 "Relation" is a chainable, lazy query builder. Nothing hits the database until a terminal method ("to_a", "first", "count", etc.) is called.
 
-#### Chainable (return "self")
+#### Record Class Methods
+
+These methods are generated on every record class (e.g., "UserRecord", and inherited by "User").
+
+| Method | Returns | Description |
+|---|---|---|
+| "find(pk)" | "T.nilable(Record)" | Find by primary key. Returns "nil" if not found. |
+| "find_by(expr)" | "T.nilable(Record)" | First record matching an expression. Sugar for ".where(expr).first". |
+| "exists?(expr)" | "T::Boolean" | "SELECT 1 ... LIMIT 1" -- checks if any row matches. |
+| "where(expr)" | "Relation" | Start a filtered query. Returns a chainable "Relation". |
+| "all" | "Relation" | Return a "Relation" for all rows in the table. |
+| "build(...)" | "Record::New" | Create a new unpersisted record with keyword arguments. |
+
+```ruby
+user = User.find(42)
+user = User.find_by(UserSchema::EMAIL.eq("alice@example.com"))
+User.exists?(UserSchema::EMAIL.eq("alice@example.com"))
+```
+
+#### Chainable Methods (return "self")
 
 | Method | Description |
 |---|---|
 | "where(expr)" | Add a WHERE condition. Multiple calls are ANDed. |
 | "where_raw(sql, binds)" | Add a raw SQL WHERE fragment with "?" bind placeholders. |
+| "where_not(expr)" | Add a negated WHERE condition. |
+| "or(relation)" | Combine with another relation via OR. |
 | "order(clause)" | Add ORDER BY via an "OrderClause" (e.g., "UserSchema::NAME.asc"). |
 | "order_by(field, direction)" | Add ORDER BY via field + ":asc" / ":desc" symbol. |
 | "limit(n)" | Set LIMIT. |
@@ -598,7 +514,7 @@ User
   .offset(50)
 ```
 
-#### Terminal (execute the query)
+#### Terminal Methods (execute the query)
 
 | Method | Returns | Description |
 |---|---|---|
@@ -607,69 +523,36 @@ User
 | "count" | "Integer" | Execute "SELECT COUNT(*)" and return the count. |
 | "exists?" | "T::Boolean" | Execute "SELECT 1 ... LIMIT 1" and return whether any row matches. |
 | "pluck_raw(field)" | "T::Array[T.nilable(String)]" | Return raw string values for a single column. |
+| "pluck(*fields)" | "T::Array[T::Array[T.nilable(String)]]" | Multi-column pluck returning raw string arrays. |
 | "delete_all" | "Integer" | Execute "DELETE" and return the number of deleted rows. |
 | "update_all(assignments)" | "Integer" | Execute "UPDATE" and return the number of updated rows. |
+| "sum(field)" | "T.nilable(String)" | Execute "SELECT SUM(field)". |
+| "average(field)" | "T.nilable(String)" | Execute "SELECT AVG(field)". |
+| "minimum(field)" | "T.nilable(String)" | Execute "SELECT MIN(field)". |
+| "maximum(field)" | "T.nilable(String)" | Execute "SELECT MAX(field)". |
 | "to_sql" | "CompiledQuery" | Return the compiled SQL + binds **without executing**. |
-| "sum(field)" | "T.nilable(String)" | Execute "SELECT SUM(field)" and return the result. |
-| "average(field)" | "T.nilable(String)" | Execute "SELECT AVG(field)" and return the result. |
-| "minimum(field)" | "T.nilable(String)" | Execute "SELECT MIN(field)" and return the result. |
-| "maximum(field)" | "T.nilable(String)" | Execute "SELECT MAX(field)" and return the result. |
-| "pluck(*fields)" | "T::Array[T::Array[T.nilable(String)]]" | Multi-column pluck returning raw string arrays. |
 
 ```ruby
-# Execute
 users = User.all.to_a
 first = User.all.order(UserSchema::NAME.asc).first
 
-# Aggregate
 total = User.where(UserSchema::ACTIVE.eq(true)).count
 total_age = User.all.sum(UserSchema::AGE)
-avg_age = User.all.average(UserSchema::AGE)
-youngest = User.all.minimum(UserSchema::AGE)
-oldest = User.all.maximum(UserSchema::AGE)
 
-# Multi-column pluck
 pairs = User.all.pluck(UserSchema::NAME, UserSchema::EMAIL)
 # => [["Alice", "a@b.com"], ["Bob", "b@c.com"]]
 
-# Pluck raw values (single column)
 names = User.all.order(UserSchema::NAME.asc).pluck_raw(UserSchema::NAME)
 # => ["Alice", "Bob", "Carol"]
 
-# Inspect SQL without executing
 compiled = User.where(UserSchema::AGE.gt(18)).to_sql
 compiled.sql     # => 'SELECT ... WHERE "users"."age" > $1'
 compiled.binds   # => [#<IntBind value=18>]
 
-# Bulk update
-User
-  .where(UserSchema::ACTIVE.eq(false))
+User.where(UserSchema::ACTIVE.eq(false))
   .update_all([HakumiORM::Assignment.new(UserSchema::ACTIVE, HakumiORM::BoolBind.new(true))])
-# => 1 (number of updated rows)
 
-# Bulk delete
 User.where(UserSchema::NAME.eq("temp")).delete_all
-# => 1 (number of deleted rows)
-
-# Distinct query
-User.all.distinct.pluck(UserSchema::NAME)
-
-# Group + aggregate
-User.all.group(UserSchema::ACTIVE).to_a
-
-# Pessimistic locking
-User.where(UserSchema::ID.eq(1)).lock.first
-# => SELECT ... WHERE ... FOR UPDATE
-
-# Raw SQL escape hatch
-User.all.where_raw(
-  "LENGTH(\"users\".\"name\") > ?",
-  [HakumiORM::IntBind.new(5)]
-).to_a
-
-# Subquery
-sub = compiler.select(table: "orders", columns: [OrderSchema::USER_ID])
-User.where(HakumiORM::SubqueryExpr.new(UserSchema::ID, :in, sub)).to_a
 ```
 
 ### Field Predicates
@@ -721,6 +604,24 @@ Predicates return "Expr" objects that can be combined with boolean logic:
 | "expr.or(other)" | "(left) OR (right)" | "UserSchema::NAME.eq("Alice").or(UserSchema::NAME.eq("Bob"))" |
 | "expr.not" | "NOT (expr)" | "UserSchema::ACTIVE.eq(true).not" |
 
+Multiple ".where" calls are ANDed automatically:
+
+```ruby
+# These are equivalent
+User.where(UserSchema::AGE.gte(18)).where(UserSchema::ACTIVE.eq(true))
+User.where(UserSchema::AGE.gte(18).and(UserSchema::ACTIVE.eq(true)))
+```
+
+Expressions nest with deterministic parentheses:
+
+```ruby
+User.where(
+  UserSchema::AGE.gte(18)
+    .and(UserSchema::EMAIL.like("%@company.com"))
+    .or(UserSchema::NAME.eq("admin"))
+)
+```
+
 #### Raw SQL Expressions
 
 For SQL that can't be expressed with typed fields, use "RawExpr":
@@ -745,25 +646,7 @@ User.where(expr).to_a
 
 Supported operators: ":in", ":not_in". Bind markers are automatically rebased to avoid collisions.
 
-Multiple ".where" calls are ANDed automatically, so the most common case needs no explicit combinator:
-
-```ruby
-# These are equivalent
-User.where(UserSchema::AGE.gte(18)).where(UserSchema::ACTIVE.eq(true))
-User.where(UserSchema::AGE.gte(18).and(UserSchema::ACTIVE.eq(true)))
-```
-
-Expressions nest with deterministic parentheses:
-
-```ruby
-User.where(
-  UserSchema::AGE.gte(18)
-    .and(UserSchema::EMAIL.like("%@company.com"))
-    .or(UserSchema::NAME.eq("admin"))
-)
-```
-
-#### Operator aliases
+#### Operator Aliases
 
 All predicates and combinators have operator aliases that delegate to the named methods:
 
@@ -778,11 +661,84 @@ All predicates and combinators have operator aliases that delegate to the named 
 
 > **Note:** "=="/"!=" return "Predicate", not "Boolean". Ruby's "&&"/"||" cannot be overloaded, so use "&"/"|" instead. Because "&"/"|" have higher precedence than comparison operators, parentheses are required: "(AGE > 18) & (ACTIVE == true)".
 
-### Associations
+### Joins
+
+Use "join" to filter records based on related table conditions. The join is for filtering only -- the SELECT returns the main table's columns.
+
+```ruby
+join = HakumiORM::JoinClause.new(:inner, "posts", UserSchema::ID, PostSchema::USER_ID)
+users = User.all
+  .join(join)
+  .where(PostSchema::PUBLISHED.eq(true))
+  .order(UserSchema::NAME.asc)
+  .to_a
+```
+
+Supported join types: ":inner", ":left", ":right", ":cross".
+
+## CRUD Operations
+
+### Creating Records
+
+```ruby
+new_user = User.build(name: "Alice", email: "alice@example.com", active: true)
+new_user.name    # => "Alice"
+new_user.class   # => UserRecord::New (no id attribute)
+
+validated = new_user.validate!
+validated.class  # => UserRecord::Validated (immutable)
+
+user = validated.save!
+user.class       # => UserRecord
+user.id          # => Integer (guaranteed non-nil)
+```
+
+The type-state lifecycle:
+
+| Method | Transition | Description |
+|---|---|---|
+| "build(...)" | -- -> "Record::New" | Create an unpersisted record with keyword arguments. |
+| "validate!" | "New" -> "Validated" | Run "Contract.on_all" + "Contract.on_create". Raises "ValidationError" on failure. |
+| "save!" | "Validated" -> "Record" | Run "Contract.on_persist", then "INSERT ... RETURNING *". Returns a hydrated "Record" with "id". |
+
+If the table has "created_at" / "updated_at" timestamp columns, they are automatically set to "Time.now".
+
+### Updating Records
+
+```ruby
+updated = user.update!(name: "Bob", active: false)
+updated.name     # => "Bob"
+updated.active   # => false
+updated.email    # => unchanged from original
+```
+
+Takes keyword arguments for each column (defaults to current values for unchanged fields). Validates via "Contract.on_all", "Contract.on_update", and "Contract.on_persist", then executes "UPDATE ... RETURNING *". Returns a new hydrated "Record".
+
+If the table has an "updated_at" timestamp column, it is automatically set to "Time.now" on every "update!" call.
+
+#### Additional instance methods
+
+| Method | Returns | Description |
+|---|---|---|
+| "reload!" | "Record" | Re-fetch from the database by primary key. |
+| "to_h" | "Hash" | Convert to a hash keyed by column name (no "T.untyped"). |
+| "as_json" | "Hash" | JSON-serializable hash with string keys. Supports "only:" and "except:". |
+| "diff(other)" | "Hash" | Compare two records and return changed fields as "{ field: [new, old] }". |
+| "changed_from?(other)" | "T::Boolean" | Whether any column differs from another record. |
+
+### Deleting Records
+
+```ruby
+user.delete!             # => void (raises if record doesn't exist)
+
+User.where(UserSchema::ACTIVE.eq(false)).delete_all  # => Integer (rows deleted)
+```
+
+## Associations
 
 Associations are generated automatically from foreign keys. No manual declaration needed.
 
-#### "has_many" (one-to-many)
+### "has_many" (one-to-many)
 
 Returns a **lazy "Relation"** -- no query is executed until a terminal method is called. The relation is fully chainable.
 
@@ -793,14 +749,13 @@ alice.posts                  # => PostRelation (no query yet)
 alice.posts.to_a             # => T::Array[PostRecord] (executes SELECT)
 alice.posts.count            # => Integer (executes SELECT COUNT(*))
 
-# Chain filters on the association
 alice.posts
   .where(PostSchema::PUBLISHED.eq(true))
   .order(PostSchema::TITLE.asc)
   .to_a
 ```
 
-#### "has_one" (one-to-one)
+### "has_one" (one-to-one)
 
 Generated when the FK column on the child table has a UNIQUE constraint. Returns "T.nilable(Record)".
 
@@ -809,7 +764,7 @@ alice = User.find(1)
 alice.profile                # => T.nilable(ProfileRecord) (executes SELECT ... LIMIT 1)
 ```
 
-#### "belongs_to" (many-to-one)
+### "belongs_to" (many-to-one)
 
 Returns the related record by executing a "find" on the foreign key value.
 
@@ -818,27 +773,24 @@ post = Post.find(1)
 post.user                    # => T.nilable(UserRecord) (executes SELECT)
 ```
 
-#### "has_many :through" (transitive associations)
+### "has_many :through" (transitive associations)
 
 Generated automatically for FK chains and join tables. Uses "SubqueryExpr" internally.
 
 ```ruby
-# Join table: users_roles (user_id, role_id) -> User has_many :roles through :users_roles
 alice = User.find(1)
 alice.roles                  # => RoleRelation (subquery: WHERE id IN (SELECT role_id FROM users_roles WHERE user_id = ?))
 alice.roles.to_a             # => T::Array[RoleRecord]
 
-# Chain pattern: users -> posts -> comments -> User has_many :comments through :posts
-alice.comments               # => CommentRelation (subquery)
+alice.comments               # => CommentRelation (subquery through posts)
 alice.comments.where(CommentSchema::APPROVED.eq(true)).to_a
 ```
 
-#### Preloading (eager loading)
+### Preloading (eager loading)
 
 Use "preload" to batch-load associations in a single extra query:
 
 ```ruby
-# 2 queries total: SELECT * FROM users; SELECT * FROM posts WHERE user_id IN (1, 2, 3)
 users = User.all.preload(:posts).to_a
 
 users.each do |u|
@@ -849,55 +801,35 @@ end
 Nested preloads load associations recursively:
 
 ```ruby
-# 3 queries: users, posts, comments
 users = User.all.preload(posts: :comments).to_a
-
-users.each do |u|
-  u.posts.to_a.each do |p|
-    p.comments.to_a              # no query -- already loaded
-  end
-end
-
-# Multiple nested
 User.all.preload(:profile, posts: [:comments, :tags]).to_a
 ```
 
 "preload" works for "has_many", "has_one", and "belongs_to".
 
-#### Custom Associations (non-FK based)
+### Custom Associations (non-FK based)
 
-FK-based associations are generated from the schema automatically. For associations based on a different column match (email, slug, external_id), declare them in "db/associations/" and the generator produces everything -- lazy accessor, batch preload, cache, and dispatch. Zero boilerplate in your model file.
-
-One file per source table:
+For associations based on a different column match (email, slug, external_id), declare them in "db/associations/" and the generator produces everything -- lazy accessor, batch preload, cache, and dispatch:
 
 ```ruby
 # db/associations/users.rb
-# frozen_string_literal: true
-
 HakumiORM.associate("users") do |a|
   a.has_many "authored_articles", target: "articles", foreign_key: "author_email", primary_key: "email"
   a.has_one  "latest_comment",    target: "comments", foreign_key: "user_email",   primary_key: "email", order_by: "created_at"
 end
 ```
 
-The generator produces the same code as FK-based associations. No distinction in the generated output:
+The generator produces the same code as FK-based associations:
 
 ```ruby
 alice = User.find(1)
 
-alice.posts                    # FK-based has_many (generated from schema)
 alice.authored_articles        # Custom has_many (generated from config)
-alice.latest_comment           # Custom has_one with ordering (generated from config)
+alice.latest_comment           # Custom has_one with ordering
 
-# Chainable -- returns a Relation, not an array
 alice.authored_articles.where(ArticleSchema::PUBLISHED.eq(true)).count
 
-# Preloadable -- batch loading in a single extra query
 users = User.all.preload(:posts, :authored_articles, :latest_comment).to_a
-users.each do |u|
-  u.authored_articles.to_a   # no query -- already preloaded
-  u.latest_comment            # no query -- already preloaded
-end
 ```
 
 Available methods inside the "associate" block:
@@ -907,7 +839,7 @@ Available methods inside the "associate" block:
 | "has_many" | "name", "target:", "foreign_key:", "primary_key:" | Returns a Relation (lazy, chainable). |
 | "has_one" | "name", "target:", "foreign_key:", "primary_key:" | Returns "T.nilable(Record)". Optional "order_by:" for deterministic results (always DESC). |
 
-The generator validates at codegen time: tables and columns must exist, source column must be NOT NULL, types must be compatible (both strings, both integers, etc.), names must not collide with existing associations or columns. Errors are raised during "rake hakumi:generate" with clear messages.
+The generator validates at codegen time: tables and columns must exist, source column must be NOT NULL, types must be compatible, names must not collide with existing associations or columns.
 
 The associations directory is configurable:
 
@@ -917,7 +849,45 @@ HakumiORM.configure do |c|
 end
 ```
 
-#### Model Annotations
+### Custom Associations (escape hatch)
+
+For associations that cannot be expressed as a field match (multi-step subqueries, external APIs, composite keys, polymorphic patterns), override "custom_preload" in the Relation manually:
+
+```ruby
+class UserRelation
+  extend T::Sig
+
+  sig { override.params(name: Symbol, records: T::Array[UserRecord], adapter: ::HakumiORM::Adapter::Base).void }
+  def custom_preload(name, records, adapter)
+    case name
+    when :recent_audits
+      ids = records.map { |r| r.id.to_s }
+      all = AuditRelation.new
+        .where(AuditSchema::ENTITY_TYPE.eq("user"))
+        .where(AuditSchema::ENTITY_ID.in_list(ids))
+        .to_a(adapter: adapter)
+      grouped = all.group_by(&:entity_id)
+      records.each { |r| r.instance_variable_set(:@_recent_audits, grouped[r.id.to_s] || []) }
+    end
+  end
+end
+```
+
+The generated "run_preloads" delegates any association name it does not recognize to "custom_preload", which is a no-op by default.
+
+### Dependent delete/destroy
+
+When deleting a parent record, you can cascade to associated records:
+
+```ruby
+user.delete!(dependent: :delete_all)   # batch SQL DELETE on children (no callbacks)
+user.delete!(dependent: :destroy)      # loads children and calls delete! on each (cascades recursively)
+user.delete!                           # :none (default) -- no cascade, relies on DB constraints
+```
+
+The "dependent" parameter is only generated when the record has "has_many" or "has_one" associations.
+
+### Model Annotations
 
 "hakumi:generate" auto-updates a comment block at the top of each model file showing columns, types, and ALL associations (FK + custom + through). The user code below the annotation is never touched:
 
@@ -948,8 +918,6 @@ class User < UserRecord
 end
 ```
 
-The generator looks for the "# == Schema Information ==" / "# == End Schema Information ==" markers and replaces only that block. If no markers exist (first run), the block is prepended.
-
 You can also list all associations from the command line:
 
 ```bash
@@ -957,172 +925,209 @@ bundle exec rake hakumi:associations            # all models
 bundle exec rake hakumi:associations[users]     # single model
 ```
 
-#### Custom Associations (escape hatch)
+## Contracts and Lifecycle Hooks
 
-For associations that cannot be expressed as a field match (multi-step subqueries, external APIs, composite keys, polymorphic patterns), override "custom_preload" in the Relation manually:
+Each model has a Contract that controls its entire lifecycle. Contracts are generated once in "contracts_dir" and never overwritten -- they are yours to edit.
+
+Two kinds of hooks:
+
+- **"on_*" hooks** run **before** the operation. They receive an "Errors" object and can **prevent** the operation by adding errors (raises "ValidationError").
+- **"after_*" hooks** run **after** the operation succeeds. They receive the persisted "Record" + "Adapter" for side effects. They **cannot** prevent the operation.
+
+### Execution order per operation
+
+**"validate!" (New -> Validated):**
+
+```
+1. Contract.on_all(record, errors)       -- shared validation
+2. Contract.on_create(record, errors)    -- create-specific validation
+3. raise ValidationError if errors       -- STOPS here on failure
+4. return Validated
+```
+
+**"save!" (Validated -> Record, executes INSERT):**
+
+```
+1. Contract.on_all(record, errors)       -- shared validation
+2. Contract.on_persist(record, adapter, errors)  -- DB-dependent validation
+3. raise ValidationError if errors       -- STOPS here, no INSERT
+4. INSERT ... RETURNING *                -- executes SQL
+5. Contract.after_create(record, adapter) -- side effects (record is persisted)
+6. return Record
+```
+
+**"update!" (Record -> Record, executes UPDATE):**
+
+```
+1. Contract.on_all(record, errors)       -- shared validation
+2. Contract.on_update(record, errors)    -- update-specific validation
+3. Contract.on_persist(record, adapter, errors)  -- DB-dependent validation
+4. raise ValidationError if errors       -- STOPS here, no UPDATE
+5. UPDATE ... RETURNING *                -- executes SQL
+6. Contract.after_update(record, adapter) -- side effects (record is updated)
+7. return Record
+```
+
+**"delete!" (Record -> void, executes DELETE or soft-delete UPDATE):**
+
+```
+1. Contract.on_destroy(record, errors)   -- can prevent deletion
+2. raise ValidationError if errors       -- STOPS here, no DELETE
+3. DELETE FROM ... WHERE pk = $1         -- executes SQL
+4. Contract.after_destroy(record, adapter) -- side effects (record is deleted)
+```
+
+### Contract example
 
 ```ruby
-# app/models/user.rb
-class User < UserRecord
+# app/contracts/user_contract.rb
+class UserRecord::Contract < UserRecord::BaseContract
   extend T::Sig
 
-  sig { returns(T::Array[AuditRecord]) }
-  def recent_audits
-    AuditRelation.new.where(AuditSchema::ENTITY_TYPE.eq("user").and(AuditSchema::ENTITY_ID.eq(id.to_s))).to_a
+  sig { override.params(record: UserRecord::Checkable, e: ::HakumiORM::Errors).void }
+  def self.on_all(record, e)
+    e.add(:name, "cannot be blank") if record.name.strip.empty?
+    e.add(:email, "must contain @") unless record.email.include?("@")
+  end
+
+  sig { override.params(record: UserRecord::New, e: ::HakumiORM::Errors).void }
+  def self.on_create(record, e)
+    e.add(:email, "is reserved") if record.email.end_with?("@system.internal")
+  end
+
+  sig { override.params(record: UserRecord::Checkable, adapter: ::HakumiORM::Adapter::Base, e: ::HakumiORM::Errors).void }
+  def self.on_persist(record, adapter, e)
+    # check uniqueness, FK existence, etc.
+  end
+
+  sig { override.params(record: UserRecord, e: ::HakumiORM::Errors).void }
+  def self.on_destroy(record, e)
+    e.add(:base, "admins cannot be deleted") if record.admin?
+  end
+
+  sig { override.params(record: UserRecord, adapter: ::HakumiORM::Adapter::Base).void }
+  def self.after_create(record, adapter)
+    AuditLog.record!("user_created", record.id, adapter: adapter)
   end
 end
+```
 
-class UserRelation
+When any "on_*" hook adds errors, a "ValidationError" is raised:
+
+```ruby
+begin
+  new_user.validate!
+rescue HakumiORM::ValidationError => e
+  e.errors.messages  # => { name: ["cannot be blank"], email: ["must contain @"] }
+  e.errors.count     # => 2
+end
+```
+
+### Hook reference
+
+| Hook | Operation | Timing | Can prevent? | Receives |
+|---|---|---|---|---|
+| "on_all" | "validate!", "save!", "update!" | Before SQL | Yes | "Checkable", "Errors" |
+| "on_create" | "validate!" | Before SQL | Yes | "New", "Errors" |
+| "on_update" | "update!" | Before SQL | Yes | "Checkable", "Errors" |
+| "on_persist" | "save!", "update!" | Before SQL | Yes | "Checkable", "Adapter", "Errors" |
+| "on_destroy" | "delete!" | Before SQL | Yes | "Record", "Errors" |
+| "after_create" | "save!" | After INSERT | No | "Record", "Adapter" |
+| "after_update" | "update!" | After UPDATE | No | "Record", "Adapter" |
+| "after_destroy" | "delete!" | After DELETE | No | "Record", "Adapter" |
+
+## Record Variants
+
+In a typical ORM, every nullable column is "T.nilable(X)" everywhere. If your "performance_reviews" table has "score integer NULL", then "review.score" is always "T.nilable(Integer)" -- even when your business logic guarantees it's present for completed reviews.
+
+Record Variants solve this with **real static typing** -- the variant constructor demands non-nil values via keyword arguments, and Sorbet verifies every call site at compile time. No runtime assertions disguised as type safety.
+
+The codegen generates a "Record::VariantBase" that delegates all columns. You subclass it, add "attr_reader" for narrowed fields, and declare them as non-nil kwargs:
+
+```ruby
+# app/models/performance_review/completed.rb
+class PerformanceReview::Completed < PerformanceReviewRecord::VariantBase
   extend T::Sig
 
-  sig { override.params(name: Symbol, records: T::Array[UserRecord], adapter: ::HakumiORM::Adapter::Base).void }
-  def custom_preload(name, records, adapter)
-    case name
-    when :recent_audits
-      ids = records.map { |r| r.id.to_s }
-      all = AuditRelation.new
-        .where(AuditSchema::ENTITY_TYPE.eq("user"))
-        .where(AuditSchema::ENTITY_ID.in_list(ids))
-        .to_a(adapter: adapter)
-      grouped = all.group_by(&:entity_id)
-      records.each { |r| r.instance_variable_set(:@_recent_audits, grouped[r.id.to_s] || []) }
-    end
+  sig { returns(Integer) }
+  attr_reader :score
+
+  sig { returns(Time) }
+  attr_reader :completed_at
+
+  sig { params(record: PerformanceReviewRecord, score: Integer, completed_at: Time).void }
+  def initialize(record:, score:, completed_at:)
+    super(record: record)
+    @score = T.let(score, Integer)
+    @completed_at = T.let(completed_at, Time)
   end
 end
 ```
 
-The generated "run_preloads" delegates any association name it does not recognize to "custom_preload", which is a no-op by default.
-
-#### When to Regenerate
-
-| Action | Requires regeneration? |
-|---|---|
-| Run a migration (add/remove column, table, FK) | Yes (automatic if using "hakumi:migrate") |
-| Add/change a custom association in "db/associations/" | Yes |
-| Add a scope to a Relation | No |
-| Edit a Contract hook | No |
-| Override "custom_preload" (escape hatch) | No |
-| Change "GeneratorOptions" (soft delete, timestamps) | Yes |
-
-Regeneration also updates model annotations ("# == Schema Information ==" block) with the latest schema and associations.
-
-#### Dependent delete/destroy
-
-When deleting a parent record, you can cascade to associated records:
+The "as_*" methods use flow typing on local variables -- Sorbet verifies the narrowing:
 
 ```ruby
-# :delete_all -- batch SQL DELETE on children (no callbacks)
-user.delete!(dependent: :delete_all)
+# app/models/performance_review.rb
+class PerformanceReview < PerformanceReviewRecord
+  extend T::Sig
 
-# :destroy -- loads children and calls delete! on each (cascades recursively)
-user.delete!(dependent: :destroy)
+  sig { returns(T.nilable(Completed)) }
+  def as_completed
+    s  = score
+    ca = completed_at
+    return nil unless s && ca
 
-# :none (default) -- no cascade, relies on DB constraints
-user.delete!
-```
+    Completed.new(record: self, score: s, completed_at: ca)
+  end
 
-The "dependent" parameter is only generated when the record has "has_many" or "has_one" associations.
-
-### Connection Pooling
-
-For multi-threaded applications, use "ConnectionPool" instead of a single adapter:
-
-```ruby
-HakumiORM.configure do |config|
-  config.adapter = HakumiORM::Adapter::ConnectionPool.new(size: 10, timeout: 5.0) do
-    HakumiORM::Adapter::Postgresql.connect(dbname: "myapp")
+  sig { returns(Completed) }
+  def as_completed!
+    as_completed || raise(HakumiORM::Error, "not a completed review")
   end
 end
 ```
 
-Works with any adapter:
+Variants can form a **progressive inheritance chain** that models domain progression:
 
 ```ruby
-# MySQL
-require "hakumi_orm/adapter/mysql"
-HakumiORM.configure do |config|
-  config.adapter = HakumiORM::Adapter::Mysql.connect(database: "myapp", host: "localhost", username: "root")
+# Draft → base (no narrowing)
+class PerformanceReview::Draft < PerformanceReviewRecord::VariantBase
 end
 
-# SQLite
-require "hakumi_orm/adapter/sqlite"
-HakumiORM.configure do |config|
-  config.adapter = HakumiORM::Adapter::Sqlite.connect("db/myapp.sqlite3")
+# Started → narrows started_at
+class PerformanceReview::Started < PerformanceReview::Draft
+  sig { returns(Time) }
+  attr_reader :started_at
+  # ...
 end
-```
 
-The pool implements "Adapter::Base", so it's a transparent drop-in. Connections are checked out per-thread and reused within nested calls (transactions, etc.).
-
-| Option | Default | Description |
-|---|---|---|
-| "size" | "5" | Maximum number of connections in the pool |
-| "timeout" | "5.0" | Seconds to wait for a connection before raising "TimeoutError" |
-
-### Multi-Database Support
-
-Configure named databases for read replicas, analytics, or other secondary databases:
-
-```ruby
-HakumiORM.configure do |c|
-  c.database_url = ENV.fetch("DATABASE_URL")
-
-  c.database_config(:replica) do |r|
-    r.database_url = ENV.fetch("REPLICA_DATABASE_URL")
-  end
-
-  c.database_config(:analytics) do |r|
-    r.database_url = ENV.fetch("ANALYTICS_DATABASE_URL")
-  end
+# Completed → inherits started_at from Started, narrows score + completed_at
+class PerformanceReview::Completed < PerformanceReview::Started
+  sig { returns(Integer) }
+  attr_reader :score
+  # ...
 end
 ```
 
-Named databases also accept individual params:
+This also supports **branching** -- not just linear progression:
 
-```ruby
-c.database_config(:replica) do |r|
-  r.adapter_name = :postgresql
-  r.database = "myapp_replica"
-  r.host = "replica.host.com"
-  r.username = "readonly"
-  r.password = ENV.fetch("REPLICA_DB_PASSWORD")
-  r.pool_size = 5
-end
+```
+Draft
+├── Started
+│   ├── Completed
+│   └── Cancelled
+└── Rejected
 ```
 
-**Block-based switching** -- all queries inside the block use the named adapter:
+Key points:
 
-```ruby
-HakumiORM.using(:replica) do
-  User.all.to_a
-  Article.where(ArticleSchema::PUBLISHED.eq(true)).to_a
-end
-```
+- **Real static typing** -- variant constructors demand non-nil kwargs; Sorbet verifies call sites at compile time
+- **No "T.must"** -- "T.let" in constructors is a declaration, not a cast (types already match)
+- **Progressive inheritance** -- variants chain ("Completed < Started < Draft"), narrowing accumulates
+- **Branching** -- model tree-shaped domain logic, not just linear state machines
+- **"VariantBase" is codegen** -- mechanical delegation of all columns, always regenerated, never edited
 
-**Per-query switching** -- pass the adapter explicitly:
-
-```ruby
-User.all.to_a(adapter: HakumiORM.adapter(:replica))
-```
-
-**Nestable** -- blocks can be nested, each level restores the previous adapter:
-
-```ruby
-HakumiORM.using(:replica) do
-  users = User.all.to_a
-  HakumiORM.using(:analytics) do
-    AnalyticsEvent.all.to_a
-  end
-end
-```
-
-| Method | Description |
-|---|---|
-| "HakumiORM.using(:name) { ... }" | Switches adapter for the block (thread-safe, nestable) |
-| "HakumiORM.adapter(:name)" | Returns the named adapter directly |
-| "config.database_config(:name) { \|r\| ... }" | Registers a named database |
-| "config.database_names" | Lists all registered database names |
-
-Each named database gets its own connection pool. No automatic read/write splitting -- the caller decides where to route queries (Hakumi philosophy: explicit, not magic).
+## Transactions
 
 ### Nested Transactions (Savepoints)
 
@@ -1141,7 +1146,26 @@ end
 
 Without "requires_new: true", nested calls are no-ops (reuse the outer transaction). With it, each level uses "SAVEPOINT hakumi_sp_N" / "RELEASE" / "ROLLBACK TO".
 
-### Optimistic Locking
+### Transaction Hooks
+
+For side effects that must wait until the transaction commits (emails, background jobs, external APIs):
+
+```ruby
+adapter.transaction do |txn|
+  user = validated.save!
+
+  txn.after_commit { WelcomeMailer.deliver(user.email) }
+  txn.after_rollback { ErrorTracker.log("user creation failed") }
+end
+```
+
+- "after_commit" fires after COMMIT, not during the transaction
+- "after_rollback" fires after ROLLBACK
+- Callbacks registered inside savepoints fire after the **top-level** transaction completes
+- Multiple callbacks fire in registration order
+- Zero overhead when not used -- no arrays allocated until "after_commit" is called
+
+## Optimistic Locking
 
 If a table has a "lock_version" integer column, the codegen automatically:
 
@@ -1153,49 +1177,65 @@ If a table has a "lock_version" integer column, the codegen automatically:
 ```ruby
 user = User.find(1)
 
-# Another process updates the same user...
 other = User.find(1)
 other.update!(name: "Other")
 
-# This raises StaleObjectError because lock_version no longer matches
 user.update!(name: "Stale")  # => HakumiORM::StaleObjectError
 ```
 
-### JSON/JSONB Columns
+## Soft Delete
 
-JSON and JSONB columns are automatically mapped to "HakumiORM::Json". The "Json" class stores the raw JSON string internally and provides typed accessors -- zero "Object", zero "T.untyped":
+Soft delete is disabled by default. To enable it, list the tables and their deletion marker column in "soft_delete_tables":
 
 ```ruby
-event = Event.find(1)
-event.payload            # => HakumiORM::Json
-
-# Navigate nested structures -- [] and at return T.nilable(Json)
-event.payload["key"]           # => T.nilable(Json)
-event.payload["nested"]["deep"]  # => T.nilable(Json)
-event.payload.at(0)            # => T.nilable(Json)
-
-# Extract typed scalars
-event.payload["name"]&.as_s   # => T.nilable(String)
-event.payload["count"]&.as_i  # => T.nilable(Integer)
-event.payload["rate"]&.as_f   # => T.nilable(Float)
-event.payload["active"]&.as_bool  # => T.nilable(T::Boolean)
-event.payload["count"]&.scalar    # => JsonScalar (union of all primitives)
-
-# Serialize back to JSON string
-event.payload.to_json          # => String
-event.payload.raw_json         # => String (same)
-
-# Creating with JSON data
-Event.build(
-  name: "signup",
-  payload: HakumiORM::Json.from_hash({ "source" => "web", "ip" => "1.2.3.4" })
+opts = HakumiORM::Codegen::GeneratorOptions.new(
+  soft_delete_tables: {
+    "articles" => "deleted_at",
+    "comments" => "removed_at",
+  }
 )
-
-# From arrays
-HakumiORM::Json.from_array([1, 2, 3])
 ```
 
-"JsonField" supports "eq", "neq", "is_null", "is_not_null". For JSON path queries, use "where_raw".
+When enabled for a table:
+
+- **delete!** executes UPDATE SET column = NOW() instead of DELETE
+- **really_delete!** executes a hard DELETE FROM (bypasses soft delete)
+- **deleted?** returns true when the column is non-nil
+- **Default scope** filters out soft-deleted records (WHERE column IS NULL) on all queries
+- **with_deleted** removes the default scope to include soft-deleted records
+- **only_deleted** replaces the scope with WHERE column IS NOT NULL
+- **unscoped** clears all default scopes (including soft delete)
+
+```ruby
+Article.all.to_a              # only non-deleted articles
+Article.all.with_deleted.to_a # all articles, including deleted
+Article.all.only_deleted.to_a # only deleted articles
+
+article = Article.find(1)
+article.deleted?              # => false
+article.delete!               # UPDATE SET deleted_at = NOW()
+article.really_delete!        # DELETE FROM articles WHERE id = 1
+```
+
+Each table can use a different column name -- there is no hardcoded default.
+
+## Automatic Timestamps
+
+If your table has timestamp columns matching "created_at_column" and/or "updated_at_column" (configurable in "GeneratorOptions"):
+
+- **On "save!" (insert):** Both are set to "Time.now"
+- **On "update!":** Only "updated_at_column" is set to "Time.now"
+
+Defaults to ""created_at"" and ""updated_at"". Pass "nil" to disable either:
+
+```ruby
+opts = HakumiORM::Codegen::GeneratorOptions.new(
+  created_at_column: "inserted_at",   # custom name
+  updated_at_column: nil              # disable auto-update timestamp
+)
+```
+
+## Data Types
 
 ### User-Defined Enums
 
@@ -1211,9 +1251,9 @@ end
 
 Signature: `e.enum(column_name, values_hash, prefix: nil, suffix: nil)`
 
-- **column_name** — Symbol matching the integer column in the DB.
-- **values_hash** — `{ sym: int }` mapping. Positions are explicit and customizable.
-- **prefix / suffix** — Optional. Controls predicate method naming.
+- **column_name** -- Symbol matching the integer column in the DB.
+- **values_hash** -- `{ sym: int }` mapping. Positions are explicit and customizable.
+- **prefix / suffix** -- Optional. Controls predicate method naming.
 
 The generator produces "T::Enum" classes and predicate methods:
 
@@ -1224,6 +1264,34 @@ user.active_status?    # => true  (suffix: :status generates active_status?, ban
 ```
 
 The generator validates column compatibility at codegen time: user-defined enums require an integer column. PG native enums are auto-detected from the schema and do not need manual declaration.
+
+### JSON/JSONB Columns
+
+JSON and JSONB columns are automatically mapped to "HakumiORM::Json". The "Json" class stores the raw JSON string internally and provides typed accessors -- zero "Object", zero "T.untyped":
+
+```ruby
+event = Event.find(1)
+event.payload            # => HakumiORM::Json
+
+event.payload["key"]           # => T.nilable(Json)
+event.payload["nested"]["deep"]  # => T.nilable(Json)
+event.payload.at(0)            # => T.nilable(Json)
+
+event.payload["name"]&.as_s   # => T.nilable(String)
+event.payload["count"]&.as_i  # => T.nilable(Integer)
+event.payload["rate"]&.as_f   # => T.nilable(Float)
+event.payload["active"]&.as_bool  # => T.nilable(T::Boolean)
+
+event.payload.to_json          # => String
+event.payload.raw_json         # => String (same)
+
+Event.build(
+  name: "signup",
+  payload: HakumiORM::Json.from_hash({ "source" => "web", "ip" => "1.2.3.4" })
+)
+```
+
+"JsonField" supports "eq", "neq", "is_null", "is_not_null". For JSON path queries, use "where_raw".
 
 ### UUID Columns
 
@@ -1282,7 +1350,7 @@ end
 
 #### Step 2: Create the Field (Ruby -> DB)
 
-The Field converts your Ruby type to a Bind that the DB understands. Zero "T.untyped" -- the custom type is a Ruby abstraction; the DB wire always carries a typed scalar:
+The Field converts your Ruby type to a Bind that the DB understands:
 
 ```ruby
 class MoneyField < ::HakumiORM::Field
@@ -1298,7 +1366,7 @@ end
 
 #### Step 3: Register for codegen (DB -> Ruby)
 
-"cast_expression" is a lambda that produces Ruby source code. It does not run at runtime -- it runs once during "rake hakumi:generate" and the string it returns is written directly into the generated file.
+"cast_expression" is a lambda that produces Ruby source code. It runs once during "rake hakumi:generate" and the string it returns is written directly into the generated file.
 
 ```ruby
 HakumiORM::Codegen::TypeRegistry.register(
@@ -1314,16 +1382,6 @@ HakumiORM::Codegen::TypeRegistry.register(
 HakumiORM::Codegen::TypeRegistry.map_pg_type("money_col", :money)
 ```
 
-When the generator finds a column "price" of type "money_col", it calls your lambda with the raw expression (e.g. "row[3]") and writes the result into the generated record:
-
-```ruby
-# generated record.rb (non-nullable column)
-obj.instance_variable_set(:@price, Money.from_decimal(row[3]))
-
-# generated record.rb (nullable column)
-obj.instance_variable_set(:@price, ((_hv = row[3]).nil? ? nil : Money.from_decimal(_hv)))
-```
-
 #### Full round-trip
 
 ```ruby
@@ -1337,7 +1395,7 @@ Product.where(ProductSchema::PRICE.eq(Money.new(9995)))
 
 Network types ("inet", "cidr", "macaddr") and "hstore" are mapped to "String" by default. Override with "TypeRegistry" for richer types.
 
-### Migrations
+## Migrations
 
 Create a migration:
 
@@ -1416,17 +1474,17 @@ Column types are validated early -- passing an unknown type raises immediately w
 
 Auto-generated identifier names (indexes, foreign key constraints) are validated against dialect limits (PostgreSQL: 63 chars, MySQL: 64 chars) to prevent cryptic database errors.
 
-Migration names are validated on generation -- only lowercase letters, digits, and underscores are accepted. Names starting with digits or containing hyphens/spaces are rejected with a clear error.
+Migration names are validated on generation -- only lowercase letters, digits, and underscores are accepted.
 
 All SQL is dialect-aware -- the same migration produces correct SQL for PostgreSQL, MySQL, and SQLite.
 
-#### DDL transactions
+### DDL transactions
 
 On PostgreSQL and SQLite, each migration runs inside a transaction. If it fails, all changes are rolled back.
 
-On MySQL, DDL statements cause implicit commits -- the Runner detects this via "dialect.supports_ddl_transactions?" and logs a warning. Partial rollback is not guaranteed.
+On MySQL, DDL statements cause implicit commits -- the Runner detects this via "dialect.supports_ddl_transactions?" and logs a warning.
 
-To opt out of the transaction wrapper (needed for operations like "CREATE INDEX CONCURRENTLY" in PostgreSQL):
+To opt out of the transaction wrapper (needed for "CREATE INDEX CONCURRENTLY" in PostgreSQL):
 
 ```ruby
 class AddEmailIndexConcurrently < HakumiORM::Migration
@@ -1442,9 +1500,9 @@ class AddEmailIndexConcurrently < HakumiORM::Migration
 end
 ```
 
-#### Concurrency safety
+### Concurrency safety
 
-The migration Runner acquires a database-level advisory lock before running migrations or rollbacks. This prevents two processes from executing migrations simultaneously:
+The migration Runner acquires a database-level advisory lock before running migrations or rollbacks:
 
 - PostgreSQL: "pg_advisory_lock(hash)"
 - MySQL: "GET_LOCK(name, timeout)"
@@ -1452,7 +1510,7 @@ The migration Runner acquires a database-level advisory lock before running migr
 
 The lock is always released in an "ensure" block.
 
-#### Configuration
+### Migration configuration
 
 Migration files are read from "db/migrate" by default. To change:
 
@@ -1462,7 +1520,7 @@ HakumiORM.configure do |c|
 end
 ```
 
-### Schema Drift and Pending Migration Detection
+## Schema Drift and Pending Migration Detection
 
 HakumiORM protects against running with stale generated code or unapplied migrations. Three layers of detection:
 
@@ -1472,8 +1530,6 @@ On first adapter access, HakumiORM performs two checks:
 
 1. **Schema fingerprint** -- Compares the SHA256 fingerprint embedded in the generated manifest against the one stored in "hakumi_schema_meta". Raises "SchemaDriftError" on mismatch.
 2. **Pending migrations** -- Scans migration files in "migrations_path" against applied versions in "hakumi_migrations". Raises "PendingMigrationError" if any are unapplied.
-
-Both checks only run when the generated manifest has set "schema_fingerprint" (i.e., during normal app boot, not during "rake hakumi:migrate").
 
 ```
 HakumiORM::PendingMigrationError: 2 pending migration(s): 20260301000001, 20260301000002.
@@ -1501,7 +1557,138 @@ Detects both pending migrations and schema drift with detailed output. Exit code
 
 "hakumi:migrate" automatically runs "hakumi:generate" after applying migrations, keeping generated code in sync. Set "HAKUMI_SKIP_GENERATE=1" to skip.
 
-### Rake Tasks
+## Connection Pooling
+
+For multi-threaded applications, use "ConnectionPool" instead of a single adapter:
+
+```ruby
+HakumiORM.configure do |config|
+  config.adapter = HakumiORM::Adapter::ConnectionPool.new(size: 10, timeout: 5.0) do
+    HakumiORM::Adapter::Postgresql.connect(dbname: "myapp")
+  end
+end
+```
+
+Works with any adapter:
+
+```ruby
+# MySQL
+require "hakumi_orm/adapter/mysql"
+HakumiORM.configure do |config|
+  config.adapter = HakumiORM::Adapter::Mysql.connect(database: "myapp", host: "localhost", username: "root")
+end
+
+# SQLite
+require "hakumi_orm/adapter/sqlite"
+HakumiORM.configure do |config|
+  config.adapter = HakumiORM::Adapter::Sqlite.connect("db/myapp.sqlite3")
+end
+```
+
+The pool implements "Adapter::Base", so it's a transparent drop-in. Connections are checked out per-thread and reused within nested calls (transactions, etc.).
+
+| Option | Default | Description |
+|---|---|---|
+| "size" | "5" | Maximum number of connections in the pool |
+| "timeout" | "5.0" | Seconds to wait for a connection before raising "TimeoutError" |
+
+## Multi-Database Support
+
+Configure named databases for read replicas, analytics, or other secondary databases:
+
+```ruby
+HakumiORM.configure do |c|
+  c.database_url = ENV.fetch("DATABASE_URL")
+
+  c.database_config(:replica) do |r|
+    r.database_url = ENV.fetch("REPLICA_DATABASE_URL")
+  end
+
+  c.database_config(:analytics) do |r|
+    r.database_url = ENV.fetch("ANALYTICS_DATABASE_URL")
+  end
+end
+```
+
+Named databases also accept individual params:
+
+```ruby
+c.database_config(:replica) do |r|
+  r.adapter_name = :postgresql
+  r.database = "myapp_replica"
+  r.host = "replica.host.com"
+  r.username = "readonly"
+  r.password = ENV.fetch("REPLICA_DB_PASSWORD")
+  r.pool_size = 5
+end
+```
+
+**Block-based switching** -- all queries inside the block use the named adapter:
+
+```ruby
+HakumiORM.using(:replica) do
+  User.all.to_a
+  Article.where(ArticleSchema::PUBLISHED.eq(true)).to_a
+end
+```
+
+**Per-query switching** -- pass the adapter explicitly:
+
+```ruby
+User.all.to_a(adapter: HakumiORM.adapter(:replica))
+```
+
+**Nestable** -- blocks can be nested, each level restores the previous adapter:
+
+```ruby
+HakumiORM.using(:replica) do
+  users = User.all.to_a
+  HakumiORM.using(:analytics) do
+    AnalyticsEvent.all.to_a
+  end
+end
+```
+
+| Method | Description |
+|---|---|
+| "HakumiORM.using(:name) { ... }" | Switches adapter for the block (thread-safe, nestable) |
+| "HakumiORM.adapter(:name)" | Returns the named adapter directly |
+| "config.database_config(:name) { \|r\| ... }" | Registers a named database |
+| "config.database_names" | Lists all registered database names |
+
+Each named database gets its own connection pool. No automatic read/write splitting -- the caller decides where to route queries (Hakumi philosophy: explicit, not magic).
+
+## Query Logging
+
+Enable SQL logging to see every query, its bind parameters, and execution time:
+
+```ruby
+HakumiORM.configure do |config|
+  config.log_level = :debug
+end
+```
+
+Output:
+
+```
+D, [2026-02-22] DEBUG -- : [HakumiORM] (0.42ms) SELECT "users".* FROM "users" WHERE "users"."active" = $1 ["t"]
+```
+
+Set to "nil" (default) to disable logging entirely with zero overhead.
+
+For production or advanced use cases, inject any logger that implements "HakumiORM::Loggable" (defines "debug", "info", "warn", "error", "fatal"). Ruby's "::Logger" satisfies this interface out of the box:
+
+```ruby
+HakumiORM.configure do |config|
+  config.logger = Rails.logger
+  config.logger = Logger.new("log/sql.log", "daily")
+  config.logger = MyCustomLogger.new
+end
+```
+
+Available log levels for "log_level=": ":debug", ":info", ":warn", ":error", ":fatal".
+
+## Rake Tasks
 
 Add to your "Rakefile":
 
@@ -1526,421 +1713,7 @@ bundle exec rake hakumi:associations       # list all associations (FK + custom 
 bundle exec rake hakumi:associations[name] # list associations for one model
 ```
 
-### Joins
-
-Use "join" to filter records based on related table conditions. The join is for filtering only -- the SELECT returns the main table's columns.
-
-```ruby
-# Find users who have at least one published post
-join = HakumiORM::JoinClause.new(:inner, "posts", UserSchema::ID, PostSchema::USER_ID)
-users = User.all
-  .join(join)
-  .where(PostSchema::PUBLISHED.eq(true))
-  .order(UserSchema::NAME.asc)
-  .to_a
-```
-
-Supported join types: ":inner", ":left", ":right", ":cross".
-
-### Creating Records
-
-```ruby
-# Build a new (unpersisted) record
-new_user = User.build(name: "Alice", email: "alice@example.com", active: true)
-new_user.name    # => "Alice"
-new_user.class   # => UserRecord::New (no id attribute)
-
-# Validate it -- runs on_all + on_create contract hooks
-validated = new_user.validate!
-validated.class  # => UserRecord::Validated (immutable)
-
-# Persist it -- runs on_persist, then INSERT RETURNING * hydrates a full record
-user = validated.save!
-user.class       # => UserRecord
-user.id          # => Integer (guaranteed non-nil)
-```
-
-### Updating Records
-
-```ruby
-# Update specific fields -- unchanged fields default to current values
-updated = user.update!(name: "Bob", active: false)
-updated.name     # => "Bob"
-updated.active   # => false
-updated.email    # => unchanged from original
-
-# Validation runs automatically (on_all + on_update + on_persist)
-user.update!(name: "")  # raises ValidationError if contract rejects blank names
-```
-
-If the table has an "updated_at" timestamp column, it is automatically set to "Time.now" on every "update!" call.
-
-### Deleting Records
-
-```ruby
-# Delete a single record by primary key
-user.delete!             # => void (raises if record doesn't exist)
-
-# Bulk delete via Relation
-User.where(UserSchema::ACTIVE.eq(false)).delete_all  # => Integer (rows deleted)
-```
-
-### Soft Delete
-
-Soft delete is disabled by default. To enable it, list the tables and their deletion marker column in "soft_delete_tables":
-
-```ruby
-opts = HakumiORM::Codegen::GeneratorOptions.new(
-  soft_delete_tables: {
-    "articles" => "deleted_at",
-    "comments" => "removed_at",
-  }
-)
-```
-
-When enabled for a table:
-
-- **delete!** executes UPDATE SET column = NOW() instead of DELETE
-- **really_delete!** executes a hard DELETE FROM (bypasses soft delete)
-- **deleted?** returns true when the column is non-nil
-- **Default scope** filters out soft-deleted records (WHERE column IS NULL) on all queries
-- **with_deleted** removes the default scope to include soft-deleted records
-- **only_deleted** replaces the scope with WHERE column IS NOT NULL
-- **unscoped** clears all default scopes (including soft delete)
-
-```ruby
-Article.all.to_a              # only non-deleted articles
-Article.all.with_deleted.to_a # all articles, including deleted
-Article.all.only_deleted.to_a # only deleted articles
-
-article = Article.find(1)
-article.deleted?              # => false
-article.delete!               # UPDATE SET deleted_at = NOW()
-article.really_delete!        # DELETE FROM articles WHERE id = 1
-```
-
-Each table can use a different column name -- there is no hardcoded default.
-
-### Automatic Timestamps
-
-If your table has timestamp columns matching "created_at_column" and/or "updated_at_column" (configurable in "GeneratorOptions"):
-
-- **On "save!" (insert):** Both are set to "Time.now"
-- **On "update!":** Only "updated_at_column" is set to "Time.now"
-
-Defaults to ""created_at"" and ""updated_at"". Pass "nil" to disable either:
-
-```ruby
-opts = HakumiORM::Codegen::GeneratorOptions.new(
-  created_at_column: "inserted_at",   # custom name
-  updated_at_column: nil              # disable auto-update timestamp
-)
-```
-
-### Custom Models
-
-Generated code lives in "db/generated/" and is always overwritten. Your models live in "app/models/" and are never touched after the initial stub generation:
-
-```ruby
-class User < UserRecord
-  extend T::Sig
-
-  sig { returns(String) }
-  def display_name
-    "#{name} <#{email}>"
-  end
-
-  sig { returns(PostRelation) }
-  def published_posts
-    posts.where(PostSchema::PUBLISHED.eq(true))
-  end
-end
-```
-
-### Contracts and Lifecycle Hooks
-
-Each model has a Contract that controls its entire lifecycle. Contracts are generated once in "contracts_dir" and never overwritten -- they are yours to edit.
-
-The Contract is the **single place** for all lifecycle logic. Two kinds of hooks:
-
-- **"on_*" hooks** run **before** the operation. They receive an "Errors" object and can **prevent** the operation by adding errors (raises "ValidationError").
-- **"after_*" hooks** run **after** the operation succeeds. They receive the persisted "Record" + "Adapter" for side effects. They **cannot** prevent the operation.
-
-#### Execution order per operation
-
-**"validate!" (New -> Validated):**
-
-```
-1. Contract.on_all(record, errors)       -- shared validation
-2. Contract.on_create(record, errors)    -- create-specific validation
-3. raise ValidationError if errors       -- STOPS here on failure
-4. return Validated
-```
-
-**"save!" (Validated -> Record, executes INSERT):**
-
-```
-1. Contract.on_all(record, errors)       -- shared validation
-2. Contract.on_persist(record, adapter, errors)  -- DB-dependent validation
-3. raise ValidationError if errors       -- STOPS here, no INSERT
-4. INSERT ... RETURNING *                -- executes SQL
-5. raise Error if no rows returned       -- STOPS here, no after_create
-6. Contract.after_create(record, adapter) -- side effects (record is persisted)
-7. return Record
-```
-
-**"update!" (Record -> Record, executes UPDATE):**
-
-```
-1. Contract.on_all(record, errors)       -- shared validation
-2. Contract.on_update(record, errors)    -- update-specific validation
-3. Contract.on_persist(record, adapter, errors)  -- DB-dependent validation
-4. raise ValidationError if errors       -- STOPS here, no UPDATE
-5. UPDATE ... RETURNING *                -- executes SQL
-6. raise Error/StaleObjectError if no rows -- STOPS here, no after_update
-7. Contract.after_update(record, adapter) -- side effects (record is updated)
-8. return Record
-```
-
-**"delete!" (Record -> void, executes DELETE or soft-delete UPDATE):**
-
-```
-1. Contract.on_destroy(record, errors)   -- can prevent deletion
-2. raise ValidationError if errors       -- STOPS here, no DELETE
-3. DELETE FROM ... WHERE pk = $1         -- executes SQL
-4. raise Error if 0 rows affected        -- STOPS here, no after_destroy
-5. Contract.after_destroy(record, adapter) -- side effects (record is deleted)
-```
-
-#### Contract example
-
-```ruby
-# app/contracts/user_contract.rb
-class UserRecord::Contract < UserRecord::BaseContract
-  extend T::Sig
-
-  sig { override.params(record: UserRecord::Checkable, e: ::HakumiORM::Errors).void }
-  def self.on_all(record, e)
-    e.add(:name, "cannot be blank") if record.name.strip.empty?
-    e.add(:email, "must contain @") unless record.email.include?("@")
-  end
-
-  sig { override.params(record: UserRecord::New, e: ::HakumiORM::Errors).void }
-  def self.on_create(record, e)
-    e.add(:email, "is reserved") if record.email.end_with?("@system.internal")
-  end
-
-  sig { override.params(record: UserRecord::Checkable, e: ::HakumiORM::Errors).void }
-  def self.on_update(record, e)
-    # prevent deactivating admin accounts, etc.
-  end
-
-  sig { override.params(record: UserRecord::Checkable, adapter: ::HakumiORM::Adapter::Base, e: ::HakumiORM::Errors).void }
-  def self.on_persist(record, adapter, e)
-    # check uniqueness, FK existence, etc.
-  end
-
-  sig { override.params(record: UserRecord, e: ::HakumiORM::Errors).void }
-  def self.on_destroy(record, e)
-    e.add(:base, "admins cannot be deleted") if record.admin?
-  end
-
-  sig { override.params(record: UserRecord, adapter: ::HakumiORM::Adapter::Base).void }
-  def self.after_create(record, adapter)
-    AuditLog.record!("user_created", record.id, adapter: adapter)
-  end
-
-  sig { override.params(record: UserRecord, adapter: ::HakumiORM::Adapter::Base).void }
-  def self.after_update(record, adapter)
-    AuditLog.record!("user_updated", record.id, adapter: adapter)
-  end
-
-  sig { override.params(record: UserRecord, adapter: ::HakumiORM::Adapter::Base).void }
-  def self.after_destroy(record, adapter)
-    SearchIndex.remove(record.id, adapter: adapter)
-  end
-end
-```
-
-When any "on_*" hook adds errors, a "ValidationError" is raised:
-
-```ruby
-begin
-  new_user.validate!
-rescue HakumiORM::ValidationError => e
-  e.errors.messages  # => { name: ["cannot be blank"], email: ["must contain @"] }
-  e.errors.count     # => 2
-end
-```
-
-#### Hook reference
-
-| Hook | Operation | Timing | Can prevent? | Receives |
-|---|---|---|---|---|
-| "on_all" | "validate!", "save!", "update!" | Before SQL | Yes | "Checkable", "Errors" |
-| "on_create" | "validate!" | Before SQL | Yes | "New", "Errors" |
-| "on_update" | "update!" | Before SQL | Yes | "Checkable", "Errors" |
-| "on_persist" | "save!", "update!" | Before SQL | Yes | "Checkable", "Adapter", "Errors" |
-| "on_destroy" | "delete!" | Before SQL | Yes | "Record", "Errors" |
-| "after_create" | "save!" | After INSERT | No | "Record", "Adapter" |
-| "after_update" | "update!" | After UPDATE | No | "Record", "Adapter" |
-| "after_destroy" | "delete!" | After DELETE | No | "Record", "Adapter" |
-
-### Transaction Hooks
-
-For side effects that must wait until the transaction commits (emails, background jobs, external APIs):
-
-```ruby
-adapter.transaction do |txn|
-  user = validated.save!
-
-  txn.after_commit { WelcomeMailer.deliver(user.email) }
-  txn.after_rollback { ErrorTracker.log("user creation failed") }
-end
-```
-
-Execution order:
-
-```
-1. BEGIN
-2. ... your code (INSERT, UPDATE, etc.) ...
-3. COMMIT (or ROLLBACK on exception)
-4. after_commit callbacks fire (in registration order) -- only if COMMIT succeeded
-   OR
-4. after_rollback callbacks fire -- only if ROLLBACK happened
-5. Callbacks are cleared (never fire twice)
-```
-
-- "after_commit" fires after COMMIT, not during the transaction
-- "after_rollback" fires after ROLLBACK
-- Callbacks registered inside savepoints fire after the **top-level** transaction completes
-- Multiple callbacks fire in registration order
-- Zero overhead when not used -- no arrays allocated until "after_commit" is called
-
-### Record Variants
-
-In a typical ORM, every nullable column is "T.nilable(X)" everywhere. If your "performance_reviews" table has "score integer NULL", then "review.score" is always "T.nilable(Integer)" -- even when your business logic guarantees it's present for completed reviews. You end up sprinkling "T.must" or nil checks everywhere.
-
-Record Variants solve this with **real static typing** -- the variant constructor demands non-nil values via keyword arguments, and Sorbet verifies every call site at compile time. No runtime assertions disguised as type safety.
-
-The codegen generates a "Record::VariantBase" that delegates all columns. You subclass it, add "attr_reader" for narrowed fields, and declare them as non-nil kwargs:
-
-```ruby
-# app/models/performance_review/completed.rb
-class PerformanceReview::Completed < PerformanceReviewRecord::VariantBase
-  extend T::Sig
-
-  sig { returns(Integer) }
-  attr_reader :score
-
-  sig { returns(Time) }
-  attr_reader :completed_at
-
-  sig { params(record: PerformanceReviewRecord, score: Integer, completed_at: Time).void }
-  def initialize(record:, score:, completed_at:)
-    super(record: record)
-    @score = T.let(score, Integer)
-    @completed_at = T.let(completed_at, Time)
-  end
-end
-```
-
-The "T.let" here is **not a cast** -- "score" is already "Integer" by the method signature. Sorbet verifies this statically. If someone tries to pass "nil", it's a **compile-time error**, not a runtime crash.
-
-The "as_*" methods use flow typing on local variables -- Sorbet verifies the narrowing:
-
-```ruby
-# app/models/performance_review.rb
-class PerformanceReview < PerformanceReviewRecord
-  extend T::Sig
-
-  sig { returns(T.nilable(Completed)) }
-  def as_completed
-    s  = score
-    ca = completed_at
-    return nil unless s && ca
-
-    Completed.new(record: self, score: s, completed_at: ca)
-  end
-
-  sig { returns(Completed) }
-  def as_completed!
-    as_completed || raise(HakumiORM::Error, "not a completed review")
-  end
-end
-```
-
-After "return nil unless s && ca", Sorbet knows both locals are non-nil. The "Completed.new" call is statically verified to pass the correct types. No casts, no "T.must".
-
-Before and after:
-
-```ruby
-review = PerformanceReview.find(1)
-review.score              # => T.nilable(Integer) -- Sorbet forces you to handle nil
-
-completed = review.as_completed!
-completed.score           # => Integer -- guaranteed non-nil, statically verified
-completed.completed_at    # => Time
-completed.title           # => String (delegated via VariantBase)
-```
-
-Variants can form a **progressive inheritance chain** that models domain progression. Each level only declares what it narrows; parent narrowings are inherited:
-
-```ruby
-# Draft → base (no narrowing)
-class PerformanceReview::Draft < PerformanceReviewRecord::VariantBase
-end
-
-# Started → narrows started_at
-class PerformanceReview::Started < PerformanceReview::Draft
-  sig { returns(Time) }
-  attr_reader :started_at
-
-  sig { params(record: PerformanceReviewRecord, started_at: Time).void }
-  def initialize(record:, started_at:)
-    super(record: record)
-    @started_at = T.let(started_at, Time)
-  end
-end
-
-# Completed → inherits started_at from Started, narrows score + completed_at
-class PerformanceReview::Completed < PerformanceReview::Started
-  sig { returns(Integer) }
-  attr_reader :score
-
-  sig { returns(Time) }
-  attr_reader :completed_at
-
-  sig { params(record: PerformanceReviewRecord, started_at: Time, score: Integer, completed_at: Time).void }
-  def initialize(record:, started_at:, score:, completed_at:)
-    super(record: record, started_at: started_at)
-    @score = T.let(score, Integer)
-    @completed_at = T.let(completed_at, Time)
-  end
-end
-```
-
-This also supports **branching** -- not just linear progression:
-
-```
-Draft
-├── Started
-│   ├── Completed
-│   └── Cancelled
-└── Rejected
-```
-
-"Completed" and "Cancelled" both inherit from "Started" (both have "started_at"), but "Rejected" branches from "Draft" directly. Sorbet enforces this: a "Rejected" is **not** a "Started", and the type checker prevents you from treating it as one.
-
-Key points:
-
-- **Real static typing** -- variant constructors demand non-nil kwargs; Sorbet verifies call sites at compile time
-- **No "T.must"** -- "T.let" in constructors is a declaration, not a cast (types already match)
-- **No metaprogramming** -- you write the variant classes yourself, full control
-- **Progressive inheritance** -- variants chain ("Completed < Started < Draft"), narrowing accumulates
-- **Branching** -- model tree-shaped domain logic, not just linear state machines
-- **"typed: strict"** -- every file, every variant, fully verified
-- **"VariantBase" is codegen** -- mechanical delegation of all columns, always regenerated, never edited
+## Low-Level Reference
 
 ### Type Casting
 
@@ -1988,6 +1761,8 @@ lib/hakumi_orm/
 │   ├── text_field.rb     #   like/ilike
 │   ├── int_field.rb, float_field.rb, decimal_field.rb, ...
 │   ├── json_field.rb     #   JSON/JSONB field
+│   ├── enum_field.rb     #   PG native enums (StrBind)
+│   ├── int_enum_field.rb #   User-defined enums (IntBind)
 │   └── *_array_field.rb  #   Array fields (int, str, float, bool)
 ├── codegen/              # Code generation from live schema
 │   ├── generator.rb      #   ERB template engine
