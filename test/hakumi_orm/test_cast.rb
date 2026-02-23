@@ -16,11 +16,13 @@ class TestCast < HakumiORM::TestCase
     assert_equal BigDecimal("123456789.123456789"), result
   end
 
-  test "to_boolean only treats PG t as true" do
+  test "to_boolean handles all adapter formats" do
     assert HakumiORM::Cast.to_boolean("t")
+    assert HakumiORM::Cast.to_boolean("1")
+    assert HakumiORM::Cast.to_boolean("true")
     refute HakumiORM::Cast.to_boolean("f")
-    refute HakumiORM::Cast.to_boolean("true")
-    refute HakumiORM::Cast.to_boolean("1")
+    refute HakumiORM::Cast.to_boolean("0")
+    refute HakumiORM::Cast.to_boolean("false")
   end
 
   test "to_time parses PG timestamp with microseconds and returns UTC" do

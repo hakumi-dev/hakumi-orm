@@ -169,12 +169,12 @@ class TestTypeMap < HakumiORM::TestCase
     assert_equal "raw.to_i", TM.cast_expression(HT::Integer, "raw", nullable: false)
   end
 
-  test "cast_expression for boolean handles PG t/f format" do
+  test "cast_expression for boolean uses Cast.to_boolean" do
     nullable = TM.cast_expression(HT::Boolean, "raw", nullable: true)
     non_null = TM.cast_expression(HT::Boolean, "raw", nullable: false)
 
-    assert_includes nullable, '== "t"'
-    assert_includes non_null, '== "t"'
+    assert_includes nullable, "Cast.to_boolean"
+    assert_includes non_null, "Cast.to_boolean"
   end
 
   test "cast_expression for json uses Cast.to_json" do

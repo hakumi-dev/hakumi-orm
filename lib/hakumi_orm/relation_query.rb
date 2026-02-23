@@ -26,7 +26,7 @@ module HakumiORM
     sig { params(fields: FieldRef, adapter: Adapter::Base).returns(T::Array[T::Array[T.nilable(String)]]) }
     def pluck(*fields, adapter: HakumiORM.adapter)
       compiled = build_select(adapter.dialect, columns_override: fields)
-      use_result(adapter.exec_params(compiled.sql, compiled.pg_params)) do |r|
+      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))) do |r|
         build_pluck_rows(r, fields.length)
       end
     end
@@ -39,7 +39,7 @@ module HakumiORM
       cursor_name = "hakumi_cursor_#{object_id}"
 
       adapter.exec("BEGIN")
-      adapter.exec_params("DECLARE #{cursor_name} CURSOR FOR #{compiled.sql}", compiled.pg_params)
+      adapter.exec_params("DECLARE #{cursor_name} CURSOR FOR #{compiled.sql}", compiled.params_for(adapter.dialect))
 
       loop do
         result = adapter.exec("FETCH #{batch_size} FROM #{cursor_name}")
@@ -60,7 +60,7 @@ module HakumiORM
       current_offset = T.let(0, Integer)
       loop do
         compiled = build_select(adapter.dialect, limit_override: batch_size, offset_override: current_offset)
-        result = adapter.exec_params(compiled.sql, compiled.pg_params)
+        result = adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))
         batch = hydrate(result)
         result.close
         break if batch.empty?
@@ -80,7 +80,7 @@ module HakumiORM
         field: field,
         where_expr: combined_where
       )
-      use_result(adapter.exec_params(compiled.sql, compiled.pg_params)) { |r| r.fetch_value(0, 0) }
+      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))) { |r| r.fetch_value(0, 0) }
     end
 
     sig { params(result: Adapter::Result, num_cols: Integer).returns(T::Array[T::Array[T.nilable(String)]]) }

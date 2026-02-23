@@ -26,8 +26,8 @@ module HakumiORM
 
       SQLITE_TYPES = T.let({
         string: "TEXT", text: "TEXT", integer: "INTEGER", bigint: "INTEGER",
-        float: "REAL", decimal: "REAL", boolean: "INTEGER",
-        date: "TEXT", datetime: "TEXT", timestamp: "TEXT",
+        float: "REAL", decimal: "NUMERIC", boolean: "BOOLEAN",
+        date: "DATE", datetime: "DATETIME", timestamp: "DATETIME",
         binary: "BLOB", json: "TEXT", jsonb: "TEXT", uuid: "TEXT",
         inet: "TEXT", cidr: "TEXT", hstore: "TEXT"
       }.freeze, T::Hash[Symbol, String])

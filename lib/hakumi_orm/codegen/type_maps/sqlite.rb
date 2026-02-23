@@ -13,6 +13,7 @@ module HakumiORM
           "REAL" => HakumiType::Float,
           "BLOB" => HakumiType::String,
           "NUMERIC" => HakumiType::Decimal,
+          "DECIMAL" => HakumiType::Decimal,
           "BOOLEAN" => HakumiType::Boolean,
           "DATE" => HakumiType::Date,
           "DATETIME" => HakumiType::Timestamp

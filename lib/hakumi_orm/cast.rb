@@ -27,7 +27,7 @@ module HakumiORM
 
       sig { params(raw: String).returns(T::Boolean) }
       def to_boolean(raw)
-        raw == "t"
+        raw == "t" || raw == "1" || raw == "true"
       end
 
       sig { params(raw: String).returns(Time) }

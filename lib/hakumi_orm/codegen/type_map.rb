@@ -27,7 +27,7 @@ module HakumiORM
           when HakumiType::Integer
             nullable ? "#{raw_expr}&.to_i" : "#{raw_expr}.to_i"
           when HakumiType::Boolean
-            nullable ? "((_hv = #{raw_expr}).nil? ? nil : _hv == \"t\")" : "#{raw_expr} == \"t\""
+            nullable_cast("::HakumiORM::Cast.to_boolean", raw_expr, nullable)
           when HakumiType::Float
             nullable ? "#{raw_expr}&.to_f" : "#{raw_expr}.to_f"
           when HakumiType::Decimal   then nullable_cast("BigDecimal", raw_expr, nullable)

@@ -182,7 +182,7 @@ module <%= module_name %>
 <%- end -%>
 <%= ind %>    end
 <%- if soft_delete -%>
-<%= ind %>    result = adapter.exec_params(SQL_SOFT_DELETE_BY_PK, [::HakumiORM::TimeBind.new(::Time.now).pg_value, @<%= pk_attr %>])
+<%= ind %>    result = adapter.exec_params(SQL_SOFT_DELETE_BY_PK, [adapter.encode(::HakumiORM::TimeBind.new(::Time.now)), @<%= pk_attr %>])
 <%- else -%>
 <%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
 <%- end -%>
@@ -237,7 +237,7 @@ module <%= module_name %>
 <%= ind %>    <%= record_class_name %>::Contract.on_destroy(self, errors)
 <%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
 <%= ind %>
-<%= ind %>    result = adapter.exec_params(SQL_SOFT_DELETE_BY_PK, [::HakumiORM::TimeBind.new(::Time.now).pg_value, @<%= pk_attr %>])
+<%= ind %>    result = adapter.exec_params(SQL_SOFT_DELETE_BY_PK, [adapter.encode(::HakumiORM::TimeBind.new(::Time.now)), @<%= pk_attr %>])
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
 <%= ind %>
 <%= ind %>    <%= record_class_name %>::Contract.after_destroy(self, adapter)
@@ -299,7 +299,7 @@ module <%= module_name %>
 <%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
 
 <%- if has_lock_version -%>
-<%= ind %>    result = adapter.exec_params(SQL_UPDATE_BY_PK, [<%= update_bind_list %>, @<%= pk_attr %>, ::HakumiORM::IntBind.new(@lock_version).pg_value])
+<%= ind %>    result = adapter.exec_params(SQL_UPDATE_BY_PK, [<%= update_bind_list %>, @<%= pk_attr %>, adapter.encode(::HakumiORM::IntBind.new(@lock_version))])
 <%- if supports_returning -%>
 <%= ind %>    record = <%= record_class_name %>.from_result(result).first
 <%- else -%>
@@ -350,13 +350,7 @@ module <%= module_name %>
 <%- insert_all_columns.each_with_index do |col, ci| -%>
 <%= ind %>      buf << ", " if <%= ci %> > 0
 <%= ind %>      buf << dialect.bind_marker(idx)
-<%- if col[:is_enum] && col[:enum_integer] -%>
-<%= ind %>      binds << T.cast(rec.<%= col[:name] %>.serialize, Integer)
-<%- elsif col[:is_enum] -%>
-<%= ind %>      binds << T.cast(rec.<%= col[:name] %>.serialize, String)
-<%- else -%>
-<%= ind %>      binds << rec.<%= col[:name] %>
-<%- end -%>
+<%= ind %>      binds << <%= col[:bind_expr] %>
 <%= ind %>      idx += 1
 <%- end -%>
 <%= ind %>      buf << ")"

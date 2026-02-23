@@ -133,11 +133,14 @@ class TestMigrationSqlGenerator < HakumiORM::TestCase
     assert_equal "char(36)", @gen.column_type_sql(:uuid, @mysql)
   end
 
-  test "type mapping for SQLite collapses to storage classes" do
+  test "type mapping for SQLite preserves semantic type names" do
     assert_equal "TEXT", @gen.column_type_sql(:string, @sqlite)
     assert_equal "INTEGER", @gen.column_type_sql(:integer, @sqlite)
-    assert_equal "INTEGER", @gen.column_type_sql(:boolean, @sqlite)
+    assert_equal "BOOLEAN", @gen.column_type_sql(:boolean, @sqlite)
     assert_equal "REAL", @gen.column_type_sql(:float, @sqlite)
+    assert_equal "NUMERIC", @gen.column_type_sql(:decimal, @sqlite)
+    assert_equal "DATE", @gen.column_type_sql(:date, @sqlite)
+    assert_equal "DATETIME", @gen.column_type_sql(:datetime, @sqlite)
     assert_equal "TEXT", @gen.column_type_sql(:uuid, @sqlite)
   end
 

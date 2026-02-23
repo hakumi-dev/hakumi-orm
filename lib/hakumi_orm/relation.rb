@@ -159,7 +159,7 @@ module HakumiORM
       return preloaded.first if preloaded
 
       compiled = build_select(adapter.dialect, limit_override: 1)
-      use_result(adapter.exec_params(compiled.sql, compiled.pg_params)) { |r| hydrate(r).first }
+      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))) { |r| hydrate(r).first }
     end
 
     sig { params(adapter: Adapter::Base).returns(Integer) }
@@ -177,7 +177,7 @@ module HakumiORM
                    table: @table_name,
                    where_expr: combined_where
                  )
-                 adapter.exec_params(compiled.sql, compiled.pg_params)
+                 adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))
                end
       use_result(result) { |r| r.fetch_value(0, 0).to_i }
     end
@@ -185,7 +185,7 @@ module HakumiORM
     sig { params(field: FieldRef, adapter: Adapter::Base).returns(T::Array[T.nilable(String)]) }
     def pluck_raw(field, adapter: HakumiORM.adapter)
       compiled = build_select(adapter.dialect, columns_override: [field])
-      use_result(adapter.exec_params(compiled.sql, compiled.pg_params)) { |r| r.column_values(0) }
+      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))) { |r| r.column_values(0) }
     end
 
     sig { params(adapter: Adapter::Base).returns(Integer) }
@@ -194,7 +194,7 @@ module HakumiORM
         table: @table_name,
         where_expr: combined_where
       )
-      use_result(adapter.exec_params(compiled.sql, compiled.pg_params), &:affected_rows)
+      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect)), &:affected_rows)
     end
 
     sig { params(adapter: Adapter::Base).returns(Integer) }
@@ -203,7 +203,7 @@ module HakumiORM
         table: @table_name,
         where_expr: combined_where
       )
-      use_result(adapter.exec_params(compiled.sql, compiled.pg_params), &:affected_rows)
+      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect)), &:affected_rows)
     end
 
     sig { params(assignments: T::Array[Assignment], adapter: Adapter::Base).returns(Integer) }
@@ -213,7 +213,7 @@ module HakumiORM
         assignments: assignments,
         where_expr: combined_where
       )
-      use_result(adapter.exec_params(compiled.sql, compiled.pg_params), &:affected_rows)
+      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect)), &:affected_rows)
     end
 
     sig { params(adapter: Adapter::Base).returns(T::Boolean) }
@@ -226,7 +226,7 @@ module HakumiORM
         where_expr: combined_where,
         joins: @joins
       )
-      use_result(adapter.exec_params(compiled.sql, compiled.pg_params)) { |r| r.row_count.positive? }
+      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))) { |r| r.row_count.positive? }
     end
 
     sig { params(adapter: Adapter::Base).returns(CompiledQuery) }
@@ -305,7 +305,7 @@ module HakumiORM
     sig { params(adapter: Adapter::Base).returns(T::Array[ModelType]) }
     def fetch_records(adapter)
       compiled = build_select(adapter.dialect)
-      use_result(adapter.exec_params(compiled.sql, compiled.pg_params)) { |r| hydrate(r) }
+      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))) { |r| hydrate(r) }
     end
 
     sig { returns(T.nilable(Expr)) }

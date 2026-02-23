@@ -320,12 +320,23 @@ module HakumiORM
         @module_name ? "  " : ""
       end
 
-      sig { params(cols: T::Array[ColumnInfo]).returns(T::Array[T::Hash[Symbol, T.any(String, T::Boolean)]]) }
+      sig { params(cols: T::Array[ColumnInfo]).returns(T::Array[T::Hash[Symbol, String]]) }
       def build_insert_all_columns(cols)
         cols.map do |c|
-          is_enum = !c.enum_values.nil?
-          { name: c.name, is_enum: is_enum,
-            enum_integer: is_enum && @integer_backed_enums.include?(c.udt_name) }
+          { name: c.name, bind_expr: insert_all_bind_expr(c) }
+        end
+      end
+
+      sig { params(col: ColumnInfo).returns(String) }
+      def insert_all_bind_expr(col)
+        if col.enum_values && @integer_backed_enums.include?(col.udt_name)
+          "T.cast(rec.#{col.name}.serialize, Integer)"
+        elsif col.enum_values
+          "T.cast(rec.#{col.name}.serialize, String)"
+        elsif col.nullable
+          "((_hv = rec.#{col.name}).nil? ? nil : adapter.encode(#{hakumi_type_for(col).bind_class}.new(_hv)))"
+        else
+          "adapter.encode(#{hakumi_type_for(col).bind_class}.new(rec.#{col.name}))"
         end
       end
 

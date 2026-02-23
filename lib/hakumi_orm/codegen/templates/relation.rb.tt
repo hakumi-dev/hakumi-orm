@@ -46,7 +46,7 @@ module <%= module_name %>
 <%= ind %>      assignments: [::HakumiORM::Assignment.new(<%= qualified_schema %>::<%= soft_delete_const %>, ::HakumiORM::TimeBind.new(::Time.now.utc))],
 <%= ind %>      where_expr: combined_where
 <%= ind %>    )
-<%= ind %>    use_result(adapter.exec_params(compiled.sql, compiled.pg_params), &:affected_rows)
+<%= ind %>    use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect)), &:affected_rows)
 <%= ind %>  end
 <%- end -%>
 

@@ -31,12 +31,15 @@ module HakumiORM
       SQL
 
       PG_UNIQUE_COLUMNS_SQL = <<~SQL
-        SELECT tc.table_name, kcu.column_name
-        FROM information_schema.table_constraints tc
-        JOIN information_schema.key_column_usage kcu
-          ON tc.constraint_name = kcu.constraint_name
-         AND tc.table_schema = kcu.table_schema
-        WHERE tc.constraint_type = 'UNIQUE' AND tc.table_schema = $1
+        SELECT c.relname AS table_name, a.attname AS column_name
+        FROM pg_index ix
+        JOIN pg_class t ON t.oid = ix.indrelid
+        JOIN pg_class c ON c.oid = ix.indrelid
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE ix.indisunique AND NOT ix.indisprimary
+          AND array_length(ix.indkey, 1) = 1
+          AND n.nspname = $1
       SQL
 
       PG_FOREIGN_KEYS_SQL = <<~SQL

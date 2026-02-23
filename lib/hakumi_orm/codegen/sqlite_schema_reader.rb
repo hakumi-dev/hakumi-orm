@@ -51,10 +51,11 @@ module HakumiORM
           pk = result.fetch_value(i, 5)
 
           tbl.primary_key = col_name if pk == "1"
+          normalized = normalize_type(col_type)
           tbl.columns << ColumnInfo.new(
             name: col_name,
-            data_type: col_type.upcase,
-            udt_name: col_type.upcase,
+            data_type: normalized,
+            udt_name: normalized,
             nullable: notnull == "0",
             default: dflt,
             max_length: nil
@@ -64,6 +65,11 @@ module HakumiORM
         result.close
 
         read_unique_indexes(table_name, tbl)
+      end
+
+      sig { params(raw: String).returns(String) }
+      def normalize_type(raw)
+        raw.upcase.sub(/\(.*\)/, "").strip
       end
 
       sig { params(table_name: String, tbl: TableInfo).void }

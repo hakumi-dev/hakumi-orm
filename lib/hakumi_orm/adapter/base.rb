@@ -27,6 +27,11 @@ module HakumiORM
       sig { abstract.void }
       def close; end
 
+      sig { params(bind: Bind).returns(PGValue) }
+      def encode(bind)
+        dialect.encode_bind(bind)
+      end
+
       sig { overridable.returns(Integer) }
       def last_insert_id
         raise HakumiORM::Error, "#{self.class.name} does not support last_insert_id (use RETURNING instead)"

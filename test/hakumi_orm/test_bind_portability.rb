@@ -9,11 +9,13 @@ class TestBindPortability < HakumiORM::TestCase
     assert_equal "f", HakumiORM::BoolBind.new(false).pg_value
   end
 
-  test "Cast.to_boolean recognizes PG t but not MySQL/SQLite 1" do
+  test "Cast.to_boolean handles all adapter boolean formats" do
     assert HakumiORM::Cast.to_boolean("t")
+    assert HakumiORM::Cast.to_boolean("1")
+    assert HakumiORM::Cast.to_boolean("true")
     refute HakumiORM::Cast.to_boolean("f")
-    refute HakumiORM::Cast.to_boolean("1"), "MySQL/SQLite send 1 for true"
-    refute HakumiORM::Cast.to_boolean("true"), "SQLite may send true literal"
+    refute HakumiORM::Cast.to_boolean("0")
+    refute HakumiORM::Cast.to_boolean("false")
   end
 
   test "TimeBind pg_value formats as UTC string" do

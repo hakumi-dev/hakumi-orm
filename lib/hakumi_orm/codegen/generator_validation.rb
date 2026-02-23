@@ -44,7 +44,7 @@ module HakumiORM
         insert_sql = build_insert_sql(table)
         validated_bind_list = ins_cols.map do |col|
           if auto_timestamp_on_insert?(col)
-            "#{hakumi_type_for(col).bind_class}.new(::Time.now).pg_value"
+            "adapter.encode(#{hakumi_type_for(col).bind_class}.new(::Time.now))"
           elsif col.enum_values
             enum_bind_expr("@record.#{col.name}", col)
           else
@@ -170,7 +170,7 @@ module HakumiORM
       def build_update_bind_list(user_cols)
         user_cols.map do |col|
           if auto_timestamp_on_update?(col)
-            "#{hakumi_type_for(col).bind_class}.new(::Time.now).pg_value"
+            "adapter.encode(#{hakumi_type_for(col).bind_class}.new(::Time.now))"
           elsif col.enum_values
             enum_bind_expr(col.name, col)
           else
@@ -182,9 +182,9 @@ module HakumiORM
       sig { params(accessor: String, col: ColumnInfo).returns(String) }
       def enum_bind_expr(accessor, col)
         if @integer_backed_enums.include?(col.udt_name)
-          "::HakumiORM::IntBind.new(T.cast(#{accessor}.serialize, Integer)).pg_value"
+          "adapter.encode(::HakumiORM::IntBind.new(T.cast(#{accessor}.serialize, Integer)))"
         else
-          "::HakumiORM::StrBind.new(T.cast(#{accessor}.serialize, String)).pg_value"
+          "adapter.encode(::HakumiORM::StrBind.new(T.cast(#{accessor}.serialize, String)))"
         end
       end
 
@@ -192,9 +192,9 @@ module HakumiORM
       def nullable_bind_expr(col, accessor)
         bind_cls = hakumi_type_for(col).bind_class
         if col.nullable
-          "((_hv = #{accessor}).nil? ? nil : #{bind_cls}.new(_hv).pg_value)"
+          "((_hv = #{accessor}).nil? ? nil : adapter.encode(#{bind_cls}.new(_hv)))"
         else
-          "#{bind_cls}.new(#{accessor}).pg_value"
+          "adapter.encode(#{bind_cls}.new(#{accessor}))"
         end
       end
 
