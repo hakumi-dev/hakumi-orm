@@ -68,6 +68,45 @@ class TestDialectPostgresql < HakumiORM::TestCase
     assert_equal 123_456, result.usec
   end
 
+  test "cast_time without fractional seconds returns zero usec" do
+    result = @dialect.cast_time("2025-06-15 09:30:00")
+
+    assert_equal 0, result.usec
+    assert_equal 9, result.hour
+  end
+
+  test "cast_time with timezone offset does not misparse offset as usec" do
+    result = @dialect.cast_time("2026-02-23 12:34:56+01")
+
+    assert_equal 0, result.usec
+    assert_equal 56, result.sec
+  end
+
+  test "cast_time with 3-digit fractional seconds" do
+    result = @dialect.cast_time("2025-06-15 09:30:00.123")
+
+    assert_equal 123_000, result.usec
+  end
+
+  test "cast_time passes through native Time from TypeMapByColumn" do
+    native = Time.utc(2025, 6, 15, 9, 30, 0)
+    result = @dialect.cast_time(native)
+
+    assert_same native, result
+  end
+
+  test "cast_boolean passes through native true/false from TypeMapByColumn" do
+    assert @dialect.cast_boolean(true)
+    refute @dialect.cast_boolean(false)
+  end
+
+  test "cast_date passes through native Date from TypeMapByColumn" do
+    native = Date.new(2025, 6, 15)
+    result = @dialect.cast_date(native)
+
+    assert_same native, result
+  end
+
   test "encode_decimal produces string representation" do
     assert_equal "99.99", @dialect.encode_decimal(BigDecimal("99.99"))
   end

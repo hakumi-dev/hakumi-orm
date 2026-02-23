@@ -235,6 +235,40 @@ class TestLifecycleHooks < HakumiORM::TestCase
     assert rolled_back
   end
 
+  test "after_commit in rolled-back savepoint does NOT fire on top-level commit" do
+    committed = false
+    @adapter.transaction do |_txn|
+      @adapter.transaction(requires_new: true) do |inner|
+        inner.after_commit { committed = true }
+        raise "savepoint boom"
+      end
+    rescue RuntimeError
+      nil
+    end
+
+    refute committed, "callback from rolled-back savepoint must be discarded"
+  end
+
+  test "after_rollback in rolled-back savepoint fires immediately" do
+    rolled_back = false
+    @adapter.transaction do |_txn|
+      assert_raises(RuntimeError) do
+        @adapter.transaction(requires_new: true) do |inner|
+          inner.after_rollback { rolled_back = true }
+          raise "savepoint boom"
+        end
+      end
+
+      assert rolled_back, "after_rollback should fire when savepoint rolls back"
+    end
+  end
+
+  test "after_commit outside transaction raises" do
+    assert_raises(HakumiORM::Error) do
+      @adapter.after_commit { "nope" }
+    end
+  end
+
   test "callbacks are cleared after transaction completes" do
     side_effect_count = 0
     @adapter.transaction do |txn|

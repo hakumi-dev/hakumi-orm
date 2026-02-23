@@ -53,17 +53,36 @@ module HakumiORM
 
       sig { params(blk: T.proc.void).void }
       def after_commit(&blk)
-        @after_commit_callbacks = T.let(@after_commit_callbacks, T.nilable(T::Array[T.proc.void]))
-        (@after_commit_callbacks ||= []) << blk
+        current_tx_frame[:after_commit] << blk
       end
 
       sig { params(blk: T.proc.void).void }
       def after_rollback(&blk)
-        @after_rollback_callbacks = T.let(@after_rollback_callbacks, T.nilable(T::Array[T.proc.void]))
-        (@after_rollback_callbacks ||= []) << blk
+        current_tx_frame[:after_rollback] << blk
       end
 
+      CallbackList = T.type_alias { T::Array[T.proc.void] }
+      TxFrame = T.type_alias { { after_commit: CallbackList, after_rollback: CallbackList } }
+
       private
+
+      sig { returns(TxFrame) }
+      def current_tx_frame
+        @tx_frames = T.let(@tx_frames, T.nilable(T::Array[TxFrame]))
+        frames = @tx_frames
+        raise HakumiORM::Error, "after_commit/after_rollback can only be called inside a transaction" unless frames&.any?
+
+        T.must(frames.last)
+      end
+
+      sig { returns(TxFrame) }
+      def push_tx_frame
+        @tx_frames = T.let(@tx_frames, T.nilable(T::Array[TxFrame]))
+        @tx_frames ||= []
+        frame = { after_commit: T.let([], CallbackList), after_rollback: T.let([], CallbackList) }
+        @tx_frames << frame
+        frame
+      end
 
       sig { returns(T.nilable(Float)) }
       def log_query_start
@@ -85,10 +104,8 @@ module HakumiORM
 
       sig { params(blk: T.proc.params(adapter: Base).void).void }
       def run_top_level_transaction(&blk)
-        @after_commit_callbacks = T.let(nil, T.nilable(T::Array[T.proc.void]))
-        @after_rollback_callbacks = T.let(nil, T.nilable(T::Array[T.proc.void]))
-        @after_commit_callbacks = []
-        @after_rollback_callbacks = []
+        @tx_frames = T.let([], T.nilable(T::Array[TxFrame]))
+        push_tx_frame
         exec("BEGIN")
         @txn_depth = 1
         blk.call(self)
@@ -98,27 +115,25 @@ module HakumiORM
         rescue StandardError
           nil
         end
-        fire_callbacks(@after_rollback_callbacks)
+        fire_callbacks(T.must(@tx_frames).flat_map { |f| f[:after_rollback] })
         raise
       else
         exec("COMMIT")
-        fire_callbacks(@after_commit_callbacks)
+        fire_callbacks(T.must(@tx_frames).flat_map { |f| f[:after_commit] })
       ensure
         @txn_depth = 0
-        @after_commit_callbacks = nil
-        @after_rollback_callbacks = nil
+        @tx_frames = nil
       end
 
-      sig { params(callbacks: T.nilable(T::Array[T.proc.void])).void }
+      sig { params(callbacks: T::Array[T.proc.void]).void }
       def fire_callbacks(callbacks)
-        return unless callbacks
-
         callbacks.each(&:call)
       end
 
       sig { params(depth: Integer, blk: T.proc.params(adapter: Base).void).void }
       def run_savepoint_transaction(depth, &blk)
         sp = "hakumi_sp_#{depth}"
+        push_tx_frame
         exec("SAVEPOINT #{sp}")
         @txn_depth = depth + 1
         blk.call(self)
@@ -128,9 +143,15 @@ module HakumiORM
         rescue StandardError
           nil
         end
+        frame = T.must(T.must(@tx_frames).pop)
+        fire_callbacks(frame[:after_rollback])
         raise
       else
         exec("RELEASE SAVEPOINT #{sp}")
+        frame = T.must(T.must(@tx_frames).pop)
+        parent = T.must(T.must(@tx_frames).last)
+        parent[:after_commit].concat(frame[:after_commit])
+        parent[:after_rollback].concat(frame[:after_rollback])
       ensure
         @txn_depth = depth
       end

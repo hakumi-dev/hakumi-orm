@@ -37,13 +37,12 @@ module HakumiORM
 
       sig { params(raw: String).returns(Integer) }
       def read_usec(raw)
-        len = raw.bytesize
-        return 0 unless len > 20
+        return 0 unless raw.bytesize > 20 && raw.getbyte(19) == 46 # '.'
 
         usec = 0
         n = 0
         pos = 20
-        while pos < len && pos < 26
+        while pos < raw.bytesize && pos < 26
           byte = raw.getbyte(pos)
 
           break if byte.nil? || byte < 48 || byte > 57
