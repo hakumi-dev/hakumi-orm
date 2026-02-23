@@ -96,7 +96,7 @@ module HakumiORM
       numeric = LOG_LEVELS.fetch(level) do
         raise ArgumentError, "Invalid log level: #{level.inspect}. Use: #{valid_levels.join(", ")}"
       end
-      stdlib_logger = ::Logger.new($stdout, progname: "HakumiORM")
+      stdlib_logger = ::Logger.new($stdout)
       stdlib_logger.level = numeric
       @logger = stdlib_logger
     end

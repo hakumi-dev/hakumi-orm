@@ -384,7 +384,8 @@ end
 | "password" | "nil" | Database password. "nil" for peer / socket auth. |
 | "connection_options" | "{}" | Extra driver params (sslmode, connect_timeout, etc.). Set automatically from URL query params. |
 | "adapter" | auto | Set directly to skip lazy building. Takes precedence over connection params. |
-| "logger" | "nil" | "Logger" instance for SQL query logging. "nil" = no logging, zero overhead. |
+| "log_level" | -- | Symbol (":debug", ":info", ":warn", ":error", ":fatal"). Creates an internal logger to "$stdout". |
+| "logger" | "nil" | Any "HakumiORM::Loggable" implementor ("::Logger", Rails.logger, custom). "nil" = no logging, zero overhead. |
 | "output_dir" | ""db/generated"" | Directory for generated schemas, records, and relations. |
 | "models_dir" | "nil" | Directory for model stubs. "nil" = skip. |
 | "contracts_dir" | "nil" | Directory for contract stubs. "nil" = skip. |
@@ -400,7 +401,7 @@ Enable SQL logging to see every query, its bind parameters, and execution time:
 
 ```ruby
 HakumiORM.configure do |config|
-  config.logger = Logger.new($stdout)
+  config.log_level = :debug
 end
 ```
 
@@ -410,7 +411,19 @@ Output:
 D, [2026-02-22] DEBUG -- : [HakumiORM] (0.42ms) SELECT "users".* FROM "users" WHERE "users"."active" = $1 ["t"]
 ```
 
-Set to "nil" (default) to disable logging entirely with zero overhead. Uses "Logger#debug" level, so in production you can set "logger.level = Logger::INFO" to silence query logs without removing the logger.
+Set to "nil" (default) to disable logging entirely with zero overhead.
+
+For production or advanced use cases, inject any logger that implements "HakumiORM::Loggable" (defines "debug", "info", "warn", "error", "fatal"). Ruby's "::Logger" satisfies this interface out of the box:
+
+```ruby
+HakumiORM.configure do |config|
+  config.logger = Rails.logger           # share with Rails
+  config.logger = Logger.new("log/sql.log", "daily")  # file with rotation
+  config.logger = MyCustomLogger.new     # any Loggable implementor
+end
+```
+
+Available log levels for "log_level=": ":debug", ":info", ":warn", ":error", ":fatal".
 
 ### Code Generation
 
@@ -1946,6 +1959,7 @@ lib/hakumi_orm/
 │   ├── sqlite_schema_reader.rb # SQLite schema reader
 │   ├── type_registry.rb  #   Custom type registration
 │   └── type_maps/        #   DB type → HakumiType per dialect
+├── loggable.rb           # Sorbet interface for loggers (::Logger includes it at boot)
 ├── bind.rb               # Sealed bind hierarchy (13 subclasses, includes array binds)
 ├── expr.rb               # Sealed expression tree (6 subclasses)
 ├── sql_compiler.rb       # Expr → parameterized SQL
