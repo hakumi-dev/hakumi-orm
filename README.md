@@ -805,7 +805,7 @@ users = User.all.preload(posts: :comments).to_a
 User.all.preload(:profile, posts: [:comments, :tags]).to_a
 ```
 
-"preload" works for "has_many", "has_one", and "belongs_to".
+"preload" works for "has_many", "has_one", and "belongs_to". A depth guard ("MAX_PRELOAD_DEPTH = 8") prevents runaway recursion if preload nodes are constructed manually with circular references.
 
 ### Custom Associations (non-FK based)
 
@@ -1161,7 +1161,7 @@ end
 
 - "after_commit" fires after COMMIT, not during the transaction
 - "after_rollback" fires after ROLLBACK
-- Callbacks registered inside savepoints fire after the **top-level** transaction completes
+- Callbacks registered inside a savepoint are **isolated**: if the savepoint is released, its "after_commit" callbacks propagate to the parent transaction; if the savepoint rolls back, its "after_commit" callbacks are **discarded** and its "after_rollback" callbacks fire immediately
 - Multiple callbacks fire in registration order
 - Zero overhead when not used -- no arrays allocated until "after_commit" is called
 

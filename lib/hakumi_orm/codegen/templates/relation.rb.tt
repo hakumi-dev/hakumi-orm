@@ -55,8 +55,10 @@ module <%= module_name %>
 <%= ind %>    <%= qualified_record_class %>.from_result(result, dialect: dialect)
 <%= ind %>  end
 
-<%= ind %>  sig { override.params(records: T::Array[<%= qualified_record_class %>], nodes: T::Array[::HakumiORM::PreloadNode], adapter: ::HakumiORM::Adapter::Base).void }
-<%= ind %>  def run_preloads(records, nodes, adapter)
+<%= ind %>  sig { override.params(records: T::Array[<%= qualified_record_class %>], nodes: T::Array[::HakumiORM::PreloadNode], adapter: ::HakumiORM::Adapter::Base, depth: Integer).void }
+<%= ind %>  def run_preloads(records, nodes, adapter, depth: 0)
+<%= ind %>    raise ::HakumiORM::Error, "Preload depth limit (#{MAX_PRELOAD_DEPTH}) exceeded — possible circular preload" if depth > MAX_PRELOAD_DEPTH
+
 <%= ind %>    nodes.each do |node|
 <%- if preloadable_assocs.any? -%>
 <%= ind %>      case node.name
@@ -66,7 +68,7 @@ module <%= module_name %>
 <%- if assoc[:relation_class] -%>
 <%= ind %>        unless node.children.empty?
 <%= ind %>          all_children = records.flat_map { |r| r._preloaded_<%= assoc[:method_name] %> || [] }
-<%= ind %>          <%= assoc[:relation_class] %>.new.run_preloads(all_children, node.children, adapter) unless all_children.empty?
+<%= ind %>          <%= assoc[:relation_class] %>.new.run_preloads(all_children, node.children, adapter, depth: depth + 1) unless all_children.empty?
 <%= ind %>        end
 <%- end -%>
 <%- end -%>

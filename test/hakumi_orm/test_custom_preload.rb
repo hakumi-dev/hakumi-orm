@@ -34,8 +34,10 @@ end
 class MixedTrackingRelation < TrackingRelation
   extend T::Sig
 
-  sig { override.params(records: T::Array[UserRecord], nodes: T::Array[HakumiORM::PreloadNode], adapter: HakumiORM::Adapter::Base).void }
-  def run_preloads(records, nodes, adapter)
+  sig { override.params(records: T::Array[UserRecord], nodes: T::Array[HakumiORM::PreloadNode], adapter: HakumiORM::Adapter::Base, depth: Integer).void }
+  def run_preloads(records, nodes, adapter, depth: 0)
+    raise HakumiORM::Error, "Preload depth limit (#{MAX_PRELOAD_DEPTH}) exceeded — possible circular preload" if depth > MAX_PRELOAD_DEPTH
+
     nodes.each do |node|
       case node.name
       when :posts
@@ -104,6 +106,28 @@ class TestCustomPreload < HakumiORM::TestCase
     relation.run_preloads(records, nodes, @adapter)
 
     assert_equal %i[authored_posts managed_teams], relation.calls.map(&:name)
+  end
+
+  test "run_preloads raises when depth exceeds MAX_PRELOAD_DEPTH" do
+    relation = TrackingRelation.new
+    node = HakumiORM::PreloadNode.new(:deep)
+    records = [UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 30, active: true)]
+
+    err = assert_raises(HakumiORM::Error) do
+      relation.run_preloads(records, [node], @adapter, depth: HakumiORM::Relation::MAX_PRELOAD_DEPTH + 1)
+    end
+
+    assert_includes err.message, "Preload depth limit"
+  end
+
+  test "run_preloads works at MAX_PRELOAD_DEPTH boundary" do
+    relation = TrackingRelation.new
+    node = HakumiORM::PreloadNode.new(:edge)
+    records = [UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 30, active: true)]
+
+    relation.run_preloads(records, [node], @adapter, depth: HakumiORM::Relation::MAX_PRELOAD_DEPTH)
+
+    assert_equal [:edge], relation.calls.map(&:name)
   end
 
   private

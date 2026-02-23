@@ -262,8 +262,12 @@ module HakumiORM
     sig { overridable.returns(T.nilable(String)) }
     def sql_count_all = nil
 
-    sig { overridable.params(records: T::Array[ModelType], nodes: T::Array[PreloadNode], adapter: Adapter::Base).void }
-    def run_preloads(records, nodes, adapter); end
+    MAX_PRELOAD_DEPTH = 8
+
+    sig { overridable.params(_records: T::Array[ModelType], _nodes: T::Array[PreloadNode], _adapter: Adapter::Base, depth: Integer).void }
+    def run_preloads(_records, _nodes, _adapter, depth: 0)
+      raise HakumiORM::Error, "Preload depth limit (#{MAX_PRELOAD_DEPTH}) exceeded — possible circular preload" if depth > MAX_PRELOAD_DEPTH
+    end
 
     sig { overridable.params(name: Symbol, records: T::Array[ModelType], adapter: Adapter::Base).void }
     def custom_preload(name, records, adapter); end

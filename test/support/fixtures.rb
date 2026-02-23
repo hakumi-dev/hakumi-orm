@@ -431,8 +431,10 @@ class UserRelation < HakumiORM::Relation
     UserRecord.from_result(result, dialect: dialect)
   end
 
-  sig { override.params(records: T::Array[UserRecord], nodes: T::Array[HakumiORM::PreloadNode], adapter: HakumiORM::Adapter::Base).void }
-  def run_preloads(records, nodes, adapter)
+  sig { override.params(records: T::Array[UserRecord], nodes: T::Array[HakumiORM::PreloadNode], adapter: HakumiORM::Adapter::Base, depth: Integer).void }
+  def run_preloads(records, nodes, adapter, depth: 0)
+    raise HakumiORM::Error, "Preload depth limit (#{MAX_PRELOAD_DEPTH}) exceeded — possible circular preload" if depth > MAX_PRELOAD_DEPTH
+
     nodes.each { |node| custom_preload(node.name, records, adapter) }
   end
 
