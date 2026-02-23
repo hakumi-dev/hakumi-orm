@@ -25,21 +25,44 @@ module HakumiORM
         BigDecimal(raw)
       end
 
-      TRUTHY = T.let(%w[t 1 true].freeze, T::Array[String])
+      TRUTHY = T.let(%w[t 1 true].to_set.freeze, T::Set[String])
 
       sig { params(raw: String).returns(T::Boolean) }
       def to_boolean(raw)
         TRUTHY.include?(raw)
       end
 
+      # 10^(6-n) lookup for microsecond padding
+      USEC_PAD = T.let([1, 100_000, 10_000, 1_000, 100, 10, 1].freeze, T::Array[Integer])
+
       sig { params(raw: String).returns(Time) }
       def to_time(raw)
-        Time.parse(raw).utc
+        len = raw.bytesize
+        usec = 0
+
+        if len > 19
+          i = 20
+          while i < len && i < 26
+            byte = raw.getbyte(i)
+
+            break if byte.nil? || byte < 48 || byte > 57
+
+            i += 1
+          end
+          ndigits = i - 20
+          if ndigits.positive?
+            frac_s = raw[20, ndigits]
+            usec = frac_s.to_i * USEC_PAD.fetch(ndigits, 1) if frac_s
+          end
+        end
+
+        Time.utc(raw[0, 4].to_i, raw[5, 2].to_i, raw[8, 2].to_i,
+                 raw[11, 2].to_i, raw[14, 2].to_i, raw[17, 2].to_i, usec)
       end
 
       sig { params(raw: String).returns(Date) }
       def to_date(raw)
-        Date.parse(raw)
+        Date.new(raw[0, 4].to_i, raw[5, 2].to_i, raw[8, 2].to_i)
       end
 
       sig { params(raw: String).returns(String) }

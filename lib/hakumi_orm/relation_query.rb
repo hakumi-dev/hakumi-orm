@@ -87,20 +87,11 @@ module HakumiORM
 
     sig { params(result: Adapter::Result, num_cols: Integer).returns(T::Array[T::Array[T.nilable(String)]]) }
     def build_pluck_rows(result, num_cols)
-      n = result.row_count
-      rows = T.let(::Array.new(n), T::Array[T::Array[T.nilable(String)]])
-      row_idx = 0
-      while row_idx < n
-        row = T.let(::Array.new(num_cols), T::Array[T.nilable(String)])
-        col_idx = 0
-        while col_idx < num_cols
-          row[col_idx] = result.get_value(row_idx, col_idx)
-          col_idx += 1
-        end
-        rows[row_idx] = row
-        row_idx += 1
+      if num_cols == 1
+        result.column_values(0).zip
+      else
+        result.values
       end
-      rows
     end
 
     sig { params(exprs: T::Array[Expr]).returns(T.nilable(Expr)) }

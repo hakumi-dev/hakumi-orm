@@ -118,14 +118,43 @@ module HakumiORM
       sig { overridable.params(raw: String).returns(String) }
       def cast_string(raw) = raw
 
+      TRUTHY = T.let(%w[t 1 true].to_set.freeze, T::Set[String])
+
       sig { overridable.params(raw: String).returns(T::Boolean) }
-      def cast_boolean(raw) = raw == "t"
+      def cast_boolean(raw) = TRUTHY.include?(raw)
+
+      # 10^(6-n) lookup for microsecond padding
+      USEC_PAD = T.let([1, 100_000, 10_000, 1_000, 100, 10, 1].freeze, T::Array[Integer])
 
       sig { overridable.params(raw: String).returns(Time) }
-      def cast_time(raw) = Time.parse(raw).utc
+      def cast_time(raw)
+        len = raw.bytesize
+        usec = 0
+
+        if len > 19
+          i = 20
+          while i < len && i < 26
+            byte = raw.getbyte(i)
+
+            break if byte.nil? || byte < 48 || byte > 57
+
+            i += 1
+          end
+          ndigits = i - 20
+          if ndigits.positive?
+            frac_s = raw[20, ndigits]
+            usec = frac_s.to_i * USEC_PAD.fetch(ndigits, 1) if frac_s
+          end
+        end
+
+        Time.utc(raw[0, 4].to_i, raw[5, 2].to_i, raw[8, 2].to_i,
+                 raw[11, 2].to_i, raw[14, 2].to_i, raw[17, 2].to_i, usec)
+      end
 
       sig { overridable.params(raw: String).returns(Date) }
-      def cast_date(raw) = Date.parse(raw)
+      def cast_date(raw)
+        Date.new(raw[0, 4].to_i, raw[5, 2].to_i, raw[8, 2].to_i)
+      end
 
       sig { overridable.params(raw: String).returns(Float) }
       def cast_float(raw) = raw.to_f
@@ -172,8 +201,12 @@ module HakumiORM
         end
       end
 
+      EMPTY_PG_PARAMS = T.let([].freeze, T::Array[PGValue])
+
       sig { params(binds: T::Array[Bind]).returns(T::Array[PGValue]) }
       def encode_binds(binds)
+        return EMPTY_PG_PARAMS if binds.empty?
+
         binds.map { |b| encode_bind(b) }
       end
 
