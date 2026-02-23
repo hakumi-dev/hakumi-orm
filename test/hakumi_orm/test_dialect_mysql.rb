@@ -26,8 +26,16 @@ class TestDialectMysql < HakumiORM::TestCase
     assert_same result1, result2
   end
 
+  test "quote_id escapes embedded backticks" do
+    assert_equal "`foo``bar`", @dialect.quote_id("foo`bar")
+  end
+
   test "qualified_name produces backtick-quoted table.column reference" do
     assert_equal "`users`.`name`", @dialect.qualified_name("users", "name")
+  end
+
+  test "qualified_name escapes embedded backticks in table and column" do
+    assert_equal "`t``a`.`c``b`", @dialect.qualified_name("t`a", "c`b")
   end
 
   test "supports_returning? returns false" do

@@ -60,37 +60,37 @@ module HakumiORM
       def self.store!(adapter, fingerprint, canonical)
         adapter.exec(CREATE_META_SQL)
         adapter.exec("DELETE FROM #{SCHEMA_META_TABLE}")
-        safe_fp = fingerprint.gsub("'", "''")
-        safe_data = canonical.gsub("'", "''")
-        safe_ver = GENERATOR_VERSION.gsub("'", "''")
-        adapter.exec(
-          "INSERT INTO #{SCHEMA_META_TABLE} (fingerprint, schema_data, generator_version) " \
-          "VALUES ('#{safe_fp}', '#{safe_data}', '#{safe_ver}')"
-        )
+        d = adapter.dialect
+        sql = "INSERT INTO #{SCHEMA_META_TABLE} (fingerprint, schema_data, generator_version) " \
+              "VALUES (#{d.bind_marker(0)}, #{d.bind_marker(1)}, #{d.bind_marker(2)})"
+        result = adapter.exec_params(sql, [fingerprint, canonical, GENERATOR_VERSION])
+        result.close
       end
 
       sig { params(adapter: Adapter::Base).returns(T.nilable(String)) }
       def self.read_from_db(adapter)
+        result = T.let(nil, T.nilable(Adapter::Result))
         result = adapter.exec("SELECT fingerprint FROM #{SCHEMA_META_TABLE} LIMIT 1")
         return nil if result.row_count.zero?
 
-        value = result.get_value(0, 0)&.to_s
-        result.close
-        value
+        result.get_value(0, 0)&.to_s
       rescue StandardError
         nil
+      ensure
+        result&.close
       end
 
       sig { params(adapter: Adapter::Base).returns(T.nilable(String)) }
       def self.read_canonical_from_db(adapter)
+        result = T.let(nil, T.nilable(Adapter::Result))
         result = adapter.exec("SELECT schema_data FROM #{SCHEMA_META_TABLE} LIMIT 1")
         return nil if result.row_count.zero?
 
-        value = result.get_value(0, 0)&.to_s
-        result.close
-        value
+        result.get_value(0, 0)&.to_s
       rescue StandardError
         nil
+      ensure
+        result&.close
       end
 
       MIGRATION_FILE_RE = T.let(/\A(\d{14})_\w+\.rb\z/, Regexp)
@@ -106,6 +106,7 @@ module HakumiORM
 
       sig { params(adapter: Adapter::Base).returns(T::Array[String]) }
       def self.read_applied_versions(adapter)
+        result = T.let(nil, T.nilable(Adapter::Result))
         result = adapter.exec("SELECT version FROM hakumi_migrations ORDER BY version")
         versions = T.let([], T::Array[String])
         i = T.let(0, Integer)
@@ -113,10 +114,11 @@ module HakumiORM
           versions << result.fetch_value(i, 0)
           i += 1
         end
-        result.close
         versions
       rescue StandardError
         []
+      ensure
+        result&.close
       end
 
       sig { params(path: String).returns(T::Array[String]) }

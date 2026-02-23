@@ -269,6 +269,35 @@ class TestLifecycleHooks < HakumiORM::TestCase
     end
   end
 
+  test "after_commit runs all callbacks even when one raises" do
+    calls = []
+    err = assert_raises(RuntimeError) do
+      @adapter.transaction do |txn|
+        txn.after_commit { calls << :first }
+        txn.after_commit { raise "boom in second" }
+        txn.after_commit { calls << :third }
+      end
+    end
+
+    assert_equal %i[first third], calls
+    assert_equal "boom in second", err.message
+  end
+
+  test "after_rollback runs all callbacks even when one raises" do
+    calls = []
+    err = assert_raises(RuntimeError) do
+      @adapter.transaction do |txn|
+        txn.after_rollback { calls << :first }
+        txn.after_rollback { raise "rollback boom" }
+        txn.after_rollback { calls << :third }
+        raise "trigger rollback"
+      end
+    end
+
+    assert_equal %i[first third], calls
+    assert_equal "rollback boom", err.message
+  end
+
   test "callbacks are cleared after transaction completes" do
     side_effect_count = 0
     @adapter.transaction do |txn|

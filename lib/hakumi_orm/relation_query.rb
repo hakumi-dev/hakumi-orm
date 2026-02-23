@@ -39,28 +39,25 @@ module HakumiORM
       compiled = build_select(dialect)
       cursor_name = "hakumi_cursor_#{object_id}"
 
-      adapter.exec("BEGIN")
-      adapter.exec_params("DECLARE #{cursor_name} CURSOR FOR #{compiled.sql}", compiled.params_for(dialect))
+      adapter.transaction do |_txn|
+        adapter.exec_params("DECLARE #{cursor_name} CURSOR FOR #{compiled.sql}", compiled.params_for(dialect))
+        begin
+          loop do
+            result = adapter.exec("FETCH #{batch_size} FROM #{cursor_name}")
+            batch = hydrate(result, dialect)
+            result.close
+            break if batch.empty?
 
-      loop do
-        result = adapter.exec("FETCH #{batch_size} FROM #{cursor_name}")
-        batch = hydrate(result, dialect)
-        result.close
-        break if batch.empty?
-
-        blk.call(batch)
-        break if batch.length < batch_size
-      end
-    ensure
-      begin
-        adapter.exec("CLOSE #{cursor_name}")
-      rescue StandardError
-        nil
-      end
-      begin
-        adapter.exec("COMMIT")
-      rescue StandardError
-        nil
+            blk.call(batch)
+            break if batch.length < batch_size
+          end
+        ensure
+          begin
+            adapter.exec("CLOSE #{cursor_name}")
+          rescue StandardError
+            nil
+          end
+        end
       end
     end
 

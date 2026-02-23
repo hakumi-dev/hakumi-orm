@@ -36,12 +36,17 @@ module HakumiORM
         result.close
       end
 
+      sig { params(name: String).returns(String) }
+      def quote_pragma_id(name)
+        "\"#{name.gsub('"', '""')}\""
+      end
+
       sig { params(table_name: String, tables: T::Hash[String, TableInfo]).void }
       def read_table_info(table_name, tables)
         tbl = tables[table_name]
         return unless tbl
 
-        result = @adapter.exec("PRAGMA table_info(#{table_name})")
+        result = @adapter.exec("PRAGMA table_info(#{quote_pragma_id(table_name)})")
         i = T.let(0, Integer)
         while i < result.row_count
           col_name = result.fetch_value(i, 1)
@@ -74,7 +79,7 @@ module HakumiORM
 
       sig { params(table_name: String, tbl: TableInfo).void }
       def read_unique_indexes(table_name, tbl)
-        result = @adapter.exec("PRAGMA index_list(#{table_name})")
+        result = @adapter.exec("PRAGMA index_list(#{quote_pragma_id(table_name)})")
         i = T.let(0, Integer)
         while i < result.row_count
           idx_name = result.fetch_value(i, 1)
@@ -87,7 +92,7 @@ module HakumiORM
 
       sig { params(idx_name: String, tbl: TableInfo).void }
       def read_index_columns(idx_name, tbl)
-        result = @adapter.exec("PRAGMA index_info(#{idx_name})")
+        result = @adapter.exec("PRAGMA index_info(#{quote_pragma_id(idx_name)})")
         i = T.let(0, Integer)
         while i < result.row_count
           col_name = result.fetch_value(i, 2)
@@ -109,7 +114,7 @@ module HakumiORM
 
       sig { params(table_name: String, tbl: TableInfo).void }
       def read_table_fks(table_name, tbl)
-        result = @adapter.exec("PRAGMA foreign_key_list(#{table_name})")
+        result = @adapter.exec("PRAGMA foreign_key_list(#{quote_pragma_id(table_name)})")
         i = T.let(0, Integer)
         while i < result.row_count
           tbl.foreign_keys << ForeignKeyInfo.new(

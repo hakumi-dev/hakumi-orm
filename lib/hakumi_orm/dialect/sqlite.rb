@@ -20,13 +20,13 @@ module HakumiORM
 
       sig { override.params(name: String).returns(String) }
       def quote_id(name)
-        @id_cache[name] ||= -"\"#{name}\""
+        @id_cache[name] ||= -"\"#{name.gsub('"', '""')}\""
       end
 
       sig { override.params(table: String, column: String).returns(String) }
       def qualified_name(table, column)
         key = -"#{table}.#{column}"
-        @qn_cache[key] ||= -"\"#{table}\".\"#{column}\""
+        @qn_cache[key] ||= -"\"#{table.gsub('"', '""')}\".\"#{column.gsub('"', '""')}\""
       end
 
       sig { override.returns(T::Boolean) }

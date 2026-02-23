@@ -194,7 +194,7 @@ class TestSchemaFingerprint < HakumiORM::TestCase
     HakumiORM.config.logger = nil
   end
 
-  test "store! creates table and inserts fingerprint and canonical" do
+  test "store! creates table and inserts fingerprint and canonical via exec_params" do
     adapter = HakumiORM::Test::MockAdapter.new
     fp = "a" * 64
     canonical = "V:1\nT:users|PK:id\nC:name|varchar|false|\n"
@@ -205,7 +205,12 @@ class TestSchemaFingerprint < HakumiORM::TestCase
 
     assert(sqls.any? { |s| s.include?("CREATE TABLE IF NOT EXISTS hakumi_schema_meta") })
     assert(sqls.any? { |s| s.include?("DELETE FROM hakumi_schema_meta") })
-    assert(sqls.any? { |s| s.include?("INSERT INTO hakumi_schema_meta") && s.include?(fp) })
+
+    insert_query = adapter.executed_queries.find { |q| q[:sql].include?("INSERT INTO hakumi_schema_meta") }
+
+    assert insert_query, "should INSERT into hakumi_schema_meta"
+    assert_includes insert_query[:sql], "$1"
+    assert_equal [fp, canonical, "1"], insert_query[:params]
   end
 
   test "read_from_db returns fingerprint when present" do
@@ -517,6 +522,30 @@ class TestSchemaFingerprint < HakumiORM::TestCase
 
     assert(diff.any? { |l| l.include?("+") && l.include?("moderator") })
     assert(diff.any? { |l| l.include?("-") && l.include?("admin,author") })
+  end
+
+  test "read_from_db closes result on early return for empty table" do
+    adapter = HakumiORM::Test::MockAdapter.new
+    closed = false
+    empty_result = HakumiORM::Test::MockResult.new([])
+    empty_result.define_singleton_method(:close) { closed = true }
+    adapter.define_singleton_method(:exec) { |_sql| empty_result }
+
+    HakumiORM::Migration::SchemaFingerprint.read_from_db(adapter)
+
+    assert closed, "result.close must be called even when row_count is zero"
+  end
+
+  test "read_canonical_from_db closes result on early return for empty table" do
+    adapter = HakumiORM::Test::MockAdapter.new
+    closed = false
+    empty_result = HakumiORM::Test::MockResult.new([])
+    empty_result.define_singleton_method(:close) { closed = true }
+    adapter.define_singleton_method(:exec) { |_sql| empty_result }
+
+    HakumiORM::Migration::SchemaFingerprint.read_canonical_from_db(adapter)
+
+    assert closed, "result.close must be called even when row_count is zero"
   end
 
   test "drift_allowed? returns false by default" do

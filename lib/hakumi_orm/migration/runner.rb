@@ -192,15 +192,18 @@ module HakumiORM
 
       sig { params(version: String, name: String).void }
       def record_version(version, name)
-        safe_version = version.gsub("'", "''")
-        safe_name = name.gsub("'", "''")
-        @adapter.exec("INSERT INTO hakumi_migrations (version, name) VALUES ('#{safe_version}', '#{safe_name}')")
+        d = @adapter.dialect
+        sql = "INSERT INTO hakumi_migrations (version, name) VALUES (#{d.bind_marker(0)}, #{d.bind_marker(1)})"
+        result = @adapter.exec_params(sql, [version, name])
+        result.close
       end
 
       sig { params(version: String).void }
       def remove_version(version)
-        safe_version = version.gsub("'", "''")
-        @adapter.exec("DELETE FROM hakumi_migrations WHERE version = '#{safe_version}'")
+        d = @adapter.dialect
+        sql = "DELETE FROM hakumi_migrations WHERE version = #{d.bind_marker(0)}"
+        result = @adapter.exec_params(sql, [version])
+        result.close
       end
     end
   end

@@ -51,9 +51,12 @@ class TestMigrationRunner < HakumiORM::TestCase
     write_migration("20260101000000_delta_step.rb", "DeltaStep", "DELTA_UP", "DELTA_DOWN")
 
     @runner.migrate!
-    sqls = executed_sqls
 
-    assert(sqls.any? { |s| s.include?("INSERT") && s.include?("hakumi_migrations") && s.include?("20260101000000") })
+    insert_query = @adapter.executed_queries.find { |q| q[:sql].include?("INSERT") && q[:sql].include?("hakumi_migrations") }
+
+    assert insert_query, "should INSERT into hakumi_migrations"
+    assert_includes insert_query[:sql], "$1"
+    assert_equal %w[20260101000000 delta_step], insert_query[:params]
   end
 
   test "rollback runs down on the last migration" do
@@ -71,7 +74,11 @@ class TestMigrationRunner < HakumiORM::TestCase
     @adapter.stub_result("SELECT version", [["20260101000000"]])
     @runner.rollback!
 
-    assert(executed_sqls.any? { |s| s.include?("DELETE") && s.include?("20260101000000") })
+    delete_query = @adapter.executed_queries.find { |q| q[:sql].include?("DELETE") && q[:sql].include?("hakumi_migrations") }
+
+    assert delete_query, "should DELETE from hakumi_migrations"
+    assert_includes delete_query[:sql], "$1"
+    assert_equal ["20260101000000"], delete_query[:params]
   end
 
   test "rollback with count rolls back N migrations in reverse order" do

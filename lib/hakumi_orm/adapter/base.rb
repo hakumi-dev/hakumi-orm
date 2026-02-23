@@ -75,9 +75,9 @@ module HakumiORM
       def current_tx_frame
         @tx_frames = T.let(@tx_frames, T.nilable(T::Array[TxFrame]))
         frames = @tx_frames
-        raise HakumiORM::Error, "after_commit/after_rollback can only be called inside a transaction" unless frames&.any?
+        raise HakumiORM::Error, "after_commit/after_rollback can only be called inside a transaction" unless frames && !frames.empty?
 
-        T.must(frames.last)
+        frames.fetch(-1)
       end
 
       sig { returns(TxFrame) }
@@ -109,7 +109,8 @@ module HakumiORM
 
       sig { params(blk: T.proc.params(adapter: Base).void).void }
       def run_top_level_transaction(&blk)
-        @tx_frames = T.let([], T.nilable(T::Array[TxFrame]))
+        frames = T.let([], T.nilable(T::Array[TxFrame]))
+        @tx_frames = frames
         push_tx_frame
         exec("BEGIN")
         @txn_depth = 1
@@ -120,11 +121,11 @@ module HakumiORM
         rescue StandardError
           nil
         end
-        fire_callbacks(T.must(@tx_frames).flat_map { |f| f[:after_rollback] })
+        fire_callbacks(frames.flat_map { |f| f[:after_rollback] }) if frames
         raise
       else
         exec("COMMIT")
-        fire_callbacks(T.must(@tx_frames).flat_map { |f| f[:after_commit] })
+        fire_callbacks(frames.flat_map { |f| f[:after_commit] }) if frames
       ensure
         @txn_depth = 0
         @tx_frames = nil
@@ -132,7 +133,13 @@ module HakumiORM
 
       sig { params(callbacks: T::Array[T.proc.void]).void }
       def fire_callbacks(callbacks)
-        callbacks.each(&:call)
+        first_error = T.let(nil, T.nilable(StandardError))
+        callbacks.each do |cb|
+          cb.call
+        rescue StandardError => e
+          first_error ||= e
+        end
+        raise first_error if first_error
       end
 
       sig { params(depth: Integer, blk: T.proc.params(adapter: Base).void).void }
@@ -148,15 +155,25 @@ module HakumiORM
         rescue StandardError
           nil
         end
-        frame = T.must(T.must(@tx_frames).pop)
-        fire_callbacks(frame[:after_rollback])
+        frames = @tx_frames
+        if frames
+          frame = frames.pop
+          fire_callbacks(frame[:after_rollback]) if frame
+        end
         raise
       else
         exec("RELEASE SAVEPOINT #{sp}")
-        frame = T.must(T.must(@tx_frames).pop)
-        parent = T.must(T.must(@tx_frames).last)
-        parent[:after_commit].concat(frame[:after_commit])
-        parent[:after_rollback].concat(frame[:after_rollback])
+        frames = @tx_frames
+        if frames
+          frame = frames.pop
+          if frame
+            parent = frames.last
+            if parent
+              parent[:after_commit].concat(frame[:after_commit])
+              parent[:after_rollback].concat(frame[:after_rollback])
+            end
+          end
+        end
       ensure
         @txn_depth = depth
       end

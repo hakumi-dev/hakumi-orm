@@ -59,6 +59,7 @@ Metrics/ParameterLists:
     - "lib/hakumi_orm/migration.rb"
     - "lib/hakumi_orm/migration/table_definition.rb"
     - "lib/hakumi_orm/migration/sql_generator.rb"
+    - "lib/hakumi_orm/codegen/association_builder.rb"
     - "test/**/*"
 
 Metrics/CollectionLiteralLength:
@@ -78,6 +79,7 @@ Naming/MethodParameterName:
     - ri
     - op
     - pk
+    - fk
     - id
     - qn
 

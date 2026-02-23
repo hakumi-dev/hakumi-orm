@@ -170,7 +170,7 @@ module HakumiORM
         }
       end
 
-      sig { params(user_cols: T::Array[ColumnInfo]).returns(T::Array[T::Hash[Symbol, T.untyped]]) }
+      sig { params(user_cols: T::Array[ColumnInfo]).returns(T::Array[T::Hash[Symbol, T.any(String, T::Boolean)]]) }
       def build_update_column_descs(user_cols)
         user_cols.map do |col|
           { name: col.name, quoted_name: @dialect.quote_id(col.name),

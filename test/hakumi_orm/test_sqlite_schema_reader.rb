@@ -85,6 +85,19 @@ class TestSqliteSchemaReader < HakumiORM::TestCase
     assert_includes tables["users"].unique_columns, "email"
   end
 
+  test "handles table names with special characters in PRAGMA calls" do
+    @adapter.exec('CREATE TABLE "my""table" (id INTEGER PRIMARY KEY, val TEXT)')
+    reader = HakumiORM::Codegen::SqliteSchemaReader.new(@adapter)
+
+    tables = reader.read_tables
+
+    assert_includes tables.keys, 'my"table'
+    tbl = tables['my"table']
+
+    assert_equal "id", tbl.primary_key
+    assert(tbl.columns.any? { |c| c.name == "val" })
+  end
+
   test "detects foreign keys" do
     tables = @reader.read_tables
     fks = tables["posts"].foreign_keys

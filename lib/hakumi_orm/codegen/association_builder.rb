@@ -18,32 +18,45 @@ module HakumiORM
         @associations = T.let([], T::Array[CustomAssociation])
       end
 
+      AssocValue = T.type_alias { T.any(String, Symbol) }
+
       sig do
-        params(name: String, opts: T.untyped).void
+        params(
+          name: String, target: AssocValue, foreign_key: AssocValue,
+          primary_key: AssocValue, order_by: T.nilable(AssocValue), scope: T.nilable(AssocValue)
+        ).void
       end
-      def has_many(name, **opts)
-        add_association(name, :has_many, opts)
+      def has_many(name, target:, foreign_key:, primary_key:, order_by: nil, scope: nil)
+        build_assoc(name, :has_many, target, foreign_key, primary_key, order_by, scope)
       end
 
       sig do
-        params(name: String, opts: T.untyped).void
+        params(
+          name: String, target: AssocValue, foreign_key: AssocValue,
+          primary_key: AssocValue, order_by: T.nilable(AssocValue), scope: T.nilable(AssocValue)
+        ).void
       end
-      def has_one(name, **opts)
-        add_association(name, :has_one, opts)
+      def has_one(name, target:, foreign_key:, primary_key:, order_by: nil, scope: nil)
+        build_assoc(name, :has_one, target, foreign_key, primary_key, order_by, scope)
       end
 
       private
 
-      sig { params(name: String, kind: Symbol, opts: T::Hash[Symbol, T.untyped]).void }
-      def add_association(name, kind, opts)
+      sig do
+        params(
+          name: String, kind: Symbol, target: AssocValue, fk: AssocValue,
+          pk: AssocValue, order_by: T.nilable(AssocValue), scope: T.nilable(AssocValue)
+        ).void
+      end
+      def build_assoc(name, kind, target, fk, pk, order_by, scope)
         @associations << CustomAssociation.new(
           name: name,
-          target_table: String(opts.fetch(:target)),
-          foreign_key: String(opts.fetch(:foreign_key)),
-          primary_key: String(opts.fetch(:primary_key)),
+          target_table: String(target),
+          foreign_key: String(fk),
+          primary_key: String(pk),
           kind: kind,
-          order_by: opts[:order_by]&.to_s,
-          scope: opts[:scope]&.to_s
+          order_by: order_by&.to_s,
+          scope: scope&.to_s
         )
       end
     end

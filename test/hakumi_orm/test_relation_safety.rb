@@ -92,6 +92,31 @@ class TestRelationSafety < HakumiORM::TestCase
     assert cursor_sql, "PostgreSQL should use DECLARE CURSOR"
   end
 
+  test "find_in_batches_cursor uses adapter.transaction instead of raw BEGIN/COMMIT" do
+    pg_adapter = HakumiORM::Test::MockAdapter.new(dialect: HakumiORM::Dialect::Postgresql.new)
+
+    UserRecord.all.find_in_batches(adapter: pg_adapter) { |_| break }
+
+    sqls = pg_adapter.executed_queries.map { |q| q[:sql] }
+
+    assert_equal "BEGIN", sqls.first, "should open transaction via adapter.transaction"
+    assert_includes sqls, "COMMIT"
+    assert sqls.any? { |s| s.include?("CLOSE") }, "should close cursor in ensure"
+  end
+
+  test "find_in_batches_cursor inside existing transaction does not emit extra BEGIN" do
+    pg_adapter = HakumiORM::Test::MockAdapter.new(dialect: HakumiORM::Dialect::Postgresql.new)
+
+    pg_adapter.transaction do |_txn|
+      UserRecord.all.find_in_batches(adapter: pg_adapter) { |_| break }
+    end
+
+    sqls = pg_adapter.executed_queries.map { |q| q[:sql] }
+    begin_count = sqls.count { |s| s == "BEGIN" }
+
+    assert_equal 1, begin_count, "nested cursor should not emit extra BEGIN"
+  end
+
   test "find_in_batches on MySQL uses LIMIT/OFFSET instead of CURSOR" do
     mysql_adapter = HakumiORM::Test::MockAdapter.new(dialect: HakumiORM::Dialect::Mysql.new)
 
