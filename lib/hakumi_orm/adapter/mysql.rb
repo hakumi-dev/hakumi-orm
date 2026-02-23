@@ -21,7 +21,10 @@ module HakumiORM
 
       sig { params(params: T::Hash[Symbol, T.any(String, Integer)]).returns(Mysql) }
       def self.connect(params)
-        new(Mysql2::Client.new(params.merge(cast: true, as: :array)))
+        client = Mysql2::Client.new(params.merge(cast: true, as: :array, database_timezone: :utc,
+                                                 application_timezone: :utc))
+        client.query("SET time_zone = '+00:00'")
+        new(client)
       end
 
       sig { override.params(sql: String, params: T::Array[PGValue]).returns(MysqlResult) }

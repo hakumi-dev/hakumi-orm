@@ -13,6 +13,7 @@ module HakumiORM
 
       sig { params(raw: String).returns(Time) }
       def parse_utc(raw)
+        reject_non_utc_offset!(raw)
         Time.utc(
           read4(raw, 0), read2(raw, 5), read2(raw, 8),
           read2(raw, 11), read2(raw, 14), read2(raw, 17),
@@ -21,6 +22,30 @@ module HakumiORM
       end
 
       private
+
+      sig { params(raw: String).void }
+      def reject_non_utc_offset!(raw)
+        return if raw.bytesize <= 19
+
+        pos = raw.getbyte(19) == 46 ? 20 : 19
+        while pos < raw.bytesize
+          b = raw.getbyte(pos)
+
+          break if b.nil? || b < 48 || b > 57
+
+          pos += 1
+        end
+
+        return if pos >= raw.bytesize
+
+        byte = raw.getbyte(pos)
+        return if byte.nil? || (byte != 43 && byte != 45)
+        return if raw.end_with?("+00", "+00:00", "-00:00")
+
+        raise ArgumentError,
+              "ByteTime.parse_utc received non-UTC offset: #{raw.inspect}. " \
+              "Configure the database session timezone to UTC"
+      end
 
       sig { params(raw: String, offset: Integer).returns(Integer) }
       def read4(raw, offset)

@@ -122,16 +122,26 @@ module HakumiORM
     sig do
       params(
         table: String,
-        where_expr: T.nilable(Expr)
+        where_expr: T.nilable(Expr),
+        joins: T::Array[JoinClause]
       ).returns(CompiledQuery)
     end
-    def count(table:, where_expr: nil)
+    def count(table:, where_expr: nil, joins: [])
       binds = T.let([], T::Array[Bind])
       idx = T.let(0, Integer)
       buf = String.new(capacity: 128)
 
       buf << "SELECT COUNT(*) FROM "
       buf << @dialect.quote_id(table)
+
+      joins.each do |j|
+        buf << join_keyword(j.join_type)
+        buf << @dialect.quote_id(j.target_table)
+        buf << " ON "
+        buf << j.source_field.qualified_name
+        buf << " = "
+        buf << j.target_field.qualified_name
+      end
 
       if where_expr
         buf << " WHERE "

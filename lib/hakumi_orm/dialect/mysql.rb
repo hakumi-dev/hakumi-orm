@@ -54,6 +54,15 @@ module HakumiORM
         "SELECT RELEASE_LOCK('hakumi_migrate')"
       end
 
+      sig { override.params(result: Adapter::Result).void }
+      def verify_advisory_lock!(result)
+        value = result.get_value(0, 0)
+        return if [1, "1"].include?(value)
+
+        raise HakumiORM::Error,
+              "Could not acquire migration advisory lock (GET_LOCK returned #{value.inspect})"
+      end
+
       sig { override.params(value: T::Boolean).returns(PGValue) }
       def encode_boolean(value) = value ? 1 : 0
 

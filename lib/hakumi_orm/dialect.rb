@@ -53,6 +53,9 @@ module HakumiORM
         nil
       end
 
+      sig { params(_result: Adapter::Result).void }
+      def verify_advisory_lock!(_result); end
+
       # -- Encoding: Ruby → DB wire format --
 
       sig { overridable.params(value: Integer).returns(PGValue) }

@@ -163,11 +163,21 @@ module HakumiORM
 
         lock_sql = dialect.advisory_lock_sql
         unlock_sql = dialect.advisory_unlock_sql
-        @adapter.exec(lock_sql).close if lock_sql
+        acquire_advisory_lock!(lock_sql) if lock_sql
         begin
           blk.call
         ensure
           @adapter.exec(unlock_sql).close if unlock_sql
+        end
+      end
+
+      sig { params(sql: String).void }
+      def acquire_advisory_lock!(sql)
+        result = @adapter.exec(sql)
+        begin
+          @adapter.dialect.verify_advisory_lock!(result)
+        ensure
+          result.close
         end
       end
 

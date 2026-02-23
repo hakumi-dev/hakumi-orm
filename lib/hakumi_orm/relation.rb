@@ -170,14 +170,17 @@ module HakumiORM
       preloaded = @_preloaded_results
       return preloaded.length if preloaded
 
+      reject_count_with_grouping!
+
       stmt = stmt_count_all
       sql = sql_count_all
-      result = if @where_exprs.empty? && @defaults_pristine && stmt && sql
+      result = if @where_exprs.empty? && @defaults_pristine && @joins.empty? && stmt && sql
                  adapter.prepare_exec(stmt, sql, [])
                else
                  compiled = adapter.dialect.compiler.count(
                    table: @table_name,
-                   where_expr: combined_where
+                   where_expr: combined_where,
+                   joins: @joins
                  )
                  adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))
                end
@@ -307,6 +310,15 @@ module HakumiORM
       blk.call(result)
     ensure
       result.close
+    end
+
+    sig { void }
+    def reject_count_with_grouping!
+      return if @group_fields.empty? && @having_exprs.empty? && !@distinct_value
+
+      raise HakumiORM::Error,
+            "count with group/having/distinct is ambiguous. " \
+            "Use to_a.length or a custom aggregate query instead"
     end
 
     sig { void }

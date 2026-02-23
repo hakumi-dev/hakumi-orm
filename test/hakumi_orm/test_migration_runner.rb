@@ -317,6 +317,31 @@ class TestMigrationRunner < HakumiORM::TestCase
     refute(executed_sqls.any? { |s| s.include?("BEGIN") }, "should not wrap in transaction")
   end
 
+  test "advisory lock failure raises on MySQL dialect" do
+    mysql_dialect = HakumiORM::Dialect::Mysql.new
+    adapter = HakumiORM::Test::MockAdapter.new(dialect: mysql_dialect)
+    adapter.stub_result("GET_LOCK", [[0]])
+    runner = HakumiORM::Migration::Runner.new(adapter, migrations_path: @dir)
+
+    err = assert_raises(HakumiORM::Error) { runner.migrate! }
+
+    assert_includes err.message, "advisory lock"
+  end
+
+  test "advisory lock success proceeds on MySQL dialect" do
+    mysql_dialect = HakumiORM::Dialect::Mysql.new
+    adapter = HakumiORM::Test::MockAdapter.new(dialect: mysql_dialect)
+    adapter.stub_result("GET_LOCK", [[1]])
+    adapter.stub_result("RELEASE_LOCK", [[1]])
+    runner = HakumiORM::Migration::Runner.new(adapter, migrations_path: @dir)
+
+    runner.migrate!
+
+    sqls = adapter.executed_queries.map { |q| q[:sql] }
+
+    assert(sqls.any? { |s| s.include?("GET_LOCK") })
+  end
+
   private
 
   def write_migration(filename, class_name, up_sql, down_sql)

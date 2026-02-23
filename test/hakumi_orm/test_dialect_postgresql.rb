@@ -83,11 +83,27 @@ class TestDialectPostgresql < HakumiORM::TestCase
     assert_equal 9, result.hour
   end
 
-  test "cast_time with timezone offset does not misparse offset as usec" do
-    result = @dialect.cast_time("2026-02-23 12:34:56+01")
+  test "cast_time rejects non-UTC timezone offset" do
+    err = assert_raises(ArgumentError) do
+      @dialect.cast_time("2026-02-23 12:34:56+01")
+    end
 
-    assert_equal 0, result.usec
+    assert_includes err.message, "non-UTC offset"
+  end
+
+  test "cast_time accepts +00 UTC offset" do
+    result = @dialect.cast_time("2026-02-23 12:34:56+00")
+
+    assert_equal 12, result.hour
     assert_equal 56, result.sec
+    assert_equal 0, result.usec
+  end
+
+  test "cast_time accepts +00:00 UTC offset with fractional seconds" do
+    result = @dialect.cast_time("2026-02-23 12:34:56.123456+00:00")
+
+    assert_equal 12, result.hour
+    assert_equal 123_456, result.usec
   end
 
   test "cast_time with 3-digit fractional seconds" do

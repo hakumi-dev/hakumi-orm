@@ -89,6 +89,37 @@ class TestRelation < HakumiORM::TestCase
     assert_includes @adapter.last_sql, "WHERE"
   end
 
+  test "count includes joins in the SQL" do
+    @adapter.stub_default([["3"]])
+
+    dialect = @adapter.dialect
+    source = HakumiORM::FieldRef.new(:id, "users", "id", dialect.qualified_name("users", "id"))
+    target = HakumiORM::FieldRef.new(:user_id, "posts", "user_id", dialect.qualified_name("posts", "user_id"))
+    clause = HakumiORM::JoinClause.new(:inner, "posts", source, target)
+
+    result = UserRecord.all.join(clause).count(adapter: @adapter)
+
+    assert_equal 3, result
+    assert_includes @adapter.last_sql, "INNER JOIN"
+    assert_includes @adapter.last_sql, "COUNT(*)"
+  end
+
+  test "count rejects group" do
+    err = assert_raises(HakumiORM::Error) do
+      UserRecord.all.group(UserSchema::ACTIVE).count(adapter: @adapter)
+    end
+
+    assert_includes err.message, "group/having/distinct"
+  end
+
+  test "count rejects distinct" do
+    err = assert_raises(HakumiORM::Error) do
+      UserRecord.all.distinct.count(adapter: @adapter)
+    end
+
+    assert_includes err.message, "group/having/distinct"
+  end
+
   test "multiple where calls are combined with AND" do
     UserRecord.all
               .where(UserSchema::AGE.gt(18))

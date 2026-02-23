@@ -21,7 +21,9 @@ module HakumiORM
 
       sig { params(params: T::Hash[Symbol, T.any(String, Integer)]).returns(Postgresql) }
       def self.connect(params)
-        new(PG.connect(params))
+        conn = PG.connect(params)
+        conn.exec("SET timezone = 'UTC'").clear
+        new(conn)
       end
 
       sig { override.params(sql: String, params: T::Array[PGValue]).returns(PostgresqlResult) }
