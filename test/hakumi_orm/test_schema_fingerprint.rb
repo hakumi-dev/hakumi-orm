@@ -462,6 +462,63 @@ class TestSchemaFingerprint < HakumiORM::TestCase
     assert(diff.any? { |l| l.include?("FK:") && l.include?("user_id") })
   end
 
+  test "enum values change produces different fingerprint" do
+    table1 = HakumiORM::Codegen::TableInfo.new("users")
+    table1.columns << HakumiORM::Codegen::ColumnInfo.new(
+      name: "role", data_type: "USER-DEFINED", udt_name: "role_enum",
+      nullable: false, default: nil, max_length: nil,
+      enum_values: %w[admin author]
+    )
+    table1.primary_key = "id"
+
+    table2 = HakumiORM::Codegen::TableInfo.new("users")
+    table2.columns << HakumiORM::Codegen::ColumnInfo.new(
+      name: "role", data_type: "USER-DEFINED", udt_name: "role_enum",
+      nullable: false, default: nil, max_length: nil,
+      enum_values: %w[admin author moderator]
+    )
+    table2.primary_key = "id"
+
+    fp1 = HakumiORM::Migration::SchemaFingerprint.compute({ "users" => table1 })
+    fp2 = HakumiORM::Migration::SchemaFingerprint.compute({ "users" => table2 })
+
+    refute_equal fp1, fp2
+  end
+
+  test "build_canonical includes enum values in output" do
+    table = HakumiORM::Codegen::TableInfo.new("users")
+    table.columns << HakumiORM::Codegen::ColumnInfo.new(
+      name: "role", data_type: "USER-DEFINED", udt_name: "role_enum",
+      nullable: false, default: nil, max_length: nil,
+      enum_values: %w[admin author]
+    )
+    table.primary_key = "id"
+
+    canonical = HakumiORM::Migration::SchemaFingerprint.build_canonical({ "users" => table })
+
+    assert_includes canonical, "EV:admin,author"
+  end
+
+  test "build_canonical omits EV tag when no enum values" do
+    table = HakumiORM::Codegen::TableInfo.new("users")
+    table.columns << col("name", nullable: false)
+    table.primary_key = "id"
+
+    canonical = HakumiORM::Migration::SchemaFingerprint.build_canonical({ "users" => table })
+
+    refute_includes canonical, "EV:"
+  end
+
+  test "diff_canonical detects enum value changes" do
+    stored = "V:2\nT:users|PK:id\nC:role|USER-DEFINED|false||EV:admin,author\n"
+    live = "V:2\nT:users|PK:id\nC:role|USER-DEFINED|false||EV:admin,author,moderator\n"
+
+    diff = HakumiORM::Migration::SchemaFingerprint.diff_canonical(stored, live)
+
+    assert(diff.any? { |l| l.include?("+") && l.include?("moderator") })
+    assert(diff.any? { |l| l.include?("-") && l.include?("admin,author") })
+  end
+
   test "drift_allowed? returns false by default" do
     ENV.delete("HAKUMI_ALLOW_SCHEMA_DRIFT")
 

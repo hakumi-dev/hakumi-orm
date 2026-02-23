@@ -100,6 +100,12 @@ module HakumiORM
 
         conn = checkout(tid)
         blk.call(conn)
+      rescue StandardError
+        if conn && !conn.alive?
+          discard(tid)
+          conn = nil
+        end
+        raise
       ensure
         checkin(tid) if conn
       end
@@ -137,6 +143,22 @@ module HakumiORM
           conn = @in_use.delete(tid)
           if conn
             @available << conn
+            @cond.signal
+          end
+        end
+      end
+
+      sig { params(tid: Integer).void }
+      def discard(tid)
+        @mutex.synchronize do
+          dead = @in_use.delete(tid)
+          if dead
+            begin
+              dead.close
+            rescue StandardError
+              nil
+            end
+            @total -= 1
             @cond.signal
           end
         end

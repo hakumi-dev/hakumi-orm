@@ -56,6 +56,13 @@ module HakumiORM
         result
       end
 
+      sig { override.returns(T::Boolean) }
+      def alive?
+        @pg_conn.status == PG::Constants::CONNECTION_OK
+      rescue StandardError
+        false
+      end
+
       sig { override.void }
       def close
         @pg_conn.close

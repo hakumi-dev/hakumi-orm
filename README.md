@@ -1585,7 +1585,7 @@ HakumiORM.configure do |config|
 end
 ```
 
-The pool implements "Adapter::Base", so it's a transparent drop-in. Connections are checked out per-thread and reused within nested calls (transactions, etc.).
+The pool implements "Adapter::Base", so it can replace any single adapter without changing application code. Connections are checked out per-thread and reused within nested calls (transactions, etc.). Dead connections are automatically evicted: if a query fails and "alive?" returns false, the connection is discarded and a fresh one is created on the next checkout.
 
 | Option | Default | Description |
 |---|---|---|

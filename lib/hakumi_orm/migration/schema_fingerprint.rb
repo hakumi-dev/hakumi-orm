@@ -183,10 +183,11 @@ module HakumiORM
       sig { params(line: String).returns(String) }
       private_class_method def self.format_line(line)
         case line
-        when /\AC:(\w+)\|([^|]+)\|(\w+)\|(.*)\z/
+        when /\AC:(\w+)\|([^|]+)\|(\w+)\|([^|]*)(?:\|EV:(.+))?\z/
           null_str = Regexp.last_match(3) == "true" ? "nullable" : "not null"
           default_str = Regexp.last_match(4).to_s.empty? ? "" : ", default: #{Regexp.last_match(4)}"
-          "#{Regexp.last_match(1)} (#{Regexp.last_match(2)}, #{null_str}#{default_str})"
+          enum_str = Regexp.last_match(5) ? ", enum: [#{Regexp.last_match(5)}]" : ""
+          "#{Regexp.last_match(1)} (#{Regexp.last_match(2)}, #{null_str}#{default_str}#{enum_str})"
         when /\AFK:(\w+)->(\w+)\.(\w+)\z/
           "FK: #{Regexp.last_match(1)} -> #{Regexp.last_match(2)}.#{Regexp.last_match(3)}"
         when /\AUQ:(\w+)\z/
@@ -198,13 +199,19 @@ module HakumiORM
         end
       end
 
+      sig { params(buf: String, col: Codegen::ColumnInfo).void }
+      private_class_method def self.append_column(buf, col)
+        buf << "C:#{col.name}|#{col.data_type}|#{col.nullable}|#{col.default}"
+        ev = col.enum_values
+        buf << "|EV:#{ev.join(",")}" if ev && !ev.empty?
+        buf << "\n"
+      end
+
       sig { params(buf: String, table_name: String, table: Codegen::TableInfo).void }
       private_class_method def self.append_table(buf, table_name, table)
         buf << "T:#{table_name}|PK:#{table.primary_key}\n"
 
-        table.columns.sort_by(&:name).each do |col|
-          buf << "C:#{col.name}|#{col.data_type}|#{col.nullable}|#{col.default}\n"
-        end
+        table.columns.sort_by(&:name).each { |col| append_column(buf, col) }
 
         table.foreign_keys.sort_by { |fk| [fk.column_name, fk.foreign_table, fk.foreign_column] }.each do |fk|
           buf << "FK:#{fk.column_name}->#{fk.foreign_table}.#{fk.foreign_column}\n"

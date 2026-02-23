@@ -76,6 +76,13 @@ module HakumiORM
         @client.last_id
       end
 
+      sig { override.returns(T::Boolean) }
+      def alive?
+        @client.ping
+      rescue StandardError
+        false
+      end
+
       sig { override.void }
       def close
         @prepared.each_value(&:close)

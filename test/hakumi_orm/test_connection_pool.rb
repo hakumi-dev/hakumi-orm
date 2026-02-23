@@ -93,6 +93,49 @@ class TestConnectionPool < HakumiORM::TestCase
     assert_equal outer_conn_id, inner_conn_id
   end
 
+  test "dead connection is evicted from pool on error" do
+    call_count = 0
+    pool = HakumiORM::Adapter::ConnectionPool.new(size: 2, timeout: 1.0) do
+      call_count += 1
+      HakumiORM::Test::MockAdapter.new
+    end
+
+    dead_adapter = nil
+    pool.transaction do |adapter|
+      dead_adapter = adapter
+    end
+
+    dead_adapter.define_singleton_method(:alive?) { false }
+    dead_adapter.define_singleton_method(:exec_params) { |_sql, _params| raise "connection lost" }
+
+    assert_raises(RuntimeError) { pool.exec_params("SELECT 1", []) }
+
+    assert_equal 0, pool.available_connections
+
+    pool.exec_params("SELECT 1", [])
+
+    assert_equal 2, call_count
+  end
+
+  test "healthy connection is returned to pool after query error" do
+    pool = HakumiORM::Adapter::ConnectionPool.new(size: 2, timeout: 1.0) do
+      HakumiORM::Test::MockAdapter.new
+    end
+
+    adapter_ref = nil
+    pool.transaction do |adapter|
+      adapter_ref = adapter
+    end
+
+    adapter_ref.define_singleton_method(:exec_params) do |_sql, _params|
+      raise "syntax error"
+    end
+
+    assert_raises(RuntimeError) { pool.exec_params("SELECT 1", []) }
+
+    assert_equal 1, pool.available_connections
+  end
+
   test "timeout raises when pool is exhausted" do
     tiny_pool = HakumiORM::Adapter::ConnectionPool.new(size: 1, timeout: 0.1) do
       HakumiORM::Test::MockAdapter.new

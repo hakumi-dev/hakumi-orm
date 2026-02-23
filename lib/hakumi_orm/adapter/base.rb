@@ -32,6 +32,11 @@ module HakumiORM
         dialect.encode_bind(bind)
       end
 
+      sig { overridable.returns(T::Boolean) }
+      def alive?
+        true
+      end
+
       sig { overridable.returns(Integer) }
       def last_insert_id
         raise HakumiORM::Error, "#{self.class.name} does not support last_insert_id (use RETURNING instead)"
