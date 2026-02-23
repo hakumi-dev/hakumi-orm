@@ -10,7 +10,6 @@ module HakumiORM
       MARKER_END = "# == End Schema Information =="
       MARKER_START_RE = T.let(/^# == Schema Information ==\s*$/, Regexp)
       MARKER_END_RE = T.let(/^# == End Schema Information ==\s*$/, Regexp)
-      RUBOCOP_DISABLE_RE = T.let(/^# rubocop:disable Layout\/ExtraSpacing\s*$/, Regexp)
 
       AssocHash = T.type_alias { T::Hash[Symbol, T.any(String, T::Boolean)] }
 
@@ -36,7 +35,7 @@ module HakumiORM
 
       sig { params(ctx: Context).returns(String) }
       def self.build_annotation(ctx)
-        lines = T.let(["# rubocop:disable Layout/ExtraSpacing", MARKER_START, "#"], T::Array[String])
+        lines = T.let([MARKER_START, "#"], T::Array[String])
         table = ctx.table
 
         append_header(lines, table, ctx.dialect)
@@ -46,7 +45,6 @@ module HakumiORM
 
         lines << "#"
         lines << MARKER_END
-        lines << "# rubocop:enable Layout/ExtraSpacing"
         lines.join("\n")
       end
 
@@ -57,10 +55,8 @@ module HakumiORM
         end_idx = lines.index { |l| l.match?(MARKER_END_RE) }
 
         if start_idx && end_idx && end_idx > start_idx
-          actual_start = start_idx.positive? && lines[start_idx - 1]&.match?(RUBOCOP_DISABLE_RE) ? start_idx - 1 : start_idx
-          actual_end = lines[end_idx + 1]&.match?(/^# rubocop:enable Layout\/ExtraSpacing\s*$/) ? end_idx + 1 : end_idx
-          before = (lines[0...actual_start] || []).map(&:chomp)
-          after = (lines[(actual_end + 1)..] || []).map(&:chomp)
+          before = (lines[0...start_idx] || []).map(&:chomp)
+          after = (lines[(end_idx + 1)..] || []).map(&:chomp)
           "#{(before + [annotation] + after).join("\n")}\n"
         else
           insert_before_class(lines, annotation)
@@ -80,9 +76,11 @@ module HakumiORM
         end
       end
 
+      BARE_TYPE_ALLOWANCE = 16
+
       sig { params(lines: T::Array[String], table: TableInfo, dialect: Dialect::Base).void }
       def self.append_header(lines, table, dialect)
-        lines << "# Table: #{table.name}"
+        lines << "# Table name: #{table.name}"
         pk = table.primary_key
         return unless pk
 
@@ -94,21 +92,32 @@ module HakumiORM
       sig { params(lines: T::Array[String], table: TableInfo, dialect: Dialect::Base).void }
       def self.append_columns(lines, table, dialect)
         lines << "#"
-        lines << "# Columns:"
-        table.columns.each do |col|
-          ev = col.enum_values
-          type_label = if ev
-                         enum_cls = classify_udt(col.udt_name)
-                         "enum(#{enum_cls})"
-                       else
-                         TypeMap.hakumi_type(dialect.name, col.data_type, col.udt_name).serialize
-                       end
-          constraints = col.nullable ? "nullable" : "not null"
-          d = col.default
-          constraints = "#{constraints}, default: #{d}" if d
-          constraints = "#{constraints}, PK" if col.name == table.primary_key
-          lines << "#   #{col.name.ljust(16)} #{type_label.ljust(12)} #{constraints}"
+        max_name = (table.columns.map { |c| c.name.length }.max || 0) + 1
+        col_meta = table.columns.map { |col| [col, col_type_label(col, dialect), col_attrs(col, table)] }
+        max_attrs = col_meta.map { |_, _, a| a.length }.max || 0
+
+        col_meta.each do |col, type_label, attrs|
+          lines << "# #{col.name.ljust(max_name)}:#{type_label.ljust(BARE_TYPE_ALLOWANCE)} #{attrs.ljust(max_attrs)}".rstrip
         end
+      end
+
+      sig { params(col: ColumnInfo, dialect: Dialect::Base).returns(String) }
+      def self.col_type_label(col, dialect)
+        ev = col.enum_values
+        if ev
+          "enum(#{classify_udt(col.udt_name)})"
+        else
+          TypeMap.hakumi_type(dialect.name, col.data_type, col.udt_name).serialize
+        end
+      end
+
+      sig { params(col: ColumnInfo, table: TableInfo).returns(String) }
+      def self.col_attrs(col, table)
+        parts = []
+        parts << "not null" unless col.nullable
+        parts << "default(#{col.default})" if col.default
+        parts << "primary key" if col.name == table.primary_key
+        parts.join(", ")
       end
 
       sig { params(udt_name: String).returns(String) }
@@ -120,20 +129,30 @@ module HakumiORM
       def self.append_enums(lines, predicates)
         return if predicates.empty?
 
-        grouped = T.let({}, T::Hash[String, T::Array[EnumValue]])
-        predicates.each do |pred|
-          (grouped[str(pred, :column)] ||= []) << pred
-        end
-
+        grouped = group_predicates(predicates)
         lines << "#"
         lines << "# Enums:"
-        grouped.each do |col, preds|
-          enum_cls = str(T.must(preds.first), :enum_class)
-          values = preds.map { |p| str(p, :const).downcase }.join(", ")
-          methods = preds.map { |p| str(p, :method_name) }.join(", ")
-          lines << "#   #{col.ljust(16)} #{enum_cls.ljust(24)} [#{values}]"
-          lines << "#   #{" ".ljust(16)} predicates: #{methods}"
-        end
+        max_col = (grouped.keys.map(&:length).max || 0) + 1
+        grouped.each { |col, preds| append_enum_group(lines, col, preds, max_col) }
+      end
+
+      sig { params(predicates: T::Array[EnumValue]).returns(T::Hash[String, T::Array[EnumValue]]) }
+      def self.group_predicates(predicates)
+        grouped = T.let({}, T::Hash[String, T::Array[EnumValue]])
+        predicates.each { |pred| (grouped[str(pred, :column)] ||= []) << pred }
+        grouped
+      end
+
+      sig { params(lines: T::Array[String], col: String, preds: T::Array[EnumValue], max_col: Integer).void }
+      def self.append_enum_group(lines, col, preds, max_col)
+        first_pred = preds.first
+        return unless first_pred
+
+        enum_cls = str(first_pred, :enum_class)
+        values = preds.map { |p| str(p, :const).downcase }.join(", ")
+        methods = preds.map { |p| str(p, :method_name) }.join(", ")
+        lines << "# #{col.ljust(max_col)}:#{enum_cls} [#{values}]".rstrip
+        lines << "# #{" ".ljust(max_col + 1)} predicates: #{methods}".rstrip
       end
 
       sig { params(hash: EnumValue, key: Symbol).returns(String) }
@@ -143,75 +162,63 @@ module HakumiORM
 
       sig { params(lines: T::Array[String], ctx: Context).void }
       def self.append_associations(lines, ctx)
-        assoc_lines = T.let([], T::Array[String])
-        table_name = ctx.table.name
+        entries = collect_assoc_entries(ctx)
+        return if entries.empty?
 
-        append_fk_has_many_lines(assoc_lines, ctx.has_many, table_name)
-        append_fk_has_one_lines(assoc_lines, ctx.has_one, table_name)
-        append_belongs_to_lines(assoc_lines, ctx.belongs_to, table_name)
-        append_through_lines(assoc_lines, ctx.has_many_through)
-        append_custom_assoc_lines(assoc_lines, ctx.custom_has_many, "has_many", table_name)
-        append_custom_assoc_lines(assoc_lines, ctx.custom_has_one, "has_one", table_name)
-
-        return if assoc_lines.empty?
+        max_kind = (entries.map { |e| e[0].length }.max || 0) + 1
+        max_name = (entries.map { |e| e[1].length }.max || 0) + 1
 
         lines << "#"
         lines << "# Associations:"
-        lines.concat(assoc_lines)
-      end
-
-      sig { params(out: T::Array[String], assocs: T::Array[AssocHash], table_name: String).void }
-      def self.append_fk_has_many_lines(out, assocs, table_name)
-        assocs.each do |a|
-          out << assoc_line("has_many", a[:method_name].to_s,
-                            "FK: #{a[:method_name]}.#{a[:fk_attr]} -> #{table_name}.#{a[:pk_attr]}")
+        entries.each do |kind, name, detail|
+          lines << "# #{kind.ljust(max_kind)}:#{name.ljust(max_name)} #{detail}".rstrip
         end
       end
 
-      sig { params(out: T::Array[String], assocs: T::Array[AssocHash], table_name: String).void }
-      def self.append_fk_has_one_lines(out, assocs, table_name)
+      AssocEntry = T.type_alias { [String, String, String] }
+
+      sig { params(ctx: Context).returns(T::Array[AssocEntry]) }
+      def self.collect_assoc_entries(ctx)
+        entries = T.let([], T::Array[AssocEntry])
+        tn = ctx.table.name
+
+        append_fk_entries(entries, "has_many", ctx.has_many, tn)
+        append_fk_entries(entries, "has_one", ctx.has_one, tn)
+        append_belongs_to_entries(entries, ctx.belongs_to, tn)
+        append_through_entries(entries, ctx.has_many_through)
+        ctx.custom_has_many.each { |a| entries << custom_assoc_entry("has_many", a, tn) }
+        ctx.custom_has_one.each { |a| entries << custom_assoc_entry("has_one", a, tn) }
+        entries
+      end
+
+      sig { params(entries: T::Array[AssocEntry], kind: String, assocs: T::Array[AssocHash], table_name: String).void }
+      def self.append_fk_entries(entries, kind, assocs, table_name)
         assocs.each do |a|
-          out << assoc_line("has_one", a[:method_name].to_s,
-                            "FK: #{a[:method_name]}.#{a[:fk_attr]} -> #{table_name}.#{a[:pk_attr]}")
+          entries << [kind, a[:method_name].to_s, "FK: #{a[:method_name]}.#{a[:fk_attr]} -> #{table_name}.#{a[:pk_attr]}"]
         end
       end
 
-      sig { params(out: T::Array[String], assocs: T::Array[BelongsToEntry], table_name: String).void }
-      def self.append_belongs_to_lines(out, assocs, table_name)
+      sig { params(entries: T::Array[AssocEntry], assocs: T::Array[BelongsToEntry], table_name: String).void }
+      def self.append_belongs_to_entries(entries, assocs, table_name)
         assocs.each do |a|
-          out << assoc_line("belongs_to", a[:method_name].to_s,
-                            "FK: #{table_name}.#{a[:fk_attr]} -> #{a[:method_name]}.#{a[:target_pk_attr]}")
+          entries << ["belongs_to", a[:method_name].to_s, "FK: #{table_name}.#{a[:fk_attr]} -> #{a[:method_name]}.#{a[:target_pk_attr]}"]
         end
       end
 
-      sig { params(out: T::Array[String], assocs: T::Array[AssocHash]).void }
-      def self.append_through_lines(out, assocs)
+      sig { params(entries: T::Array[AssocEntry], assocs: T::Array[AssocHash]).void }
+      def self.append_through_entries(entries, assocs)
         assocs.each do |a|
-          out << assoc_line("has_many", a[:method_name].to_s, "through: #{a[:join_table]}")
+          entries << ["has_many", a[:method_name].to_s, "through: #{a[:join_table]}"]
         end
       end
 
-      sig do
-        params(
-          out: T::Array[String],
-          assocs: T::Array[AssocHash],
-          kind: String,
-          source_table: String
-        ).void
-      end
-      def self.append_custom_assoc_lines(out, assocs, kind, source_table)
-        assocs.each do |a|
-          target = a[:target_table] || a[:method_name]
-          ob = a[:order_by_const]&.to_s
-          detail = "custom: #{target}.#{a[:fk_attr]} -> #{source_table}.#{a[:pk_attr]}"
-          detail = "#{detail}, order: #{ob.downcase}" if ob
-          out << assoc_line(kind, a[:method_name].to_s, detail)
-        end
-      end
-
-      sig { params(kind: String, name: String, detail: String).returns(String) }
-      def self.assoc_line(kind, name, detail)
-        "#   #{kind.ljust(12)} :#{name.ljust(21)} (#{detail})"
+      sig { params(kind: String, a: AssocHash, source_table: String).returns(AssocEntry) }
+      def self.custom_assoc_entry(kind, a, source_table)
+        target = a[:target_table] || a[:method_name]
+        ob = a[:order_by_const]&.to_s
+        detail = "custom: #{target}.#{a[:fk_attr]} -> #{source_table}.#{a[:pk_attr]}"
+        detail = "#{detail}, order: #{ob.downcase}" if ob
+        [kind, a[:method_name].to_s, detail]
       end
 
       sig { params(ctx: Context).returns(T::Array[String]) }

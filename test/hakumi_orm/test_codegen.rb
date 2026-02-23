@@ -338,7 +338,7 @@ class TestCodegen < HakumiORM::TestCase
 
       assert_includes result, "def custom_method; end"
       assert_includes result, "# == Schema Information =="
-      assert_includes result, "# Table: users"
+      assert_includes result, "# Table name: users"
     end
   end
 

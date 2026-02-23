@@ -370,7 +370,7 @@ module <%= module_name %>
 <%= ind %>    from_result(result)
 <%- else -%>
 <%= ind %>    result.close
-<%= ind %>    first_id = T.unsafe(adapter).last_insert_id
+<%= ind %>    first_id = adapter.last_insert_id
 <%= ind %>    count = records.length
 <%= ind %>    fetch = adapter.exec("SELECT <%= returning_cols %> FROM <%= insert_all_table %> WHERE <%= insert_all_pk %> >= #{first_id} AND <%= insert_all_pk %> < #{first_id + count} ORDER BY <%= insert_all_pk %>")
 <%= ind %>    from_result(fetch)

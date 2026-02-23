@@ -28,9 +28,9 @@ module HakumiORM
       def exec_params(sql, params)
         start = log_query_start
         stmt = @client.prepare(sql)
-        result = T.unsafe(stmt).execute(*mysql_params(params), as: :array, cast: false)
+        result = stmt.execute(*mysql_params(params), as: :array, cast: false)
         rows = result_to_rows(result)
-        r = MysqlResult.new(rows, T.unsafe(stmt).affected_rows)
+        r = MysqlResult.new(rows, stmt.affected_rows)
         log_query_done(sql, params, start)
         r
       ensure
@@ -60,14 +60,14 @@ module HakumiORM
         stmt = @prepared[name]
         raise HakumiORM::Error, "Statement #{name.inspect} not prepared" unless stmt
 
-        result = T.unsafe(stmt).execute(*mysql_params(params), as: :array, cast: false)
+        result = stmt.execute(*mysql_params(params), as: :array, cast: false)
         rows = result_to_rows(result)
-        r = MysqlResult.new(rows, T.unsafe(stmt).affected_rows)
+        r = MysqlResult.new(rows, stmt.affected_rows)
         log_query_done(name, params, start)
         r
       end
 
-      sig { returns(Integer) }
+      sig { override.returns(Integer) }
       def last_insert_id
         @client.last_id
       end

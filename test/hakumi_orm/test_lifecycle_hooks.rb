@@ -249,12 +249,14 @@ class TestLifecycleHooks < HakumiORM::TestCase
 end
 
 module HookTracker
-  @calls = []
+  CallEntry = T.type_alias { [Symbol, Integer] }
+
+  @calls = T.let([], T::Array[CallEntry])
 
   class << self
     extend T::Sig
 
-    sig { returns(T::Array[T::Array[T.untyped]]) }
+    sig { returns(T::Array[CallEntry]) }
     attr_reader :calls
 
     sig { void }
@@ -262,7 +264,7 @@ module HookTracker
       @calls = []
     end
 
-    sig { params(event: Symbol, id: T.untyped).void }
+    sig { params(event: Symbol, id: Integer).void }
     def track(event, id)
       @calls << [event, id]
     end

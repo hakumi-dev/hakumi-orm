@@ -60,7 +60,6 @@ module HakumiORM
         refetch_bind_list = nil
         unless @dialect.supports_returning? || has_auto_pk
           all_cols = table.columns.map { |c| @dialect.quote_id(c.name) }.join(", ")
-          pk_cols = ins_cols.select { |c| c.name == pk || table.primary_key_columns&.include?(c.name) rescue c.name == pk }
           if pk
             where = "#{@dialect.qualified_name(table.name, pk)} = #{@dialect.bind_marker(0)}"
             refetch_sql = "SELECT #{all_cols} FROM #{@dialect.quote_id(table.name)} WHERE #{where} LIMIT 1"

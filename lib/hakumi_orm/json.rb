@@ -6,10 +6,9 @@ require "json"
 module HakumiORM
   JsonScalar = T.type_alias { T.nilable(T.any(String, Integer, Float, T::Boolean)) }
 
-  # Thin wrapper over a raw JSON string. Each accessor re-parses on purpose:
-  # caching the result of JSON.parse would require T.untyped, which breaks
-  # the project's zero-untyped policy. For hot-path access, parse once
-  # outside this class instead.
+  # Thin wrapper over a raw JSON string. Each accessor re-parses on purpose
+  # to preserve full type safety. For hot-path access, parse once outside
+  # this class instead.
   class Json
     extend T::Sig
 

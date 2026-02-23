@@ -19,7 +19,8 @@ module HakumiORM
       end
       def annotate_models!(models_dir, has_many_map, has_one_map, through_map)
         @tables.each_value do |table|
-          model_path = File.join(models_dir, "#{singularize(table.name)}.rb")
+          singular = singularize(table.name)
+          model_path = File.join(models_dir, "#{singular}.rb")
           next unless File.exist?(model_path)
 
           ctx = ModelAnnotator::Context.new(
@@ -33,6 +34,17 @@ module HakumiORM
             enum_predicates: build_enum_predicates(table)
           )
           ModelAnnotator.annotate!(model_path, ctx)
+          annotate_variants!(models_dir, singular, ctx)
+        end
+      end
+
+      sig { params(models_dir: String, singular: String, ctx: ModelAnnotator::Context).void }
+      def annotate_variants!(models_dir, singular, ctx)
+        variant_dir = File.join(models_dir, singular)
+        return unless Dir.exist?(variant_dir)
+
+        Dir.glob(File.join(variant_dir, "**", "*.rb")).each do |variant_path|
+          ModelAnnotator.annotate!(variant_path, ctx)
         end
       end
 
