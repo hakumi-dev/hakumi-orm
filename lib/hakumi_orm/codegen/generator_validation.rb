@@ -52,13 +52,37 @@ module HakumiORM
           end
         end.join(", ")
 
+        pk = table.primary_key
+        pk_col = pk ? table.columns.find { |c| c.name == pk } : nil
+        has_auto_pk = pk_col && !ins_cols.include?(pk_col)
+
+        refetch_sql = nil
+        refetch_bind_list = nil
+        unless @dialect.supports_returning? || has_auto_pk
+          all_cols = table.columns.map { |c| @dialect.quote_id(c.name) }.join(", ")
+          pk_cols = ins_cols.select { |c| c.name == pk || table.primary_key_columns&.include?(c.name) rescue c.name == pk }
+          if pk
+            where = "#{@dialect.qualified_name(table.name, pk)} = #{@dialect.bind_marker(0)}"
+            refetch_sql = "SELECT #{all_cols} FROM #{@dialect.quote_id(table.name)} WHERE #{where} LIMIT 1"
+            refetch_bind_list = nullable_bind_expr(pk_col, "@record.#{pk}")
+          else
+            where_parts = ins_cols.each_with_index.map { |c, i| "#{@dialect.qualified_name(table.name, c.name)} = #{@dialect.bind_marker(i)}" }
+            refetch_sql = "SELECT #{all_cols} FROM #{@dialect.quote_id(table.name)} WHERE #{where_parts.join(" AND ")} LIMIT 1"
+            refetch_bind_list = ins_cols.map { |c| nullable_bind_expr(c, "@record.#{c.name}") }.join(", ")
+          end
+        end
+
         render("validated_record",
                module_name: @module_name,
                ind: indent,
                record_class_name: qualify(record_cls),
                columns: cols,
                insert_sql: insert_sql,
-               validated_bind_list: validated_bind_list)
+               validated_bind_list: validated_bind_list,
+               supports_returning: @dialect.supports_returning?,
+               has_auto_pk: has_auto_pk,
+               refetch_sql: refetch_sql,
+               refetch_bind_list: refetch_bind_list)
       end
 
       sig { params(table: TableInfo).returns(T.nilable(String)) }

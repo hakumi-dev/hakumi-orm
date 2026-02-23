@@ -10,6 +10,7 @@ module HakumiORM
       MARKER_END = "# == End Schema Information =="
       MARKER_START_RE = T.let(/^# == Schema Information ==\s*$/, Regexp)
       MARKER_END_RE = T.let(/^# == End Schema Information ==\s*$/, Regexp)
+      RUBOCOP_DISABLE_RE = T.let(/^# rubocop:disable Layout\/ExtraSpacing\s*$/, Regexp)
 
       AssocHash = T.type_alias { T::Hash[Symbol, T.any(String, T::Boolean)] }
 
@@ -35,7 +36,7 @@ module HakumiORM
 
       sig { params(ctx: Context).returns(String) }
       def self.build_annotation(ctx)
-        lines = T.let([MARKER_START, "#"], T::Array[String])
+        lines = T.let(["# rubocop:disable Layout/ExtraSpacing", MARKER_START, "#"], T::Array[String])
         table = ctx.table
 
         append_header(lines, table, ctx.dialect)
@@ -45,6 +46,7 @@ module HakumiORM
 
         lines << "#"
         lines << MARKER_END
+        lines << "# rubocop:enable Layout/ExtraSpacing"
         lines.join("\n")
       end
 
@@ -55,8 +57,10 @@ module HakumiORM
         end_idx = lines.index { |l| l.match?(MARKER_END_RE) }
 
         if start_idx && end_idx && end_idx > start_idx
-          before = (lines[0...start_idx] || []).map(&:chomp)
-          after = (lines[(end_idx + 1)..] || []).map(&:chomp)
+          actual_start = start_idx.positive? && lines[start_idx - 1]&.match?(RUBOCOP_DISABLE_RE) ? start_idx - 1 : start_idx
+          actual_end = lines[end_idx + 1]&.match?(/^# rubocop:enable Layout\/ExtraSpacing\s*$/) ? end_idx + 1 : end_idx
+          before = (lines[0...actual_start] || []).map(&:chomp)
+          after = (lines[(actual_end + 1)..] || []).map(&:chomp)
           "#{(before + [annotation] + after).join("\n")}\n"
         else
           insert_before_class(lines, annotation)

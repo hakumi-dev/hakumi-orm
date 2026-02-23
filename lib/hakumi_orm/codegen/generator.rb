@@ -141,7 +141,7 @@ module HakumiORM
 
       sig { params(template_name: String, locals: T::Hash[Symbol, TemplateLocal]).returns(String) }
       def render(template_name, locals)
-        path = File.join(TEMPLATE_DIR, "#{template_name}.rb.erb")
+        path = File.join(TEMPLATE_DIR, "#{template_name}.rb.tt")
         T.cast(ERB.new(File.read(path), trim_mode: "-").result_with_hash(locals), String)
       end
 
@@ -207,6 +207,8 @@ module HakumiORM
                insert_all_columns: build_insert_all_columns(ins_cols),
                supports_returning: @dialect.supports_returning?,
                returning_cols: returning_list,
+               insert_all_table: @dialect.quote_id(table.name),
+               insert_all_pk: table.primary_key ? @dialect.quote_id(table.primary_key) : nil,
                enum_predicates: build_enum_predicates(table),
                **build_find_locals(table, record_cls),
                **build_delete_locals(table),
@@ -414,7 +416,8 @@ module HakumiORM
       sig { params(table: TableInfo).returns(T::Array[ColumnInfo]) }
       def insertable_columns(table)
         table.columns.reject do |c|
-          c.default&.start_with?("nextval(") || false
+          d = c.default
+          (d&.start_with?("nextval(") || d == "auto_increment") || false
         end
       end
 

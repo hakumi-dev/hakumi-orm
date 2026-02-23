@@ -31,7 +31,16 @@ module <%= module_name %>
 <%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
 
 <%= ind %>    result = adapter.exec_params(SQL_INSERT, [<%= validated_bind_list %>])
+<%- if supports_returning -%>
 <%= ind %>    record = <%= record_class_name %>.from_result(result).first
+<%- elsif has_auto_pk -%>
+<%= ind %>    result.close
+<%= ind %>    record = <%= record_class_name %>.find(T.unsafe(adapter).last_insert_id, adapter: adapter)
+<%- else -%>
+<%= ind %>    result.close
+<%= ind %>    refetch = adapter.exec_params('<%= refetch_sql %>', [<%= refetch_bind_list %>])
+<%= ind %>    record = <%= record_class_name %>.from_result(refetch).first
+<%- end -%>
 <%= ind %>    raise ::HakumiORM::Error, "INSERT returned no rows" unless record
 
 <%= ind %>    <%= record_class_name %>::Contract.after_create(record, adapter)

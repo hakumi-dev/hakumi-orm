@@ -28,9 +28,9 @@ module HakumiORM
       def exec_params(sql, params)
         start = log_query_start
         stmt = @client.prepare(sql)
-        result = T.unsafe(stmt).execute(*params, as: :array, cast: false)
+        result = T.unsafe(stmt).execute(*mysql_params(params), as: :array, cast: false)
         rows = result_to_rows(result)
-        r = MysqlResult.new(rows, @client.affected_rows)
+        r = MysqlResult.new(rows, T.unsafe(stmt).affected_rows)
         log_query_done(sql, params, start)
         r
       ensure
@@ -42,7 +42,7 @@ module HakumiORM
         start = log_query_start
         result = @client.query(sql, as: :array, cast: false)
         rows = result_to_rows(result)
-        r = MysqlResult.new(rows, @client.affected_rows)
+        r = MysqlResult.new(rows, safe_affected_rows)
         log_query_done(sql, [], start)
         r
       end
@@ -60,11 +60,16 @@ module HakumiORM
         stmt = @prepared[name]
         raise HakumiORM::Error, "Statement #{name.inspect} not prepared" unless stmt
 
-        result = T.unsafe(stmt).execute(*params, as: :array, cast: false)
+        result = T.unsafe(stmt).execute(*mysql_params(params), as: :array, cast: false)
         rows = result_to_rows(result)
-        r = MysqlResult.new(rows, @client.affected_rows)
+        r = MysqlResult.new(rows, T.unsafe(stmt).affected_rows)
         log_query_done(name, params, start)
         r
+      end
+
+      sig { returns(Integer) }
+      def last_insert_id
+        @client.last_id
       end
 
       sig { override.void }
@@ -75,6 +80,25 @@ module HakumiORM
       end
 
       private
+
+      sig { params(params: T::Array[PGValue]).returns(T::Array[PGValue]) }
+      def mysql_params(params)
+        params.map do |v|
+          case v
+          when "t" then 1
+          when "f" then 0
+          else v
+          end
+        end
+      end
+
+      # MySQL 9.x raises Mysql2::Error on affected_rows after SELECT queries
+      sig { returns(Integer) }
+      def safe_affected_rows
+        @client.affected_rows
+      rescue Mysql2::Error
+        0
+      end
 
       sig { params(result: T.nilable(Mysql2::Result)).returns(T::Array[T::Array[T.nilable(String)]]) }
       def result_to_rows(result)

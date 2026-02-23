@@ -15,7 +15,7 @@ module HakumiORM
 
       COLUMNS_SQL = <<~SQL
         SELECT table_name, column_name, data_type, column_type,
-               is_nullable, column_default, character_maximum_length
+               is_nullable, column_default, character_maximum_length, extra
         FROM information_schema.columns
         WHERE table_schema = ?
         ORDER BY table_name, ordinal_position
@@ -88,12 +88,14 @@ module HakumiORM
             column_type = result.fetch_value(i, 3)
             resolved_type = column_type == "tinyint(1)" ? "tinyint(1)" : data_type
             max_len_raw = result.get_value(i, 6)
+            extra = result.get_value(i, 7)
+            col_default = extra&.include?("auto_increment") ? "auto_increment" : result.get_value(i, 5)
             tbl.columns << ColumnInfo.new(
               name: result.fetch_value(i, 1),
               data_type: resolved_type,
               udt_name: resolved_type,
               nullable: result.fetch_value(i, 4) == "YES",
-              default: result.get_value(i, 5),
+              default: col_default,
               max_length: max_len_raw&.to_i
             )
           end
