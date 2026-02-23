@@ -157,4 +157,26 @@ class TestField < HakumiORM::TestCase
     assert_equal :is_null, field.is_null.op
     assert_equal :is_not_null, field.is_not_null.op
   end
+
+  test "in_list with empty array returns constant false expression" do
+    expr = UserSchema::AGE.in_list([])
+
+    assert_instance_of HakumiORM::RawExpr, expr
+    dialect = HakumiORM::Dialect::Postgresql.new
+    compiled = dialect.compiler.select(table: "users", columns: [UserSchema::ID], where_expr: expr)
+
+    assert_includes compiled.sql, "1 = 0"
+    assert_empty compiled.binds
+  end
+
+  test "not_in_list with empty array returns constant true expression" do
+    expr = UserSchema::AGE.not_in_list([])
+
+    assert_instance_of HakumiORM::RawExpr, expr
+    dialect = HakumiORM::Dialect::Postgresql.new
+    compiled = dialect.compiler.select(table: "users", columns: [UserSchema::ID], where_expr: expr)
+
+    assert_includes compiled.sql, "1 = 1"
+    assert_empty compiled.binds
+  end
 end

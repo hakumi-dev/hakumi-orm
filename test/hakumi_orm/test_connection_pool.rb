@@ -160,6 +160,37 @@ class TestConnectionPool < HakumiORM::TestCase
     assert_equal prepare_on, exec_on
   end
 
+  test "after_commit on pool forwards to checked-out connection" do
+    calls = []
+
+    @pool.transaction do |_txn|
+      @pool.after_commit { calls << :committed }
+    end
+
+    assert_equal [:committed], calls
+  end
+
+  test "after_rollback on pool forwards to checked-out connection" do
+    calls = []
+
+    assert_raises(RuntimeError) do
+      @pool.transaction do |_txn|
+        @pool.after_rollback { calls << :rolled_back }
+        raise "boom"
+      end
+    end
+
+    assert_equal [:rolled_back], calls
+  end
+
+  test "after_commit on pool raises outside transaction" do
+    err = assert_raises(HakumiORM::Error) do
+      @pool.after_commit { nil }
+    end
+
+    assert_includes err.message, "only be called inside a transaction"
+  end
+
   test "timeout raises when pool is exhausted" do
     tiny_pool = HakumiORM::Adapter::ConnectionPool.new(size: 1, timeout: 0.1) do
       HakumiORM::Test::MockAdapter.new

@@ -204,7 +204,19 @@ class TestSchemaFingerprint < HakumiORM::TestCase
     sqls = adapter.executed_queries.map { |q| q[:sql] }
 
     assert(sqls.any? { |s| s.include?("CREATE TABLE IF NOT EXISTS hakumi_schema_meta") })
-    assert(sqls.any? { |s| s.include?("DELETE FROM hakumi_schema_meta") })
+
+    begin_idx = sqls.index("BEGIN")
+    delete_idx = sqls.index { |s| s.include?("DELETE FROM hakumi_schema_meta") }
+    insert_idx = sqls.index { |s| s.include?("INSERT INTO hakumi_schema_meta") }
+    commit_idx = sqls.index("COMMIT")
+
+    refute_nil begin_idx, "should wrap in transaction"
+    refute_nil delete_idx
+    refute_nil insert_idx
+    refute_nil commit_idx
+    assert_operator begin_idx, :<, delete_idx, "DELETE should be inside transaction"
+    assert_operator delete_idx, :<, insert_idx, "INSERT should follow DELETE"
+    assert_operator insert_idx, :<, commit_idx, "INSERT should come before COMMIT"
 
     insert_query = adapter.executed_queries.find { |q| q[:sql].include?("INSERT INTO hakumi_schema_meta") }
 

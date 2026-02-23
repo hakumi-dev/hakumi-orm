@@ -59,12 +59,14 @@ module HakumiORM
       sig { params(adapter: Adapter::Base, fingerprint: String, canonical: String).void }
       def self.store!(adapter, fingerprint, canonical)
         adapter.exec(CREATE_META_SQL).close
-        adapter.exec("DELETE FROM #{SCHEMA_META_TABLE}").close
-        d = adapter.dialect
-        sql = "INSERT INTO #{SCHEMA_META_TABLE} (fingerprint, schema_data, generator_version) " \
-              "VALUES (#{d.bind_marker(0)}, #{d.bind_marker(1)}, #{d.bind_marker(2)})"
-        result = adapter.exec_params(sql, [fingerprint, canonical, GENERATOR_VERSION])
-        result.close
+        adapter.transaction do |_txn|
+          adapter.exec("DELETE FROM #{SCHEMA_META_TABLE}").close
+          d = adapter.dialect
+          sql = "INSERT INTO #{SCHEMA_META_TABLE} (fingerprint, schema_data, generator_version) " \
+                "VALUES (#{d.bind_marker(0)}, #{d.bind_marker(1)}, #{d.bind_marker(2)})"
+          result = adapter.exec_params(sql, [fingerprint, canonical, GENERATOR_VERSION])
+          result.close
+        end
       end
 
       sig { params(adapter: Adapter::Base).returns(T.nilable(String)) }

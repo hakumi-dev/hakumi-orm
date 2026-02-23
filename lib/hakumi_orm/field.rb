@@ -34,13 +34,17 @@ module HakumiORM
       neq(other)
     end
 
-    sig { params(values: T::Array[ValueType]).returns(Predicate) }
+    sig { params(values: T::Array[ValueType]).returns(Expr) }
     def in_list(values)
+      return RawExpr.new("1 = 0", []) if values.empty?
+
       Predicate.new(self, :in, values.map { |v| to_bind(v) })
     end
 
-    sig { params(values: T::Array[ValueType]).returns(Predicate) }
+    sig { params(values: T::Array[ValueType]).returns(Expr) }
     def not_in_list(values)
+      return RawExpr.new("1 = 1", []) if values.empty?
+
       Predicate.new(self, :not_in, values.map { |v| to_bind(v) })
     end
 

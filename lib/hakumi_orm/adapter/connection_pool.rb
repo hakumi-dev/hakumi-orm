@@ -67,6 +67,16 @@ module HakumiORM
         end
       end
 
+      sig { override.params(blk: T.proc.void).void }
+      def after_commit(&blk)
+        checked_out_connection!.after_commit(&blk)
+      end
+
+      sig { override.params(blk: T.proc.void).void }
+      def after_rollback(&blk)
+        checked_out_connection!.after_rollback(&blk)
+      end
+
       sig { override.void }
       def close
         @mutex.synchronize do
@@ -94,6 +104,15 @@ module HakumiORM
       end
 
       private
+
+      sig { returns(Base) }
+      def checked_out_connection!
+        tid = Thread.current.object_id
+        conn = @mutex.synchronize { @in_use[tid] }
+        raise HakumiORM::Error, "after_commit/after_rollback can only be called inside a transaction" unless conn
+
+        conn
+      end
 
       sig do
         type_parameters(:R)
