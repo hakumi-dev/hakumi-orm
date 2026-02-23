@@ -146,6 +146,18 @@ module HakumiORM
       def compatible_with?(other)
         self == other || compat_category == other.compat_category
       end
+
+      # Returns the PG::TextDecoder expression for C-level decoding, or nil for string passthrough.
+      sig { returns(T.nilable(::String)) }
+      def pg_decoder_expr
+        case self
+        when Integer      then "PG::TextDecoder::Integer.new"
+        when Boolean      then "PG::TextDecoder::Boolean.new"
+        when Float        then "PG::TextDecoder::Float.new"
+        when Timestamp    then "PG::TextDecoder::TimestampUtc.new"
+        when Date         then "PG::TextDecoder::Date.new"
+        end
+      end
     end
   end
 end

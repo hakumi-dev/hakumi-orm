@@ -127,8 +127,8 @@ module HakumiORM
               data_type: result.fetch_value(i, 2),
               udt_name: udt,
               nullable: result.fetch_value(i, 4) == "YES",
-              default: result.get_value(i, 5),
-              max_length: max_len_raw&.to_i,
+              default: result.get_value(i, 5)&.to_s,
+              max_length: max_len_raw&.to_s&.to_i,
               enum_values: enum_map[udt]
             )
           end

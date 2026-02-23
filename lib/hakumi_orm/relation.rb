@@ -183,7 +183,7 @@ module HakumiORM
       use_result(result) { |r| r.fetch_value(0, 0).to_i }
     end
 
-    sig { params(field: FieldRef, adapter: Adapter::Base).returns(T::Array[T.nilable(String)]) }
+    sig { params(field: FieldRef, adapter: Adapter::Base).returns(T::Array[Adapter::CellValue]) }
     def pluck_raw(field, adapter: HakumiORM.adapter)
       compiled = build_select(adapter.dialect, columns_override: [field])
       use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))) { |r| r.column_values(0) }

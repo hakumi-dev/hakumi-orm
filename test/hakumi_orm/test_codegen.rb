@@ -70,20 +70,21 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
-  test "record has update! with SQL_UPDATE_BY_PK and RETURNING" do
+  test "record has update! with dirty tracking and RETURNING" do
     Dir.mktmpdir do |dir|
       gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
       code = File.read(File.join(dir, "user/record.rb"))
 
-      assert_includes code, "SQL_UPDATE_BY_PK"
       assert_includes code, 'UPDATE "users" SET'
       assert_includes code, "RETURNING"
       assert_includes code, "def update!"
       assert_includes code, "Contract.on_update"
       assert_includes code, "Contract.on_all"
       assert_includes code, "Contract.on_persist"
+      assert_includes code, "!= @", "update! should compare new values with current ivars for dirty tracking"
+      assert_includes code, "return self if idx.zero?", "update! should return self when nothing changed"
     end
   end
 
@@ -451,7 +452,7 @@ class TestCodegen < HakumiORM::TestCase
 
       record_code = File.read(File.join(dir, "post/record.rb"))
 
-      assert_includes record_code, "SQL_UPDATE_BY_PK"
+      assert_includes record_code, "def update!"
       assert_includes record_code, "TimeBind.new(::Time.now)", "update! should auto-set updated_at"
     end
   end

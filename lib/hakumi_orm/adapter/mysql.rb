@@ -21,7 +21,7 @@ module HakumiORM
 
       sig { params(params: T::Hash[Symbol, T.any(String, Integer)]).returns(Mysql) }
       def self.connect(params)
-        new(Mysql2::Client.new(params.merge(cast: false, as: :array)))
+        new(Mysql2::Client.new(params.merge(cast: true, as: :array)))
       end
 
       sig { override.params(sql: String, params: T::Array[PGValue]).returns(MysqlResult) }
@@ -30,7 +30,7 @@ module HakumiORM
         stmt = @client.prepare(sql)
         # Sorbet cannot verify splats on dynamically-sized arrays (error 7019);
         # mysql2's C extension requires positional args for bind parameters.
-        result = T.unsafe(stmt).execute(*mysql_params(params), as: :array, cast: false)
+        result = T.unsafe(stmt).execute(*mysql_params(params), as: :array)
         rows = result_to_rows(result)
         r = MysqlResult.new(rows, stmt.affected_rows)
         log_query_done(sql, params, start)
@@ -42,7 +42,7 @@ module HakumiORM
       sig { override.params(sql: String).returns(MysqlResult) }
       def exec(sql)
         start = log_query_start
-        result = @client.query(sql, as: :array, cast: false)
+        result = @client.query(sql, as: :array, cast: true)
         rows = result_to_rows(result)
         r = MysqlResult.new(rows, safe_affected_rows)
         log_query_done(sql, [], start)
@@ -64,7 +64,7 @@ module HakumiORM
 
         # Sorbet cannot verify splats on dynamically-sized arrays (error 7019);
         # mysql2's C extension requires positional args for bind parameters.
-        result = T.unsafe(stmt).execute(*mysql_params(params), as: :array, cast: false)
+        result = T.unsafe(stmt).execute(*mysql_params(params), as: :array)
         rows = result_to_rows(result)
         r = MysqlResult.new(rows, stmt.affected_rows)
         log_query_done(name, params, start)
@@ -104,13 +104,11 @@ module HakumiORM
         0
       end
 
-      sig { params(result: T.nilable(Mysql2::Result)).returns(T::Array[T::Array[T.nilable(String)]]) }
+      sig { params(result: T.nilable(Mysql2::Result)).returns(T::Array[T::Array[CellValue]]) }
       def result_to_rows(result)
         return [] unless result
 
-        result.map do |row|
-          row.map { |v| v&.to_s }
-        end
+        result.to_a
       end
     end
   end

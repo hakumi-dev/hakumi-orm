@@ -107,11 +107,6 @@ class UserRecord
     record
   end
 
-  SQL_UPDATE_BY_PK = T.let(
-    'UPDATE "users" SET "name" = $1, "email" = $2, "age" = $3, "active" = $4 WHERE "users"."id" = $5 RETURNING "id", "name", "email", "age", "active"',
-    String
-  )
-
   sig do
     params(
       name: String, email: String, age: T.nilable(Integer), active: T::Boolean,
@@ -126,7 +121,32 @@ class UserRecord
     UserRecord::Contract.on_persist(proxy, adapter, errors)
     raise HakumiORM::ValidationError, errors unless errors.valid?
 
-    result = adapter.exec_params(SQL_UPDATE_BY_PK, [name, email, age, adapter.encode(HakumiORM::BoolBind.new(active)), @id])
+    pairs = update_dirty_pairs(name, email, age, active, adapter)
+    return self if pairs.empty?
+
+    exec_update(pairs, adapter)
+  end
+
+  sig do
+    params(name: String, email: String, age: T.nilable(Integer), active: T::Boolean,
+           adapter: HakumiORM::Adapter::Base).returns(T::Array[T::Array[T.untyped]])
+  end
+  def update_dirty_pairs(name, email, age, active, adapter)
+    pairs = []
+    pairs << ['"name" = $', adapter.encode(HakumiORM::StrBind.new(name))] if name != @name
+    pairs << ['"email" = $', adapter.encode(HakumiORM::StrBind.new(email))] if email != @email
+    pairs << ['"age" = $', age.nil? ? nil : adapter.encode(HakumiORM::IntBind.new(age))] if age != @age
+    pairs << ['"active" = $', adapter.encode(HakumiORM::BoolBind.new(active))] if active != @active
+    pairs
+  end
+
+  sig { params(pairs: T::Array[T::Array[T.untyped]], adapter: HakumiORM::Adapter::Base).returns(UserRecord) }
+  def exec_update(pairs, adapter)
+    sets = pairs.each_with_index.map { |(col, _), i| "#{col}#{i + 1}" }.join(", ")
+    binds = pairs.map(&:last)
+    binds << @id
+    sql = %(UPDATE "users" SET #{sets} WHERE "users"."id" = $#{binds.size} RETURNING "id", "name", "email", "age", "active")
+    result = adapter.exec_params(sql, binds)
     record = UserRecord.from_result(result, dialect: adapter.dialect).first
     raise HakumiORM::Error, "UPDATE returned no rows" unless record
 

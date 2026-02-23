@@ -88,15 +88,15 @@ module HakumiORM
             column_type = result.fetch_value(i, 3)
             resolved_type = column_type == "tinyint(1)" ? "tinyint(1)" : data_type
             max_len_raw = result.get_value(i, 6)
-            extra = result.get_value(i, 7)
-            col_default = extra&.include?("auto_increment") ? "auto_increment" : result.get_value(i, 5)
+            extra = result.get_value(i, 7)&.to_s
+            col_default = extra&.include?("auto_increment") ? "auto_increment" : result.get_value(i, 5)&.to_s
             tbl.columns << ColumnInfo.new(
               name: result.fetch_value(i, 1),
               data_type: resolved_type,
               udt_name: resolved_type,
               nullable: result.fetch_value(i, 4) == "YES",
               default: col_default,
-              max_length: max_len_raw&.to_i
+              max_length: max_len_raw&.to_s&.to_i
             )
           end
           i += 1

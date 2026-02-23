@@ -23,7 +23,7 @@ module HakumiORM
       run_aggregate("MAX", field, adapter)
     end
 
-    sig { params(fields: FieldRef, adapter: Adapter::Base).returns(T::Array[T::Array[T.nilable(String)]]) }
+    sig { params(fields: FieldRef, adapter: Adapter::Base).returns(T::Array[T::Array[Adapter::CellValue]]) }
     def pluck(*fields, adapter: HakumiORM.adapter)
       compiled = build_select(adapter.dialect, columns_override: fields)
       use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))) do |r|
@@ -93,7 +93,7 @@ module HakumiORM
       use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))) { |r| r.fetch_value(0, 0) }
     end
 
-    sig { params(result: Adapter::Result, num_cols: Integer).returns(T::Array[T::Array[T.nilable(String)]]) }
+    sig { params(result: Adapter::Result, num_cols: Integer).returns(T::Array[T::Array[Adapter::CellValue]]) }
     def build_pluck_rows(result, num_cols)
       if num_cols == 1
         result.column_values(0).zip

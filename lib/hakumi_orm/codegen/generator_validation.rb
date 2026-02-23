@@ -146,52 +146,55 @@ module HakumiORM
 
         has_lv = lock_version_column(table)
         user_cols = has_lv ? ins_cols.reject { |c| c.name == "lock_version" } : ins_cols
-        sql = build_update_sql(table, user_cols, pk, lock_version: !has_lv.nil?)
+        tbl = @dialect.quote_id(table.name)
+
+        build_update_hash(table, user_cols, tbl, has_lv, pk)
+      end
+
+      sig do
+        params(table: TableInfo, user_cols: T::Array[ColumnInfo], tbl: String,
+               has_lv: T.nilable(ColumnInfo), pk: String).returns(T::Hash[Symbol, TemplateLocal])
+      end
+      def build_update_hash(table, user_cols, tbl, has_lv, pk)
+        returning = table.columns.map { |c| @dialect.quote_id(c.name) }.join(", ")
 
         {
-          update_sql: sql,
+          update_sql: tbl, update_table: tbl, update_returning: returning,
           update_sig_params: user_cols.map { |c| "#{c.name}: #{ruby_type(c)}" }.join(", "),
           update_defaults: user_cols.map { |c| "#{c.name}: @#{c.name}" }.join(", "),
-          update_bind_list: build_update_bind_list(user_cols),
           update_ins_cols: user_cols.map { |c| { name: c.name } },
+          update_columns: build_update_column_descs(user_cols),
+          update_pk_where: @dialect.qualified_name(table.name, pk),
+          supports_positional_binds: @dialect.is_a?(HakumiORM::Dialect::Postgresql),
+          **build_lv_locals(table.name, has_lv)
+        }
+      end
+
+      sig { params(user_cols: T::Array[ColumnInfo]).returns(T::Array[T::Hash[Symbol, T.untyped]]) }
+      def build_update_column_descs(user_cols)
+        user_cols.map do |col|
+          { name: col.name, quoted_name: @dialect.quote_id(col.name),
+            bind_expr: update_col_bind_expr(col), auto_ts: auto_timestamp_on_update?(col) }
+        end
+      end
+
+      sig { params(table_name: String, has_lv: T.nilable(ColumnInfo)).returns(T::Hash[Symbol, TemplateLocal]) }
+      def build_lv_locals(table_name, has_lv)
+        lv_quoted = has_lv ? @dialect.quote_id("lock_version") : nil
+        {
+          update_lv_set: lv_quoted ? "#{lv_quoted} = #{lv_quoted} + 1" : nil,
+          update_lv_where: has_lv ? @dialect.qualified_name(table_name, "lock_version") : nil,
           has_lock_version: !has_lv.nil?
         }
       end
 
-      sig do
-        params(table: TableInfo, user_cols: T::Array[ColumnInfo], pk: String, lock_version: T::Boolean).returns(String)
-      end
-      def build_update_sql(table, user_cols, pk, lock_version:)
-        set_parts = user_cols.each_with_index.map do |col, idx|
-          "#{@dialect.quote_id(col.name)} = #{@dialect.bind_marker(idx)}"
+      sig { params(col: ColumnInfo).returns(String) }
+      def update_col_bind_expr(col)
+        if col.enum_values
+          enum_bind_expr("val", col)
+        else
+          nullable_bind_expr(col, "val")
         end
-        set_parts << "#{@dialect.quote_id("lock_version")} = #{@dialect.quote_id("lock_version")} + 1" if lock_version
-
-        next_idx = user_cols.length
-        pk_marker = @dialect.bind_marker(next_idx)
-        where = "#{@dialect.qualified_name(table.name, pk)} = #{pk_marker}"
-        if lock_version
-          lv_marker = @dialect.bind_marker(next_idx + 1)
-          where += " AND #{@dialect.qualified_name(table.name, "lock_version")} = #{lv_marker}"
-        end
-
-        returning = table.columns.map { |c| @dialect.quote_id(c.name) }.join(", ")
-        sql = "UPDATE #{@dialect.quote_id(table.name)} SET #{set_parts.join(", ")} WHERE #{where}"
-        sql += " RETURNING #{returning}" if @dialect.supports_returning?
-        sql
-      end
-
-      sig { params(user_cols: T::Array[ColumnInfo]).returns(String) }
-      def build_update_bind_list(user_cols)
-        user_cols.map do |col|
-          if auto_timestamp_on_update?(col)
-            "adapter.encode(#{hakumi_type_for(col).bind_class}.new(::Time.now))"
-          elsif col.enum_values
-            enum_bind_expr(col.name, col)
-          else
-            nullable_bind_expr(col, col.name)
-          end
-        end.join(", ")
       end
 
       sig { params(accessor: String, col: ColumnInfo).returns(String) }

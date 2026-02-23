@@ -47,7 +47,7 @@ module HakumiORM
           col_name = result.fetch_value(i, 1)
           col_type = result.fetch_value(i, 2)
           notnull = result.fetch_value(i, 3)
-          dflt = result.get_value(i, 4)
+          dflt = result.get_value(i, 4)&.to_s
           pk = result.fetch_value(i, 5)
 
           tbl.primary_key = col_name if pk == "1"

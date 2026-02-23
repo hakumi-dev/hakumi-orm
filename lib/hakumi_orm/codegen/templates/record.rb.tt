@@ -46,11 +46,28 @@ module <%= module_name %>
 <%- end -%>
 <%= ind %>  end
 
+<%- has_pg_decoders = pg_decoders.any? { |d| !d.nil? } -%>
+<%- if has_pg_decoders -%>
+<%= ind %>  sig { returns(T.nilable(Object)) }
+<%= ind %>  def self._pg_type_map
+<%= ind %>    return @_pg_type_map if defined?(@_pg_type_map)
+<%= ind %>    @_pg_type_map = PG::TypeMapByColumn.new([<%= pg_decoders.map { |d| d || 'nil' }.join(', ') %>])
+<%= ind %>  rescue ::NameError
+<%= ind %>    @_pg_type_map = nil
+<%= ind %>  end
+
+<%- end -%>
 <%= ind %>  sig { params(result: ::HakumiORM::Adapter::Result, dialect: ::HakumiORM::Dialect::Base).returns(T::Array[<%= record_class_name %>]) }
 <%= ind %>  def self.from_result(result, dialect: ::HakumiORM.adapter.dialect)
 <%= ind %>    n = result.row_count
 <%= ind %>    return [] if n.zero?
 <%= ind %>
+<%- if has_pg_decoders -%>
+<%= ind %>    if (tm = _pg_type_map) && result.respond_to?(:apply_type_map!)
+<%= ind %>      result.apply_type_map!(tm)
+<%= ind %>    end
+<%= ind %>
+<%- end -%>
 <%= ind %>    all_rows = result.values
 <%= ind %>    rows = ::Array.new(n)
 <%= ind %>    i = 0
@@ -284,8 +301,6 @@ module <%= module_name %>
 
 <%- end -%>
 <%- if update_sql -%>
-<%= ind %>  SQL_UPDATE_BY_PK = T.let('<%= update_sql %>', String)
-
 <%= ind %>  sig { params(<%= update_sig_params %>, adapter: ::HakumiORM::Adapter::Base).returns(<%= record_class_name %>) }
 <%= ind %>  def update!(<%= update_defaults %>, adapter: ::HakumiORM.adapter)
 <%- proxy_args = update_ins_cols.map { |c| "#{c[:name]}: #{c[:name]}" } -%>
@@ -297,8 +312,48 @@ module <%= module_name %>
 <%= ind %>    <%= record_class_name %>::Contract.on_persist(proxy, adapter, errors)
 <%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
 
+<%= ind %>    sets = ::String.new(capacity: 128)
+<%= ind %>    binds = []
+<%= ind %>    idx = 0
+<%- update_columns.reject { |c| c[:auto_ts] }.each do |col| -%>
+<%= ind %>    if <%= col[:name] %> != @<%= col[:name] %>
+<%= ind %>      sets << ", " if idx > 0
+<%- if supports_positional_binds -%>
+<%= ind %>      idx += 1
+<%= ind %>      sets << '<%= col[:quoted_name] %> = $' << idx.to_s
+<%- else -%>
+<%= ind %>      sets << '<%= col[:quoted_name] %> = ?'
+<%= ind %>      idx += 1
+<%- end -%>
+<%= ind %>      val = <%= col[:name] %>
+<%= ind %>      binds << <%= col[:bind_expr] %>
+<%= ind %>    end
+<%- end -%>
+<%= ind %>    return self if idx.zero?
+<%- update_columns.select { |c| c[:auto_ts] }.each do |col| -%>
+<%= ind %>    sets << ", " if idx > 0
+<%- if supports_positional_binds -%>
+<%= ind %>    idx += 1
+<%= ind %>    sets << '<%= col[:quoted_name] %> = $' << idx.to_s
+<%- else -%>
+<%= ind %>    sets << '<%= col[:quoted_name] %> = ?'
+<%= ind %>    idx += 1
+<%- end -%>
+<%= ind %>    binds << adapter.encode(::HakumiORM::TimeBind.new(::Time.now))
+<%- end -%>
+
 <%- if has_lock_version -%>
-<%= ind %>    result = adapter.exec_params(SQL_UPDATE_BY_PK, [<%= update_bind_list %>, @<%= pk_attr %>, adapter.encode(::HakumiORM::IntBind.new(@lock_version))])
+<%= ind %>    sets << ', <%= update_lv_set %>'
+<%- if supports_positional_binds -%>
+<%= ind %>    sql = %(UPDATE <%= update_table %> SET #{sets} WHERE <%= update_pk_where %> = $#{idx + 1} AND <%= update_lv_where %> = $#{idx + 2}<%= supports_returning ? " RETURNING #{update_returning}" : "" %>)
+<%= ind %>    binds << @<%= pk_attr %>
+<%= ind %>    binds << adapter.encode(::HakumiORM::IntBind.new(@lock_version))
+<%- else -%>
+<%= ind %>    sql = %(UPDATE <%= update_table %> SET #{sets} WHERE <%= update_pk_where %> = ? AND <%= update_lv_where %> = ?<%= supports_returning ? " RETURNING #{update_returning}" : "" %>)
+<%= ind %>    binds << @<%= pk_attr %>
+<%= ind %>    binds << adapter.encode(::HakumiORM::IntBind.new(@lock_version))
+<%- end -%>
+<%= ind %>    result = adapter.exec_params(sql, binds)
 <%- if supports_returning -%>
 <%= ind %>    record = <%= record_class_name %>.from_result(result, dialect: adapter.dialect).first
 <%- else -%>
@@ -308,7 +363,13 @@ module <%= module_name %>
 <%- end -%>
 <%= ind %>    raise ::HakumiORM::StaleObjectError, "Attempted to update a stale #{<%= record_class_name %>.name}" unless record
 <%- else -%>
-<%= ind %>    result = adapter.exec_params(SQL_UPDATE_BY_PK, [<%= update_bind_list %>, @<%= pk_attr %>])
+<%- if supports_positional_binds -%>
+<%= ind %>    sql = %(UPDATE <%= update_table %> SET #{sets} WHERE <%= update_pk_where %> = $#{idx + 1}<%= supports_returning ? " RETURNING #{update_returning}" : "" %>)
+<%- else -%>
+<%= ind %>    sql = %(UPDATE <%= update_table %> SET #{sets} WHERE <%= update_pk_where %> = ?<%= supports_returning ? " RETURNING #{update_returning}" : "" %>)
+<%- end -%>
+<%= ind %>    binds << @<%= pk_attr %>
+<%= ind %>    result = adapter.exec_params(sql, binds)
 <%- if supports_returning -%>
 <%= ind %>    record = <%= record_class_name %>.from_result(result, dialect: adapter.dialect).first
 <%- else -%>

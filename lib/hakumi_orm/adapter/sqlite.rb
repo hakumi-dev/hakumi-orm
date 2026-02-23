@@ -87,9 +87,9 @@ module HakumiORM
         end
       end
 
-      sig { params(stmt: SQLite3::Statement).returns(T::Array[T::Array[T.nilable(String)]]) }
+      sig { params(stmt: SQLite3::Statement).returns(T::Array[T::Array[CellValue]]) }
       def collect_rows(stmt)
-        rows = T.let([], T::Array[T::Array[T.nilable(String)]])
+        rows = T.let([], T::Array[T::Array[CellValue]])
         while (row = stmt.step)
           rows << row.map { |v| v&.to_s }
         end

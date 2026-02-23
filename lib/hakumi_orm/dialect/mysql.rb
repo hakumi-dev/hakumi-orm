@@ -57,8 +57,40 @@ module HakumiORM
       sig { override.params(value: T::Boolean).returns(PGValue) }
       def encode_boolean(value) = value ? 1 : 0
 
-      sig { override.params(raw: String).returns(T::Boolean) }
-      def cast_boolean(raw) = raw == "1"
+      sig { override.params(raw: T.any(String, Integer, T::Boolean)).returns(T::Boolean) }
+      def cast_boolean(raw)
+        return raw if raw.equal?(true) || raw.equal?(false)
+
+        [1, "1"].include?(raw)
+      end
+
+      sig { override.params(raw: T.any(String, Integer)).returns(Integer) }
+      def cast_integer(raw)
+        return raw if raw.is_a?(Integer)
+
+        raw.to_i
+      end
+
+      sig { override.params(raw: T.any(String, Time)).returns(Time) }
+      def cast_time(raw)
+        return raw if raw.is_a?(Time)
+
+        ByteTime.parse_utc(raw)
+      end
+
+      sig { override.params(raw: T.any(String, Float)).returns(Float) }
+      def cast_float(raw)
+        return raw if raw.is_a?(Float)
+
+        raw.to_f
+      end
+
+      sig { override.params(raw: T.any(String, Date)).returns(Date) }
+      def cast_date(raw)
+        return raw if raw.is_a?(Date)
+
+        Date.new(raw[0, 4].to_i, raw[5, 2].to_i, raw[8, 2].to_i)
+      end
 
       sig { override.params(_value: T::Array[T.nilable(Integer)]).returns(PGValue) }
       def encode_int_array(_value) = unsupported!(:integer_array)

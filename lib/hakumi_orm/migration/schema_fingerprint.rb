@@ -74,7 +74,7 @@ module HakumiORM
         result = adapter.exec("SELECT fingerprint FROM #{SCHEMA_META_TABLE} LIMIT 1")
         return nil if result.row_count.zero?
 
-        value = result.get_value(0, 0)
+        value = result.get_value(0, 0)&.to_s
         result.close
         value
       rescue StandardError
@@ -86,7 +86,7 @@ module HakumiORM
         result = adapter.exec("SELECT schema_data FROM #{SCHEMA_META_TABLE} LIMIT 1")
         return nil if result.row_count.zero?
 
-        value = result.get_value(0, 0)
+        value = result.get_value(0, 0)&.to_s
         result.close
         value
       rescue StandardError

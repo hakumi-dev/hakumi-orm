@@ -130,6 +130,19 @@ module HakumiORM
           end
         end
       end
+
+      sig { params(table: TableInfo).returns(T::Array[T.nilable(String)]) }
+      def build_pg_decoders(table)
+        table.columns.map do |col|
+          if col.enum_values && @integer_backed_enums.include?(col.udt_name)
+            "PG::TextDecoder::Integer.new"
+          elsif col.enum_values
+            nil
+          else
+            hakumi_type_for(col).pg_decoder_expr
+          end
+        end
+      end
     end
   end
 end

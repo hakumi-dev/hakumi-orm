@@ -191,6 +191,7 @@ module HakumiORM
                init_sig_params: table.columns.map { |c| "#{c.name}: #{record_ruby_type(table, c)}" }.join(", "),
                init_args: table.columns.map { |c| "#{c.name}:" }.join(", "),
                cast_lines: build_cast_lines(table),
+               pg_decoders: build_pg_decoders(table),
                last_cast_index: table.columns.length - 1,
                qualified_relation: qualify("#{cls}Relation"),
                has_many: hm,
