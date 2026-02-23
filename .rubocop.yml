@@ -27,6 +27,7 @@ Metrics/AbcSize:
     - "lib/hakumi_orm/sql_compiler.rb"
     - "lib/hakumi_orm/codegen/generator.rb"
     - "lib/hakumi_orm/relation.rb"
+    - "lib/hakumi_orm/configuration.rb"
 
 Metrics/ClassLength:
   Max: 380

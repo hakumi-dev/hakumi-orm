@@ -64,7 +64,7 @@ module HakumiORM
     attr_accessor :connection_options
 
     sig { void }
-    def initialize # rubocop:disable Metrics/AbcSize
+    def initialize
       @adapter = T.let(nil, T.nilable(Adapter::Base))
       @adapter_name = T.let(:postgresql, Symbol)
       @database = T.let(nil, T.nilable(String))

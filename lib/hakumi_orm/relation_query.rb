@@ -52,8 +52,16 @@ module HakumiORM
         break if batch.length < batch_size
       end
     ensure
-      adapter.exec("CLOSE #{cursor_name}") rescue nil # rubocop:disable Style/RescueModifier
-      adapter.exec("COMMIT") rescue nil # rubocop:disable Style/RescueModifier
+      begin
+        adapter.exec("CLOSE #{cursor_name}")
+      rescue StandardError
+        nil
+      end
+      begin
+        adapter.exec("COMMIT")
+      rescue StandardError
+        nil
+      end
     end
 
     sig { params(batch_size: Integer, adapter: Adapter::Base, blk: T.proc.params(batch: T::Array[ModelType]).void).void }

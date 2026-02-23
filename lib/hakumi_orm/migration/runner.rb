@@ -179,14 +179,13 @@ module HakumiORM
           raise HakumiORM::Error, "Failed to load migration #{file_info.filename}: #{e.message}"
         end
 
-        begin
-          klass = Object.const_get(class_name) # rubocop:disable Sorbet/ConstantsFromStrings
-        rescue NameError
-          raise HakumiORM::Error,
-                "Migration #{file_info.filename} must define class #{class_name} (expected from filename)"
-        end
+        klass = Migration.lookup(class_name)
 
-        raise HakumiORM::Error, "#{class_name} must inherit from HakumiORM::Migration" unless klass < Migration
+        unless klass
+          raise HakumiORM::Error,
+                "Migration #{file_info.filename} must define class #{class_name} " \
+                "that must inherit from HakumiORM::Migration (expected from filename)"
+        end
 
         klass
       end

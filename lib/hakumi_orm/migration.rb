@@ -15,6 +15,8 @@ module HakumiORM
     NameLike = T.type_alias { T.any(String, Symbol) }
     DefaultValue = T.type_alias { T.nilable(T.any(String, Integer, Float, T::Boolean)) }
 
+    @registry = T.let({}, T::Hash[String, T.class_of(Migration)])
+
     class << self
       extend T::Sig
 
@@ -37,6 +39,18 @@ module HakumiORM
       sig { returns(T::Boolean) }
       def ddl_transaction_disabled?
         @ddl_transaction_disabled == true
+      end
+
+      sig { params(name: String).returns(T.nilable(T.class_of(Migration))) }
+      def lookup(name)
+        @registry[name]
+      end
+
+      sig { params(subclass: T::Class[T.anything]).void }
+      def inherited(subclass)
+        super
+        klass_name = subclass.name
+        @registry[klass_name] = T.unsafe(subclass) if klass_name
       end
     end
 

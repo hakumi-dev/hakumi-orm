@@ -40,6 +40,7 @@ require_relative "hakumi_orm/field/float_array_field"
 require_relative "hakumi_orm/field/bool_array_field"
 
 require_relative "hakumi_orm/assignment"
+require_relative "hakumi_orm/byte_time"
 require_relative "hakumi_orm/cast"
 
 require_relative "hakumi_orm/dialect"
