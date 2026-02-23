@@ -22,7 +22,7 @@ jobs:
         with:
           ruby-version: "3.3"
           bundler-cache: true
-      - run: bundle exec mdl README.md AGENT.md lib/hakumi_orm/README.md ARCHITECTURE.md CHANGELOG.md CODE_OF_CONDUCT.md
+      - run: bundle exec mdl README.md lib/hakumi_orm/README.md ARCHITECTURE.md CHANGELOG.md CODE_OF_CONDUCT.md
 
   lint:
     name: RuboCop

@@ -289,7 +289,9 @@ module <%= module_name %>
 
 <%= ind %>  sig { params(<%= update_sig_params %>, adapter: ::HakumiORM::Adapter::Base).returns(<%= record_class_name %>) }
 <%= ind %>  def update!(<%= update_defaults %>, adapter: ::HakumiORM.adapter)
-<%= ind %>    proxy = <%= record_class_name %>::New.new(<%= update_ins_cols.map { |c| "#{c[:name]}: #{c[:name]}" }.join(", ") %>)
+<%- proxy_args = update_ins_cols.map { |c| "#{c[:name]}: #{c[:name]}" } -%>
+<%- proxy_args << "lock_version: @lock_version" if has_lock_version -%>
+<%= ind %>    proxy = <%= record_class_name %>::New.new(<%= proxy_args.join(", ") %>)
 <%= ind %>    errors = ::HakumiORM::Errors.new
 <%= ind %>    <%= record_class_name %>::Contract.on_all(proxy, errors)
 <%= ind %>    <%= record_class_name %>::Contract.on_update(proxy, errors)
