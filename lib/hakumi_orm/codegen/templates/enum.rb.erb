@@ -8,7 +8,11 @@ module <%= module_name %>
 <%= ind %>class <%= enum_class_name %> < T::Enum
 <%= ind %>  enums do
 <%- values.each do |v| -%>
+<%- if v[:integer] -%>
+<%= ind %>    <%= v[:const] %> = new(<%= v[:serialized] %>)
+<%- else -%>
 <%= ind %>    <%= v[:const] %> = new("<%= v[:serialized] %>")
+<%- end -%>
 <%- end -%>
 <%= ind %>  end
 <%= ind %>end

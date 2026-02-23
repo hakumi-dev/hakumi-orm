@@ -46,7 +46,7 @@ module HakumiORM
           if auto_timestamp_on_insert?(col)
             "#{hakumi_type_for(col).bind_class}.new(::Time.now).pg_value"
           elsif col.enum_values
-            "::HakumiORM::StrBind.new(T.cast(@record.#{col.name}.serialize, String)).pg_value"
+            enum_bind_expr("@record.#{col.name}", col)
           else
             nullable_bind_expr(col, "@record.#{col.name}")
           end
@@ -149,11 +149,20 @@ module HakumiORM
           if auto_timestamp_on_update?(col)
             "#{hakumi_type_for(col).bind_class}.new(::Time.now).pg_value"
           elsif col.enum_values
-            "::HakumiORM::StrBind.new(T.cast(#{col.name}.serialize, String)).pg_value"
+            enum_bind_expr(col.name, col)
           else
             nullable_bind_expr(col, col.name)
           end
         end.join(", ")
+      end
+
+      sig { params(accessor: String, col: ColumnInfo).returns(String) }
+      def enum_bind_expr(accessor, col)
+        if @integer_backed_enums.include?(col.udt_name)
+          "::HakumiORM::IntBind.new(T.cast(#{accessor}.serialize, Integer)).pg_value"
+        else
+          "::HakumiORM::StrBind.new(T.cast(#{accessor}.serialize, String)).pg_value"
+        end
       end
 
       sig { params(col: ColumnInfo, accessor: String).returns(String) }
@@ -214,7 +223,11 @@ module HakumiORM
       def json_expr(col)
         if col.enum_values
           ivar = "@#{col.name}"
-          col.nullable ? "#{ivar}&.serialize&.to_s" : "#{ivar}.serialize.to_s"
+          if @integer_backed_enums.include?(col.udt_name)
+            col.nullable ? "#{ivar}&.serialize" : "#{ivar}.serialize"
+          else
+            col.nullable ? "#{ivar}&.serialize&.to_s" : "#{ivar}.serialize.to_s"
+          end
         else
           hakumi_type_for(col).as_json_expr("@#{col.name}", nullable: col.nullable)
         end
@@ -228,7 +241,9 @@ module HakumiORM
 
       sig { params(col: ColumnInfo).returns(String) }
       def json_ruby_type(col)
-        return "String" if col.enum_values
+        if col.enum_values
+          return @integer_backed_enums.include?(col.udt_name) ? "Integer" : "String"
+        end
 
         ht = hakumi_type_for(col)
         case ht

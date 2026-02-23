@@ -54,6 +54,9 @@ module HakumiORM
     sig { returns(String) }
     attr_accessor :associations_path
 
+    sig { returns(String) }
+    attr_accessor :enums_path
+
     sig { returns(T::Hash[String, String]) }
     attr_accessor :connection_options
 
@@ -75,6 +78,7 @@ module HakumiORM
       @logger = T.let(nil, T.nilable(::Logger))
       @migrations_path = T.let("db/migrate", String)
       @associations_path = T.let("db/associations", String)
+      @enums_path = T.let("db/enums", String)
       @connection_options = T.let({}, T::Hash[String, String])
       @named_databases = T.let({}, T::Hash[Symbol, DatabaseConfig])
       @named_adapters = T.let({}, T::Hash[Symbol, Adapter::Base])

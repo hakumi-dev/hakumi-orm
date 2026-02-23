@@ -1299,7 +1299,393 @@ class TestCodegen < HakumiORM::TestCase
     { "users" => users, "posts" => posts, "comments" => comments }
   end
 
+  def build_enum_definition(column:, values:, prefix: nil, suffix: nil)
+    HakumiORM::Codegen::EnumDefinition.new(
+      column_name: column, values: values, prefix: prefix, suffix: suffix
+    )
+  end
+
   def opts(dir, **overrides)
     HakumiORM::Codegen::GeneratorOptions.new(dialect: @dialect, output_dir: dir, **overrides)
+  end
+end
+
+class TestUserDefinedEnums < HakumiORM::TestCase
+  def setup
+    @dialect = HakumiORM::Dialect::Sqlite.new
+
+    col_id = HakumiORM::Codegen::ColumnInfo.new(
+      name: "id", data_type: "INTEGER", udt_name: "INTEGER",
+      nullable: true, default: nil, max_length: nil
+    )
+    col_name = HakumiORM::Codegen::ColumnInfo.new(
+      name: "name", data_type: "TEXT", udt_name: "TEXT",
+      nullable: false, default: nil, max_length: nil
+    )
+    col_role = HakumiORM::Codegen::ColumnInfo.new(
+      name: "role", data_type: "INTEGER", udt_name: "INTEGER",
+      nullable: false, default: nil, max_length: nil
+    )
+    col_status = HakumiORM::Codegen::ColumnInfo.new(
+      name: "status", data_type: "TEXT", udt_name: "TEXT",
+      nullable: false, default: nil, max_length: nil
+    )
+
+    table = HakumiORM::Codegen::TableInfo.new("users")
+    table.columns << col_id << col_name << col_role << col_status
+    table.primary_key = "id"
+
+    @tables = { "users" => table }
+    @role_enum = HakumiORM::Codegen::EnumDefinition.new(
+      column_name: "role",
+      values: { admin: 0, author: 1, reader: 2 },
+      prefix: :role
+    )
+    @status_enum = HakumiORM::Codegen::EnumDefinition.new(
+      column_name: "status",
+      values: { active: "active", banned: "banned" },
+      suffix: :status
+    )
+    @user_enums = { "users" => [@role_enum, @status_enum] }
+  end
+
+  def teardown
+    HakumiORM.reset_config!
+  end
+
+  test "EnumBuilder DSL parses key-value enums with prefix/suffix" do
+    builder = HakumiORM::Codegen::EnumBuilder.new("users")
+    builder.enum(:role, admin: 0, author: 1, reader: 2, prefix: :role)
+    builder.enum(:status, active: "active", banned: "banned", suffix: :status)
+
+    assert_equal 2, builder.definitions.length
+
+    role = builder.definitions[0]
+
+    assert_equal "role", role.column_name
+    assert_equal({ admin: 0, author: 1, reader: 2 }, role.values)
+    assert_equal :role, role.prefix
+    assert_nil role.suffix
+
+    status = builder.definitions[1]
+
+    assert_equal "status", status.column_name
+    assert_equal({ active: "active", banned: "banned" }, status.values)
+    assert_nil status.prefix
+    assert_equal :status, status.suffix
+  end
+
+  test "EnumBuilder raises on empty values" do
+    builder = HakumiORM::Codegen::EnumBuilder.new("users")
+
+    assert_raises(HakumiORM::Error) { builder.enum(:role) }
+  end
+
+  test "EnumDefinition#serialized_values returns string representations" do
+    assert_equal %w[0 1 2], @role_enum.serialized_values
+    assert_equal %w[active banned], @status_enum.serialized_values
+  end
+
+  test "EnumDefinition#db_type detects integer vs string" do
+    assert_equal "integer", @role_enum.db_type
+    assert_equal "string", @status_enum.db_type
+  end
+
+  test "generates enum files from user-defined enums" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
+      gen.generate!
+
+      role_enum_path = File.join(dir, "enums", "users_role.rb")
+
+      assert_path_exists role_enum_path
+
+      content = File.read(role_enum_path)
+
+      assert_includes content, "class UsersRoleEnum < T::Enum"
+      assert_includes content, "ADMIN = new(0)"
+      assert_includes content, "AUTHOR = new(1)"
+      assert_includes content, "READER = new(2)"
+
+      status_enum_path = File.join(dir, "enums", "users_status.rb")
+
+      assert_path_exists status_enum_path
+
+      status_content = File.read(status_enum_path)
+
+      assert_includes status_content, "class UsersStatusEnum < T::Enum"
+      assert_includes status_content, 'ACTIVE = new("active")'
+      assert_includes status_content, 'BANNED = new("banned")'
+    end
+  end
+
+  test "record types enum columns as enum class" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
+      gen.generate!
+
+      record_path = File.join(dir, "user", "record.rb")
+      content = File.read(record_path)
+
+      assert_includes content, "sig { returns(UsersRoleEnum) }"
+      assert_includes content, "sig { returns(UsersStatusEnum) }"
+    end
+  end
+
+  test "record generates predicate methods with prefix" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
+      gen.generate!
+
+      record_path = File.join(dir, "user", "record.rb")
+      content = File.read(record_path)
+
+      assert_includes content, "def role_admin?"
+      assert_includes content, "def role_author?"
+      assert_includes content, "def role_reader?"
+      assert_includes content, "UsersRoleEnum::ADMIN"
+    end
+  end
+
+  test "record generates predicate methods with suffix" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
+      gen.generate!
+
+      record_path = File.join(dir, "user", "record.rb")
+      content = File.read(record_path)
+
+      assert_includes content, "def active_status?"
+      assert_includes content, "def banned_status?"
+      assert_includes content, "UsersStatusEnum::ACTIVE"
+    end
+  end
+
+  test "manifest includes enum files" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
+      gen.generate!
+
+      manifest = File.read(File.join(dir, "manifest.rb"))
+
+      assert_includes manifest, "enums/users_role"
+      assert_includes manifest, "enums/users_status"
+    end
+  end
+
+  test "cast expressions use enum deserialize" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
+      gen.generate!
+
+      record_path = File.join(dir, "user", "record.rb")
+      content = File.read(record_path)
+
+      assert_includes content, "UsersRoleEnum.deserialize("
+      assert_includes content, "UsersStatusEnum.deserialize("
+    end
+  end
+
+  test "HakumiORM.define_enums DSL works end-to-end" do
+    HakumiORM.define_enums("users") do |e|
+      e.enum :role, admin: 0, author: 1, prefix: :role
+    end
+
+    result = HakumiORM.drain_enums!
+
+    assert_equal 1, result["users"].length
+
+    enum_def = result["users"].first
+
+    assert_equal "role", enum_def.column_name
+    assert_equal({ admin: 0, author: 1 }, enum_def.values)
+    assert_equal :role, enum_def.prefix
+  end
+
+  test "EnumLoader loads from directory" do
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "users.rb"), <<~RUBY)
+        HakumiORM.define_enums("users") do |e|
+          e.enum :role, admin: 0, author: 1, reader: 2, prefix: :role
+        end
+      RUBY
+
+      result = HakumiORM::Codegen::EnumLoader.load(dir)
+
+      assert_equal 1, result["users"].length
+      assert_equal "role", result["users"].first.column_name
+    end
+  end
+
+  test "rejects enum on incompatible column type (boolean)" do
+    table = HakumiORM::Codegen::TableInfo.new("items")
+    table.columns << HakumiORM::Codegen::ColumnInfo.new(
+      name: "id", data_type: "INTEGER", udt_name: "INTEGER", nullable: true, default: nil, max_length: nil
+    )
+    table.columns << HakumiORM::Codegen::ColumnInfo.new(
+      name: "active", data_type: "BOOLEAN", udt_name: "BOOLEAN", nullable: false, default: nil, max_length: nil
+    )
+    table.primary_key = "id"
+
+    bool_enum = HakumiORM::Codegen::EnumDefinition.new(
+      column_name: "active", values: { yes: "yes", no: "no" }
+    )
+
+    err = assert_raises(HakumiORM::Error) do
+      HakumiORM::Codegen::Generator.new(
+        { "items" => table },
+        HakumiORM::Codegen::GeneratorOptions.new(
+          dialect: @dialect, output_dir: Dir.tmpdir, user_enums: { "items" => [bool_enum] }
+        )
+      )
+    end
+
+    assert_includes err.message, "not compatible with enums"
+    assert_includes err.message, "active"
+  end
+
+  test "rejects enum on incompatible column type (datetime)" do
+    table = HakumiORM::Codegen::TableInfo.new("events")
+    table.columns << HakumiORM::Codegen::ColumnInfo.new(
+      name: "id", data_type: "INTEGER", udt_name: "INTEGER", nullable: true, default: nil, max_length: nil
+    )
+    table.columns << HakumiORM::Codegen::ColumnInfo.new(
+      name: "starts_at", data_type: "DATETIME", udt_name: "DATETIME", nullable: false, default: nil, max_length: nil
+    )
+    table.primary_key = "id"
+
+    dt_enum = HakumiORM::Codegen::EnumDefinition.new(
+      column_name: "starts_at", values: { morning: "morning" }
+    )
+
+    err = assert_raises(HakumiORM::Error) do
+      HakumiORM::Codegen::Generator.new(
+        { "events" => table },
+        HakumiORM::Codegen::GeneratorOptions.new(
+          dialect: @dialect, output_dir: Dir.tmpdir, user_enums: { "events" => [dt_enum] }
+        )
+      )
+    end
+
+    assert_includes err.message, "not compatible with enums"
+  end
+
+  test "rejects type mismatch: string enum values on integer column" do
+    table = HakumiORM::Codegen::TableInfo.new("posts")
+    table.columns << HakumiORM::Codegen::ColumnInfo.new(
+      name: "id", data_type: "INTEGER", udt_name: "INTEGER", nullable: true, default: nil, max_length: nil
+    )
+    table.columns << HakumiORM::Codegen::ColumnInfo.new(
+      name: "kind", data_type: "INTEGER", udt_name: "INTEGER", nullable: false, default: nil, max_length: nil
+    )
+    table.primary_key = "id"
+
+    wrong_enum = HakumiORM::Codegen::EnumDefinition.new(
+      column_name: "kind", values: { draft: "draft", published: "published" }
+    )
+
+    err = assert_raises(HakumiORM::Error) do
+      HakumiORM::Codegen::Generator.new(
+        { "posts" => table },
+        HakumiORM::Codegen::GeneratorOptions.new(
+          dialect: @dialect, output_dir: Dir.tmpdir, user_enums: { "posts" => [wrong_enum] }
+        )
+      )
+    end
+
+    assert_includes err.message, "enum values are strings"
+    assert_includes err.message, "integer"
+  end
+
+  test "rejects type mismatch: integer enum values on string column" do
+    table = HakumiORM::Codegen::TableInfo.new("posts")
+    table.columns << HakumiORM::Codegen::ColumnInfo.new(
+      name: "id", data_type: "INTEGER", udt_name: "INTEGER", nullable: true, default: nil, max_length: nil
+    )
+    table.columns << HakumiORM::Codegen::ColumnInfo.new(
+      name: "kind", data_type: "TEXT", udt_name: "TEXT", nullable: false, default: nil, max_length: nil
+    )
+    table.primary_key = "id"
+
+    wrong_enum = HakumiORM::Codegen::EnumDefinition.new(
+      column_name: "kind", values: { draft: 0, published: 1 }
+    )
+
+    err = assert_raises(HakumiORM::Error) do
+      HakumiORM::Codegen::Generator.new(
+        { "posts" => table },
+        HakumiORM::Codegen::GeneratorOptions.new(
+          dialect: @dialect, output_dir: Dir.tmpdir, user_enums: { "posts" => [wrong_enum] }
+        )
+      )
+    end
+
+    assert_includes err.message, "enum values are integers"
+    assert_includes err.message, "string"
+  end
+
+  test "allows integer enum on integer column" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
+      gen.generate!
+
+      content = File.read(File.join(dir, "enums", "users_role.rb"))
+
+      assert_includes content, "ADMIN = new(0)"
+    end
+  end
+
+  test "integer enum uses IntBind in generated code" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
+      gen.generate!
+
+      validated = File.read(File.join(dir, "user", "validated_record.rb"))
+
+      assert_includes validated, "IntBind.new(T.cast(@record.role.serialize, Integer))"
+      assert_includes validated, "StrBind.new(T.cast(@record.status.serialize, String))"
+    end
+  end
+
+  test "integer enum uses IntBind in insert_all" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
+      gen.generate!
+
+      record = File.read(File.join(dir, "user", "record.rb"))
+
+      assert_includes record, "T.cast(rec.role.serialize, Integer)"
+      assert_includes record, "T.cast(rec.status.serialize, String)"
+    end
+  end
+
+  test "integer enum deserialize uses to_i coercion" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
+      gen.generate!
+
+      record = File.read(File.join(dir, "user", "record.rb"))
+
+      assert_includes record, "deserialize(c2[i].to_i)"
+      refute_includes record, "deserialize(c3[i].to_i)"
+      assert_includes record, "deserialize(c3[i])"
+    end
+  end
+
+  test "allows string enum on string column" do
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
+      gen.generate!
+
+      content = File.read(File.join(dir, "enums", "users_status.rb"))
+
+      assert_includes content, 'ACTIVE = new("active")'
+    end
+  end
+
+  private
+
+  def opts(dir)
+    HakumiORM::Codegen::GeneratorOptions.new(dialect: @dialect, output_dir: dir, user_enums: @user_enums)
   end
 end

@@ -93,6 +93,8 @@ db/generated/              <-- always overwritten by codegen
 
 app/models/                <-- generated once, never overwritten; yours to edit
   user.rb                  # class User < UserRecord
+  user/                    # variants live in a subfolder matching the model name
+    with_bio.rb            # User::WithBio < UserRecord::VariantBase
   post.rb                  # class Post < PostRecord
   performance_review.rb    # class PerformanceReview < PerformanceReviewRecord
   performance_review/      # variant subclasses (user-defined, not codegen)
@@ -388,6 +390,7 @@ end
 | "contracts_dir" | "nil" | Directory for contract stubs. "nil" = skip. |
 | "module_name" | "nil" | Namespace wrapping for generated code. |
 | "migrations_path" | ""db/migrate"" | Directory for migration files. |
+| "enums_path" | ""db/enums"" | Directory for user-defined enum declaration files. |
 
 All generated methods ("find", "where", "save!", associations, etc.) default to "HakumiORM.adapter", so you never pass the adapter manually.
 
@@ -1181,6 +1184,38 @@ HakumiORM::Json.from_array([1, 2, 3])
 
 "JsonField" supports "eq", "neq", "is_null", "is_not_null". For JSON path queries, use "where_raw".
 
+### User-Defined Enums
+
+For databases without native enum types (SQLite, MySQL), or when you want explicit control over enum values, declare enums in "db/enums/":
+
+```ruby
+# db/enums/users.rb
+HakumiORM.define_enums("users") do |e|
+  e.enum :role, admin: "admin", author: "author", reader: "reader", prefix: :role
+  e.enum :status, active: "active", banned: "banned", suffix: :status
+end
+```
+
+The generator produces "T::Enum" classes and predicate methods:
+
+```ruby
+user.role              # => UsersRoleEnum::ADMIN
+user.role_admin?       # => true  (prefix: :role generates role_admin?, role_author?, ...)
+user.active_status?    # => true  (suffix: :status generates active_status?, banned_status?)
+```
+
+Both string-backed and integer-backed values are supported:
+
+```ruby
+# String-backed (stored as "admin", "author" in the DB)
+e.enum :role, admin: "admin", author: "author", reader: "reader"
+
+# Integer-backed (stored as 0, 1, 2 in the DB) — more efficient for storage and indexing
+e.enum :role, admin: 0, author: 1, reader: 2
+```
+
+The generator validates column compatibility at codegen time: enums require a matching column type (string values on string/text columns, integer values on integer columns). PG native enums are auto-detected from the schema and do not need manual declaration.
+
 ### UUID Columns
 
 UUID columns map to "String" / "StrField" with full LIKE/ILIKE support:
@@ -1429,6 +1464,7 @@ require "hakumi_orm/tasks"
 Available tasks:
 
 ```bash
+bundle exec rake hakumi:install            # create initial project structure (dirs, config)
 bundle exec rake hakumi:generate           # generate models from DB schema + update annotations
 bundle exec rake hakumi:migrate            # run pending migrations
 bundle exec rake hakumi:rollback[N]        # rollback N migrations

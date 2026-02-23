@@ -22,6 +22,7 @@ module HakumiORM
         const :has_many_through, T::Array[AssocHash]
         const :custom_has_many, T::Array[AssocHash]
         const :custom_has_one, T::Array[AssocHash]
+        const :enum_predicates, T::Array[EnumValue], default: []
       end
 
       sig { params(model_path: String, ctx: Context).void }
@@ -39,6 +40,7 @@ module HakumiORM
 
         append_header(lines, table, ctx.dialect)
         append_columns(lines, table, ctx.dialect)
+        append_enums(lines, ctx.enum_predicates)
         append_associations(lines, ctx)
 
         lines << "#"
@@ -90,13 +92,49 @@ module HakumiORM
         lines << "#"
         lines << "# Columns:"
         table.columns.each do |col|
-          ht = TypeMap.hakumi_type(dialect.name, col.data_type, col.udt_name)
+          ev = col.enum_values
+          type_label = if ev
+                         enum_cls = classify_udt(col.udt_name)
+                         "enum(#{enum_cls})"
+                       else
+                         TypeMap.hakumi_type(dialect.name, col.data_type, col.udt_name).serialize
+                       end
           constraints = col.nullable ? "nullable" : "not null"
           d = col.default
           constraints = "#{constraints}, default: #{d}" if d
           constraints = "#{constraints}, PK" if col.name == table.primary_key
-          lines << "#   #{col.name.ljust(16)} #{ht.serialize.ljust(12)} #{constraints}"
+          lines << "#   #{col.name.ljust(16)} #{type_label.ljust(12)} #{constraints}"
         end
+      end
+
+      sig { params(udt_name: String).returns(String) }
+      def self.classify_udt(udt_name)
+        "#{udt_name.split("_").map(&:capitalize).join}Enum"
+      end
+
+      sig { params(lines: T::Array[String], predicates: T::Array[EnumValue]).void }
+      def self.append_enums(lines, predicates)
+        return if predicates.empty?
+
+        grouped = T.let({}, T::Hash[String, T::Array[EnumValue]])
+        predicates.each do |pred|
+          (grouped[str(pred, :column)] ||= []) << pred
+        end
+
+        lines << "#"
+        lines << "# Enums:"
+        grouped.each do |col, preds|
+          enum_cls = str(T.must(preds.first), :enum_class)
+          values = preds.map { |p| str(p, :const).downcase }.join(", ")
+          methods = preds.map { |p| str(p, :method_name) }.join(", ")
+          lines << "#   #{col.ljust(16)} #{enum_cls.ljust(24)} [#{values}]"
+          lines << "#   #{" ".ljust(16)} predicates: #{methods}"
+        end
+      end
+
+      sig { params(hash: EnumValue, key: Symbol).returns(String) }
+      def self.str(hash, key)
+        T.cast(hash.fetch(key), String)
       end
 
       sig { params(lines: T::Array[String], ctx: Context).void }

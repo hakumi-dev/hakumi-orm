@@ -35,7 +35,7 @@ module HakumiORM
           path = ::Rails.root.join(dir)
           next unless path.exist?
 
-          Dir[path.join("**", "*.rb")].each { |f| require f }
+          Dir[path.join("**", "*.rb")].sort_by { |f| f.count(File::SEPARATOR) }.each { |f| require f }
         end
       end
 

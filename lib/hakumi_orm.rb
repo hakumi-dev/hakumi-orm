@@ -137,6 +137,26 @@ module HakumiORM
       result
     end
 
+    sig { params(table_name: String, blk: T.proc.params(builder: Codegen::EnumBuilder).void).void }
+    def define_enums(table_name, &blk)
+      builder = Codegen::EnumBuilder.new(table_name)
+      blk.call(builder)
+      enum_registry = (@_enum_registry ||= T.let({}, T.nilable(T::Hash[String, T::Array[Codegen::EnumDefinition]])))
+      (enum_registry[table_name] ||= []).concat(builder.definitions)
+    end
+
+    sig { void }
+    def clear_enums!
+      @_enum_registry = T.let({}, T.nilable(T::Hash[String, T::Array[Codegen::EnumDefinition]]))
+    end
+
+    sig { returns(T::Hash[String, T::Array[Codegen::EnumDefinition]]) }
+    def drain_enums!
+      result = @_enum_registry || {}
+      @_enum_registry = T.let(nil, T.nilable(T::Hash[String, T::Array[Codegen::EnumDefinition]]))
+      result
+    end
+
     private
 
     sig { returns(Adapter::Base) }

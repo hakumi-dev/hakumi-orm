@@ -134,6 +134,7 @@ module HakumiORM
 
         tables = read_schema(config, adapter)
         custom_assocs = HakumiORM::Codegen::AssociationLoader.load(config.associations_path)
+        user_enums = HakumiORM::Codegen::EnumLoader.load(config.enums_path)
 
         opts = HakumiORM::Codegen::GeneratorOptions.new(
           dialect: adapter.dialect,
@@ -142,6 +143,7 @@ module HakumiORM
           models_dir: config.models_dir,
           contracts_dir: config.contracts_dir,
           custom_associations: custom_assocs,
+          user_enums: user_enums,
           internal_tables: INTERNAL_TABLES
         )
         generator = HakumiORM::Codegen::Generator.new(tables, opts)
@@ -192,7 +194,8 @@ module HakumiORM
           belongs_to: generator.send(:build_belongs_to_assocs, table),
           has_many_through: generator.send(:build_has_many_through_assocs, table, through_map),
           custom_has_many: generator.send(:build_custom_has_many, table, custom_assocs),
-          custom_has_one: generator.send(:build_custom_has_one, table, custom_assocs)
+          custom_has_one: generator.send(:build_custom_has_one, table, custom_assocs),
+          enum_predicates: generator.send(:build_enum_predicates, table)
         )
       end
 

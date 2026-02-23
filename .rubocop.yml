@@ -17,7 +17,7 @@ AllCops:
 Metrics/MethodLength:
   CountAsOne:
     - heredoc
-  Max: 35
+  Max: 40
   Exclude:
     - "lib/hakumi_orm/sql_compiler.rb"
 
@@ -29,7 +29,7 @@ Metrics/AbcSize:
     - "lib/hakumi_orm/relation.rb"
 
 Metrics/ClassLength:
-  Max: 310
+  Max: 380
   CountAsOne:
     - heredoc
   Exclude:

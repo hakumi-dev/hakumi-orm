@@ -29,7 +29,8 @@ module HakumiORM
             belongs_to: build_belongs_to_assocs(table),
             has_many_through: build_has_many_through_assocs(table, through_map),
             custom_has_many: build_custom_has_many(table, @custom_associations),
-            custom_has_one: build_custom_has_one(table, @custom_associations)
+            custom_has_one: build_custom_has_one(table, @custom_associations),
+            enum_predicates: build_enum_predicates(table)
           )
           ModelAnnotator.annotate!(model_path, ctx)
         end

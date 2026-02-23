@@ -134,6 +134,11 @@ module <%= module_name %>
 <%- end -%>
 <%= ind %>    h
 <%= ind %>  end
+<%- enum_predicates.each do |pred| -%>
+
+<%= ind %>  sig { returns(T::Boolean) }
+<%= ind %>  def <%= pred[:method_name] %> = @<%= pred[:column] %> == <%= pred[:enum_class] %>::<%= pred[:const] %>
+<%- end -%>
 <%- if delete_sql -%>
 <%= ind %>  SQL_DELETE_BY_PK = T.let('<%= delete_sql %>', String)
 <%- if soft_delete_sql -%>
@@ -331,7 +336,9 @@ module <%= module_name %>
 <%- insert_all_columns.each_with_index do |col, ci| -%>
 <%= ind %>      buf << ", " if <%= ci %> > 0
 <%= ind %>      buf << dialect.bind_marker(idx)
-<%- if col[:is_enum] -%>
+<%- if col[:is_enum] && col[:enum_integer] -%>
+<%= ind %>      binds << T.cast(rec.<%= col[:name] %>.serialize, Integer)
+<%- elsif col[:is_enum] -%>
 <%= ind %>      binds << T.cast(rec.<%= col[:name] %>.serialize, String)
 <%- else -%>
 <%= ind %>      binds << rec.<%= col[:name] %>

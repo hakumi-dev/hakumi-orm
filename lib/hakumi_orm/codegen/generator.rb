@@ -14,6 +14,16 @@ module HakumiORM
         String
       )
 
+      ENUM_COMPATIBLE_TYPES = T.let(
+        [HakumiType::Integer, HakumiType::String].to_set.freeze,
+        T::Set[HakumiType]
+      )
+
+      ENUM_TYPE_COHERENCE = T.let({
+        "integer" => HakumiType::Integer,
+        "string" => HakumiType::String
+      }.freeze, T::Hash[String, HakumiType])
+
       sig { params(tables: T::Hash[String, TableInfo], options: GeneratorOptions).void }
       def initialize(tables, options = GeneratorOptions.new)
         cfg = HakumiORM.config
@@ -36,8 +46,11 @@ module HakumiORM
         @created_at_column = T.let(options.created_at_column, T.nilable(String))
         @updated_at_column = T.let(options.updated_at_column, T.nilable(String))
         @custom_associations = T.let(options.custom_associations, T::Hash[String, T::Array[CustomAssociation]])
+        @user_enums = T.let(options.user_enums, T::Hash[String, T::Array[EnumDefinition]])
         @internal_tables = T.let(options.internal_tables.to_set, T::Set[String])
+        @integer_backed_enums = T.let(Set.new, T::Set[String])
 
+        inject_user_enums!
         normalize_column_order!
       end
 
@@ -191,9 +204,10 @@ module HakumiORM
                has_many_through: hmt,
                belongs_to: build_belongs_to_assocs(table),
                insert_all_prefix: "INSERT INTO #{@dialect.quote_id(table.name)} (#{col_list}) VALUES ",
-               insert_all_columns: ins_cols.map { |c| { name: c.name, is_enum: !c.enum_values.nil? } },
+               insert_all_columns: build_insert_all_columns(ins_cols),
                supports_returning: @dialect.supports_returning?,
                returning_cols: returning_list,
+               enum_predicates: build_enum_predicates(table),
                **build_find_locals(table, record_cls),
                **build_delete_locals(table),
                **build_update_locals(table, ins_cols),
@@ -304,9 +318,70 @@ module HakumiORM
         @module_name ? "  " : ""
       end
 
+      sig { params(cols: T::Array[ColumnInfo]).returns(T::Array[T::Hash[Symbol, T.any(String, T::Boolean)]]) }
+      def build_insert_all_columns(cols)
+        cols.map do |c|
+          is_enum = !c.enum_values.nil?
+          { name: c.name, is_enum: is_enum,
+            enum_integer: is_enum && @integer_backed_enums.include?(c.udt_name) }
+        end
+      end
+
       sig { params(col: ColumnInfo).returns(HakumiType) }
       def hakumi_type_for(col)
         TypeMap.hakumi_type(@dialect.name, col.data_type, col.udt_name)
+      end
+
+      sig { void }
+      def inject_user_enums!
+        @user_enums.each do |table_name, defs|
+          table = @tables[table_name]
+          next unless table
+
+          defs.each do |enum_def|
+            idx = table.columns.index { |c| c.name == enum_def.column_name }
+            next unless idx
+
+            old = table.columns[idx]
+            next unless old
+
+            validate_enum_column!(table_name, enum_def, old)
+
+            udt = "#{table_name}_#{enum_def.column_name}"
+            @integer_backed_enums.add(udt) if enum_def.db_type == "integer"
+            table.columns[idx] = ColumnInfo.new(
+              name: old.name, data_type: old.data_type, udt_name: udt,
+              nullable: old.nullable, default: old.default, max_length: old.max_length,
+              enum_values: enum_def.serialized_values
+            )
+          end
+        end
+      end
+
+      sig { params(table_name: String, enum_def: EnumDefinition, col: ColumnInfo).void }
+      def validate_enum_column!(table_name, enum_def, col)
+        col_type = hakumi_type_for(col)
+        col_name = enum_def.column_name
+
+        unless ENUM_COMPATIBLE_TYPES.include?(col_type)
+          raise HakumiORM::Error,
+                "Enum :#{col_name} on '#{table_name}': column type '#{col.data_type}' " \
+                "(#{col_type.serialize}) is not compatible with enums. " \
+                "Only integer and string/text columns support user-defined enums."
+        end
+
+        expected = ENUM_TYPE_COHERENCE[enum_def.db_type]
+        return if expected == col_type
+
+        raise HakumiORM::Error,
+              "Enum :#{col_name} on '#{table_name}': enum values are #{enum_def.db_type}s " \
+              "but column type '#{col.data_type}' maps to #{col_type.serialize}. " \
+              "Use #{expected_values_hint(col_type)} values instead."
+      end
+
+      sig { params(col_type: HakumiType).returns(String) }
+      def expected_values_hint(col_type)
+        col_type == HakumiType::Integer ? "integer (e.g. admin: 0)" : "string (e.g. admin: \"admin\")"
       end
 
       sig { void }

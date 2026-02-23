@@ -26,7 +26,7 @@ module HakumiORM
 
     sig { void }
     def create_directories
-      dirs = %w[db/migrate db/associations db/generated]
+      dirs = %w[db/migrate db/associations db/enums db/generated]
       dirs.push("app/models", "app/contracts") if @framework == :rails
 
       dirs.each do |dir|
