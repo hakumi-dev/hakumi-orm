@@ -4,11 +4,14 @@
 require "test_helper"
 
 class TestValidation < HakumiORM::TestCase
+  HOOK_METHODS = %i[on_all on_create on_update on_persist].freeze
+
   def setup
-    sc = UserRecord::Contract.singleton_class
-    %i[on_all on_create on_update on_persist].each do |m|
-      sc.remove_method(m) if sc.method_defined?(m, false)
-    end
+    remove_contract_hooks!
+  end
+
+  def teardown
+    remove_contract_hooks!
   end
 
   test "Errors starts empty and valid" do
@@ -122,5 +125,12 @@ class TestValidation < HakumiORM::TestCase
     assert_includes err.errors.messages[:email], "is invalid"
     assert_includes err.errors.messages[:name], "too short"
     assert_equal 2, err.errors.count
+  end
+
+  private
+
+  def remove_contract_hooks!
+    sc = UserRecord::Contract.singleton_class
+    HOOK_METHODS.each { |m| sc.remove_method(m) if sc.method_defined?(m, false) }
   end
 end

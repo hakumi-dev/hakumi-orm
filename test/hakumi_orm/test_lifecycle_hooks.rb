@@ -12,6 +12,7 @@ class TestLifecycleHooks < HakumiORM::TestCase
     @adapter.stub_result("UPDATE", [["1", "Alice", "alice@test.com", nil, "t"]], affected: 1)
     @adapter.stub_result("INSERT", [["1", "Alice", "alice@test.com", nil, "t"]])
     HookTracker.reset!
+    remove_hooks!
     install_hooks!
   end
 

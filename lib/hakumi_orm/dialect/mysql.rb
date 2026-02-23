@@ -54,12 +54,41 @@ module HakumiORM
         "SELECT RELEASE_LOCK('hakumi_migrate')"
       end
 
-      sig { override.params(bind: ::HakumiORM::Bind).returns(::HakumiORM::PGValue) }
-      def encode_bind(bind)
-        case bind
-        when ::HakumiORM::BoolBind then bind.value ? 1 : 0
-        else bind.pg_value
-        end
+      sig { override.params(value: T::Boolean).returns(PGValue) }
+      def encode_boolean(value) = value ? 1 : 0
+
+      sig { override.params(raw: String).returns(T::Boolean) }
+      def cast_boolean(raw) = raw == "1"
+
+      sig { override.params(value: T::Array[T.nilable(Integer)]).returns(PGValue) }
+      def encode_int_array(value) = unsupported!(:integer_array) # rubocop:disable Lint/UnusedMethodArgument
+
+      sig { override.params(value: T::Array[T.nilable(String)]).returns(PGValue) }
+      def encode_str_array(value) = unsupported!(:string_array) # rubocop:disable Lint/UnusedMethodArgument
+
+      sig { override.params(value: T::Array[T.nilable(Float)]).returns(PGValue) }
+      def encode_float_array(value) = unsupported!(:float_array) # rubocop:disable Lint/UnusedMethodArgument
+
+      sig { override.params(value: T::Array[T.nilable(T::Boolean)]).returns(PGValue) }
+      def encode_bool_array(value) = unsupported!(:boolean_array) # rubocop:disable Lint/UnusedMethodArgument
+
+      sig { override.params(raw: String).returns(T::Array[T.nilable(Integer)]) }
+      def cast_int_array(raw) = unsupported!(:integer_array) # rubocop:disable Lint/UnusedMethodArgument
+
+      sig { override.params(raw: String).returns(T::Array[T.nilable(String)]) }
+      def cast_str_array(raw) = unsupported!(:string_array) # rubocop:disable Lint/UnusedMethodArgument
+
+      sig { override.params(raw: String).returns(T::Array[T.nilable(Float)]) }
+      def cast_float_array(raw) = unsupported!(:float_array) # rubocop:disable Lint/UnusedMethodArgument
+
+      sig { override.params(raw: String).returns(T::Array[T.nilable(T::Boolean)]) }
+      def cast_bool_array(raw) = unsupported!(:boolean_array) # rubocop:disable Lint/UnusedMethodArgument
+
+      private
+
+      sig { params(type_name: Symbol).returns(T.noreturn) }
+      def unsupported!(type_name)
+        raise ::HakumiORM::Error, "MySQL does not support #{type_name} columns"
       end
     end
   end

@@ -50,9 +50,9 @@ module <%= module_name %>
 <%= ind %>  end
 <%- end -%>
 
-<%= ind %>  sig { override.params(result: ::HakumiORM::Adapter::Result).returns(T::Array[<%= qualified_record_class %>]) }
-<%= ind %>  def hydrate(result)
-<%= ind %>    <%= qualified_record_class %>.from_result(result)
+<%= ind %>  sig { override.params(result: ::HakumiORM::Adapter::Result, dialect: ::HakumiORM::Dialect::Base).returns(T::Array[<%= qualified_record_class %>]) }
+<%= ind %>  def hydrate(result, dialect)
+<%= ind %>    <%= qualified_record_class %>.from_result(result, dialect: dialect)
 <%= ind %>  end
 
 <%= ind %>  sig { override.params(records: T::Array[<%= qualified_record_class %>], nodes: T::Array[::HakumiORM::PreloadNode], adapter: ::HakumiORM::Adapter::Base).void }

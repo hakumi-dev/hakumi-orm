@@ -40,9 +40,30 @@ module HakumiORM
         ins_cols = insertable_columns(table)
 
         cols = ins_cols.map { |c| { name: c.name, ruby_type: ruby_type(c) } }
+        validated_bind_list = validated_bind_list_for(ins_cols)
 
-        insert_sql = build_insert_sql(table)
-        validated_bind_list = ins_cols.map do |col|
+        pk = table.primary_key
+        pk_col = pk ? table.columns.find { |c| c.name == pk } : nil
+        has_auto_pk = pk_col && !ins_cols.include?(pk_col)
+
+        refetch_sql, refetch_bind_list = build_refetch_locals(table, ins_cols, pk, pk_col, has_auto_pk)
+
+        render("validated_record",
+               module_name: @module_name,
+               ind: indent,
+               record_class_name: qualify(record_cls),
+               columns: cols,
+               insert_sql: build_insert_sql(table),
+               validated_bind_list: validated_bind_list,
+               supports_returning: @dialect.supports_returning?,
+               has_auto_pk: has_auto_pk,
+               refetch_sql: refetch_sql,
+               refetch_bind_list: refetch_bind_list)
+      end
+
+      sig { params(ins_cols: T::Array[ColumnInfo]).returns(String) }
+      def validated_bind_list_for(ins_cols)
+        ins_cols.map do |col|
           if auto_timestamp_on_insert?(col)
             "adapter.encode(#{hakumi_type_for(col).bind_class}.new(::Time.now))"
           elsif col.enum_values
@@ -51,37 +72,31 @@ module HakumiORM
             nullable_bind_expr(col, "@record.#{col.name}")
           end
         end.join(", ")
+      end
 
-        pk = table.primary_key
-        pk_col = pk ? table.columns.find { |c| c.name == pk } : nil
-        has_auto_pk = pk_col && !ins_cols.include?(pk_col)
+      sig do
+        params(
+          table: TableInfo, ins_cols: T::Array[ColumnInfo],
+          pk: T.nilable(String), pk_col: T.nilable(ColumnInfo), has_auto_pk: T.nilable(T::Boolean)
+        ).returns([T.nilable(String), T.nilable(String)])
+      end
+      def build_refetch_locals(table, ins_cols, pk, pk_col, has_auto_pk)
+        return [nil, nil] if @dialect.supports_returning? || has_auto_pk
 
-        refetch_sql = nil
-        refetch_bind_list = nil
-        unless @dialect.supports_returning? || has_auto_pk
-          all_cols = table.columns.map { |c| @dialect.quote_id(c.name) }.join(", ")
-          if pk
-            where = "#{@dialect.qualified_name(table.name, pk)} = #{@dialect.bind_marker(0)}"
-            refetch_sql = "SELECT #{all_cols} FROM #{@dialect.quote_id(table.name)} WHERE #{where} LIMIT 1"
-            refetch_bind_list = nullable_bind_expr(pk_col, "@record.#{pk}")
-          else
-            where_parts = ins_cols.each_with_index.map { |c, i| "#{@dialect.qualified_name(table.name, c.name)} = #{@dialect.bind_marker(i)}" }
-            refetch_sql = "SELECT #{all_cols} FROM #{@dialect.quote_id(table.name)} WHERE #{where_parts.join(" AND ")} LIMIT 1"
-            refetch_bind_list = ins_cols.map { |c| nullable_bind_expr(c, "@record.#{c.name}") }.join(", ")
+        all_cols = table.columns.map { |c| @dialect.quote_id(c.name) }.join(", ")
+        tbl = @dialect.quote_id(table.name)
+
+        if pk && pk_col
+          where = "#{@dialect.qualified_name(table.name, pk)} = #{@dialect.bind_marker(0)}"
+          ["SELECT #{all_cols} FROM #{tbl} WHERE #{where} LIMIT 1",
+           nullable_bind_expr(pk_col, "@record.#{pk}")]
+        else
+          parts = ins_cols.each_with_index.map do |c, i|
+            "#{@dialect.qualified_name(table.name, c.name)} = #{@dialect.bind_marker(i)}"
           end
+          ["SELECT #{all_cols} FROM #{tbl} WHERE #{parts.join(" AND ")} LIMIT 1",
+           ins_cols.map { |c| nullable_bind_expr(c, "@record.#{c.name}") }.join(", ")]
         end
-
-        render("validated_record",
-               module_name: @module_name,
-               ind: indent,
-               record_class_name: qualify(record_cls),
-               columns: cols,
-               insert_sql: insert_sql,
-               validated_bind_list: validated_bind_list,
-               supports_returning: @dialect.supports_returning?,
-               has_auto_pk: has_auto_pk,
-               refetch_sql: refetch_sql,
-               refetch_bind_list: refetch_bind_list)
       end
 
       sig { params(table: TableInfo).returns(T.nilable(String)) }

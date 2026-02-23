@@ -82,4 +82,35 @@ class TestLogger < HakumiORM::TestCase
 
     assert_equal logger, HakumiORM.config.logger
   end
+
+  test "log_level= creates a logger with the given level" do
+    HakumiORM.config.log_level = :debug
+
+    logger = HakumiORM.config.logger
+
+    refute_nil logger
+    assert_equal Logger::DEBUG, logger.level
+  end
+
+  test "log_level= with :warn sets WARN level" do
+    HakumiORM.config.log_level = :warn
+
+    assert_equal Logger::WARN, HakumiORM.config.logger&.level
+  end
+
+  test "log_level= raises on invalid level" do
+    assert_raises(ArgumentError) { HakumiORM.config.log_level = :verbose }
+  end
+
+  test "log_level= logger produces output at correct level" do
+    old_stdout = $stdout
+    $stdout = StringIO.new
+    HakumiORM.config.log_level = :debug
+
+    UserRelation.new.to_a(adapter: @adapter)
+
+    assert_includes $stdout.string, "[HakumiORM]"
+  ensure
+    $stdout = old_stdout
+  end
 end

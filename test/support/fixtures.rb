@@ -47,18 +47,18 @@ class UserRecord
     @active = T.let(active, T::Boolean)
   end
 
-  sig { params(result: HakumiORM::Adapter::Result).returns(T::Array[UserRecord]) }
-  def self.from_result(result)
+  sig { params(result: HakumiORM::Adapter::Result, dialect: HakumiORM::Dialect::Base).returns(T::Array[UserRecord]) }
+  def self.from_result(result, dialect: HakumiORM.adapter.dialect)
     n = result.row_count
     rows = T.let(::Array.new(n), T::Array[UserRecord])
     i = T.let(0, Integer)
     while i < n
       rows[i] = new(
-        id: result.fetch_value(i, 0).to_i,
-        name: result.fetch_value(i, 1),
-        email: result.fetch_value(i, 2),
-        age: result.get_value(i, 3)&.to_i,
-        active: result.fetch_value(i, 4) == "t"
+        id: dialect.cast_integer(result.fetch_value(i, 0)),
+        name: dialect.cast_string(result.fetch_value(i, 1)),
+        email: dialect.cast_string(result.fetch_value(i, 2)),
+        age: ((hv = result.get_value(i, 3)).nil? ? nil : dialect.cast_integer(hv)),
+        active: dialect.cast_boolean(result.fetch_value(i, 4))
       )
       i += 1
     end
@@ -73,7 +73,7 @@ class UserRecord
     )
     return nil if result.row_count.zero?
 
-    from_result(result).first
+    from_result(result, dialect: adapter.dialect).first
   ensure
     result&.close
   end
@@ -126,8 +126,8 @@ class UserRecord
     UserRecord::Contract.on_persist(proxy, adapter, errors)
     raise HakumiORM::ValidationError, errors unless errors.valid?
 
-    result = adapter.exec_params(SQL_UPDATE_BY_PK, [name, email, age, active == true ? "t" : "f", @id])
-    record = UserRecord.from_result(result).first
+    result = adapter.exec_params(SQL_UPDATE_BY_PK, [name, email, age, adapter.encode(HakumiORM::BoolBind.new(active)), @id])
+    record = UserRecord.from_result(result, dialect: adapter.dialect).first
     raise HakumiORM::Error, "UPDATE returned no rows" unless record
 
     UserRecord::Contract.after_update(record, adapter)
@@ -325,8 +325,8 @@ class UserRecord
       UserRecord::Contract.on_persist(self, adapter, errors)
       raise HakumiORM::ValidationError, errors unless errors.valid?
 
-      result = adapter.exec_params(SQL_INSERT, [name, email, age, active == true ? "t" : "f"])
-      record = UserRecord.from_result(result).first
+      result = adapter.exec_params(SQL_INSERT, [name, email, age, adapter.encode(HakumiORM::BoolBind.new(active))])
+      record = UserRecord.from_result(result, dialect: adapter.dialect).first
       raise HakumiORM::Error, "INSERT returned no rows" unless record
 
       UserRecord::Contract.after_create(record, adapter)
@@ -406,9 +406,9 @@ class UserRelation < HakumiORM::Relation
     super(UserSchema::TABLE_NAME, UserSchema::ALL)
   end
 
-  sig { override.params(result: HakumiORM::Adapter::Result).returns(T::Array[UserRecord]) }
-  def hydrate(result)
-    UserRecord.from_result(result)
+  sig { override.params(result: HakumiORM::Adapter::Result, dialect: HakumiORM::Dialect::Base).returns(T::Array[UserRecord]) }
+  def hydrate(result, dialect)
+    UserRecord.from_result(result, dialect: dialect)
   end
 
   sig { override.params(records: T::Array[UserRecord], nodes: T::Array[HakumiORM::PreloadNode], adapter: HakumiORM::Adapter::Base).void }
@@ -451,16 +451,16 @@ class ArticleRecord
     @deleted_at = T.let(deleted_at, T.nilable(Time))
   end
 
-  sig { params(result: HakumiORM::Adapter::Result).returns(T::Array[ArticleRecord]) }
-  def self.from_result(result)
+  sig { params(result: HakumiORM::Adapter::Result, dialect: HakumiORM::Dialect::Base).returns(T::Array[ArticleRecord]) }
+  def self.from_result(result, dialect: HakumiORM.adapter.dialect)
     n = result.row_count
     rows = T.let(::Array.new(n), T::Array[ArticleRecord])
     i = T.let(0, Integer)
     while i < n
       rows[i] = new(
-        id: result.fetch_value(i, 0).to_i,
-        title: result.fetch_value(i, 1),
-        deleted_at: (v = result.get_value(i, 2)) ? Time.parse(v) : nil
+        id: dialect.cast_integer(result.fetch_value(i, 0)),
+        title: dialect.cast_string(result.fetch_value(i, 1)),
+        deleted_at: ((hv = result.get_value(i, 2)).nil? ? nil : dialect.cast_time(hv))
       )
       i += 1
     end
@@ -509,11 +509,11 @@ class ArticleRelation < HakumiORM::Relation
       assignments: [HakumiORM::Assignment.new(ArticleSchema::DELETED_AT, HakumiORM::TimeBind.new(Time.now.utc))],
       where_expr: combined_where
     )
-    use_result(adapter.exec_params(compiled.sql, compiled.pg_params), &:affected_rows)
+    use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect)), &:affected_rows)
   end
 
-  sig { override.params(result: HakumiORM::Adapter::Result).returns(T::Array[ArticleRecord]) }
-  def hydrate(result)
-    ArticleRecord.from_result(result)
+  sig { override.params(result: HakumiORM::Adapter::Result, dialect: HakumiORM::Dialect::Base).returns(T::Array[ArticleRecord]) }
+  def hydrate(result, dialect)
+    ArticleRecord.from_result(result, dialect: dialect)
   end
 end

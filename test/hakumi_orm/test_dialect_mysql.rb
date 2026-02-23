@@ -50,4 +50,33 @@ class TestDialectMysql < HakumiORM::TestCase
     assert_includes @dialect.advisory_lock_sql, "GET_LOCK"
     assert_includes @dialect.advisory_unlock_sql, "RELEASE_LOCK"
   end
+
+  test "encode_boolean produces 1/0" do
+    assert_equal 1, @dialect.encode_boolean(true)
+    assert_equal 0, @dialect.encode_boolean(false)
+  end
+
+  test "cast_boolean interprets 1/0 string format" do
+    assert @dialect.cast_boolean("1")
+    refute @dialect.cast_boolean("0")
+  end
+
+  test "cast_integer delegates to base" do
+    assert_equal 42, @dialect.cast_integer("42")
+  end
+
+  test "cast_decimal delegates to base" do
+    assert_equal BigDecimal("3.14"), @dialect.cast_decimal("3.14")
+  end
+
+  test "array types raise unsupported error" do
+    assert_raises(HakumiORM::Error) { @dialect.cast_int_array("{1,2}") }
+    assert_raises(HakumiORM::Error) { @dialect.encode_int_array([1, 2]) }
+    assert_raises(HakumiORM::Error) { @dialect.cast_str_array("{a,b}") }
+    assert_raises(HakumiORM::Error) { @dialect.encode_str_array(%w[a b]) }
+    assert_raises(HakumiORM::Error) { @dialect.cast_float_array("{1.0}") }
+    assert_raises(HakumiORM::Error) { @dialect.encode_float_array([1.0]) }
+    assert_raises(HakumiORM::Error) { @dialect.cast_bool_array("{t}") }
+    assert_raises(HakumiORM::Error) { @dialect.encode_bool_array([true]) }
+  end
 end

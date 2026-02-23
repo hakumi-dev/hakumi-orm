@@ -28,7 +28,9 @@ module HakumiORM
       def exec_params(sql, params)
         start = log_query_start
         stmt = @client.prepare(sql)
-        result = stmt.execute(*mysql_params(params), as: :array, cast: false)
+        # Sorbet cannot verify splats on dynamically-sized arrays (error 7019);
+        # mysql2's C extension requires positional args for bind parameters.
+        result = T.unsafe(stmt).execute(*mysql_params(params), as: :array, cast: false)
         rows = result_to_rows(result)
         r = MysqlResult.new(rows, stmt.affected_rows)
         log_query_done(sql, params, start)
@@ -60,7 +62,9 @@ module HakumiORM
         stmt = @prepared[name]
         raise HakumiORM::Error, "Statement #{name.inspect} not prepared" unless stmt
 
-        result = stmt.execute(*mysql_params(params), as: :array, cast: false)
+        # Sorbet cannot verify splats on dynamically-sized arrays (error 7019);
+        # mysql2's C extension requires positional args for bind parameters.
+        result = T.unsafe(stmt).execute(*mysql_params(params), as: :array, cast: false)
         rows = result_to_rows(result)
         r = MysqlResult.new(rows, stmt.affected_rows)
         log_query_done(name, params, start)

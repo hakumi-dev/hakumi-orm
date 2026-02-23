@@ -46,8 +46,8 @@ module <%= module_name %>
 <%- end -%>
 <%= ind %>  end
 
-<%= ind %>  sig { params(result: ::HakumiORM::Adapter::Result).returns(T::Array[<%= record_class_name %>]) }
-<%= ind %>  def self.from_result(result)
+<%= ind %>  sig { params(result: ::HakumiORM::Adapter::Result, dialect: ::HakumiORM::Dialect::Base).returns(T::Array[<%= record_class_name %>]) }
+<%= ind %>  def self.from_result(result, dialect: ::HakumiORM.adapter.dialect)
 <%= ind %>    n = result.row_count
 <%= ind %>    return [] if n.zero?
 <%= ind %>
@@ -77,7 +77,7 @@ module <%= module_name %>
 <%= ind %>    result = adapter.exec_prepared(STMT_FIND_BY_PK, [pk_value])
 <%= ind %>    return nil if result.row_count.zero?
 
-<%= ind %>    from_result(result).first
+<%= ind %>    from_result(result, dialect: adapter.dialect).first
 <%= ind %>  ensure
 <%= ind %>    result&.close
 <%= ind %>  end
@@ -301,7 +301,7 @@ module <%= module_name %>
 <%- if has_lock_version -%>
 <%= ind %>    result = adapter.exec_params(SQL_UPDATE_BY_PK, [<%= update_bind_list %>, @<%= pk_attr %>, adapter.encode(::HakumiORM::IntBind.new(@lock_version))])
 <%- if supports_returning -%>
-<%= ind %>    record = <%= record_class_name %>.from_result(result).first
+<%= ind %>    record = <%= record_class_name %>.from_result(result, dialect: adapter.dialect).first
 <%- else -%>
 <%= ind %>    raise ::HakumiORM::StaleObjectError, "Attempted to update a stale #{<%= record_class_name %>.name}" if result.affected_rows.zero?
 <%= ind %>    result.close
@@ -311,7 +311,7 @@ module <%= module_name %>
 <%- else -%>
 <%= ind %>    result = adapter.exec_params(SQL_UPDATE_BY_PK, [<%= update_bind_list %>, @<%= pk_attr %>])
 <%- if supports_returning -%>
-<%= ind %>    record = <%= record_class_name %>.from_result(result).first
+<%= ind %>    record = <%= record_class_name %>.from_result(result, dialect: adapter.dialect).first
 <%- else -%>
 <%= ind %>    raise ::HakumiORM::Error, "UPDATE returned no rows" if result.affected_rows.zero?
 <%= ind %>    result.close
@@ -361,13 +361,13 @@ module <%= module_name %>
 <%= ind %>
 <%= ind %>    result = adapter.exec_params(buf, binds)
 <%- if supports_returning -%>
-<%= ind %>    from_result(result)
+<%= ind %>    from_result(result, dialect: dialect)
 <%- else -%>
 <%= ind %>    result.close
 <%= ind %>    first_id = adapter.last_insert_id
 <%= ind %>    count = records.length
 <%= ind %>    fetch = adapter.exec("SELECT <%= returning_cols %> FROM <%= insert_all_table %> WHERE <%= insert_all_pk %> >= #{first_id} AND <%= insert_all_pk %> < #{first_id + count} ORDER BY <%= insert_all_pk %>")
-<%= ind %>    from_result(fetch)
+<%= ind %>    from_result(fetch, dialect: dialect)
 <%- end -%>
 <%= ind %>  ensure
 <%= ind %>    result&.close

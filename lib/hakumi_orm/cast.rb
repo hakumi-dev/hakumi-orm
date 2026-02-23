@@ -25,9 +25,11 @@ module HakumiORM
         BigDecimal(raw)
       end
 
+      TRUTHY = T.let(%w[t 1 true].freeze, T::Array[String])
+
       sig { params(raw: String).returns(T::Boolean) }
       def to_boolean(raw)
-        raw == "t" || raw == "1" || raw == "true"
+        TRUTHY.include?(raw)
       end
 
       sig { params(raw: String).returns(Time) }

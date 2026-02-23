@@ -35,15 +35,16 @@ module HakumiORM
 
     sig { params(batch_size: Integer, adapter: Adapter::Base, blk: T.proc.params(batch: T::Array[ModelType]).void).void }
     def find_in_batches_cursor(batch_size, adapter, &blk)
-      compiled = build_select(adapter.dialect)
+      dialect = adapter.dialect
+      compiled = build_select(dialect)
       cursor_name = "hakumi_cursor_#{object_id}"
 
       adapter.exec("BEGIN")
-      adapter.exec_params("DECLARE #{cursor_name} CURSOR FOR #{compiled.sql}", compiled.params_for(adapter.dialect))
+      adapter.exec_params("DECLARE #{cursor_name} CURSOR FOR #{compiled.sql}", compiled.params_for(dialect))
 
       loop do
         result = adapter.exec("FETCH #{batch_size} FROM #{cursor_name}")
-        batch = hydrate(result)
+        batch = hydrate(result, dialect)
         result.close
         break if batch.empty?
 
@@ -57,11 +58,12 @@ module HakumiORM
 
     sig { params(batch_size: Integer, adapter: Adapter::Base, blk: T.proc.params(batch: T::Array[ModelType]).void).void }
     def find_in_batches_limit(batch_size, adapter, &blk)
+      dialect = adapter.dialect
       current_offset = T.let(0, Integer)
       loop do
-        compiled = build_select(adapter.dialect, limit_override: batch_size, offset_override: current_offset)
-        result = adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))
-        batch = hydrate(result)
+        compiled = build_select(dialect, limit_override: batch_size, offset_override: current_offset)
+        result = adapter.exec_params(compiled.sql, compiled.params_for(dialect))
+        batch = hydrate(result, dialect)
         result.close
         break if batch.empty?
 

@@ -208,7 +208,7 @@ module HakumiORM
                supports_returning: @dialect.supports_returning?,
                returning_cols: returning_list,
                insert_all_table: @dialect.quote_id(table.name),
-               insert_all_pk: table.primary_key ? @dialect.quote_id(table.primary_key) : nil,
+               insert_all_pk: (pk = table.primary_key) ? @dialect.quote_id(pk) : nil,
                enum_predicates: build_enum_predicates(table),
                **build_find_locals(table, record_cls),
                **build_delete_locals(table),
@@ -449,17 +449,12 @@ module HakumiORM
 
       sig { params(word: String).returns(String) }
       def singularize(word)
-        if word.end_with?("ies")
-          "#{word.delete_suffix("ies")}y"
-        elsif word.end_with?("ves")
-          "#{word.delete_suffix("ves")}f"
-        elsif word.end_with?("ses", "xes", "zes", "ches", "shes")
-          word.delete_suffix("es")
-        elsif word.end_with?("s") && !word.end_with?("ss", "us", "is")
-          word.delete_suffix("s")
-        else
-          word
-        end
+        return "#{word.delete_suffix("ies")}y" if word.end_with?("ies")
+        return "#{word.delete_suffix("ves")}f" if word.end_with?("ves")
+        return word.delete_suffix("es") if word.end_with?("ses", "xes", "zes", "ches", "shes")
+        return word.delete_suffix("s") if word.end_with?("s") && !word.end_with?("ss", "us", "is")
+
+        word
       end
     end
   end

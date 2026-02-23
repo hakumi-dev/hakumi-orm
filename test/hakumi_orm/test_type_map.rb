@@ -161,32 +161,34 @@ class TestTypeMap < HakumiORM::TestCase
     refute_predicate HT::Json, :text?
   end
 
-  test "cast_expression for nullable integer uses safe navigation" do
-    assert_equal "raw&.to_i", TM.cast_expression(HT::Integer, "raw", nullable: true)
+  test "cast_expression for nullable integer delegates to dialect" do
+    assert_equal "((_hv = raw).nil? ? nil : dialect.cast_integer(_hv))",
+                 TM.cast_expression(HT::Integer, "raw", nullable: true)
   end
 
-  test "cast_expression for non-nullable integer calls to_i directly" do
-    assert_equal "raw.to_i", TM.cast_expression(HT::Integer, "raw", nullable: false)
+  test "cast_expression for non-nullable integer delegates to dialect" do
+    assert_equal "dialect.cast_integer(raw)",
+                 TM.cast_expression(HT::Integer, "raw", nullable: false)
   end
 
-  test "cast_expression for boolean uses Cast.to_boolean" do
+  test "cast_expression for boolean delegates to dialect" do
     nullable = TM.cast_expression(HT::Boolean, "raw", nullable: true)
     non_null = TM.cast_expression(HT::Boolean, "raw", nullable: false)
 
-    assert_includes nullable, "Cast.to_boolean"
-    assert_includes non_null, "Cast.to_boolean"
+    assert_includes nullable, "dialect.cast_boolean"
+    assert_includes non_null, "dialect.cast_boolean"
   end
 
-  test "cast_expression for json uses Cast.to_json" do
+  test "cast_expression for json delegates to dialect" do
     non_null = TM.cast_expression(HT::Json, "raw", nullable: false)
 
-    assert_equal "::HakumiORM::Cast.to_json(raw)", non_null
+    assert_equal "dialect.cast_json(raw)", non_null
   end
 
   test "cast_expression for nullable json wraps with nil check" do
     nullable = TM.cast_expression(HT::Json, "raw", nullable: true)
 
-    assert_includes nullable, "Cast.to_json"
+    assert_includes nullable, "dialect.cast_json"
     assert_includes nullable, "nil"
   end
 

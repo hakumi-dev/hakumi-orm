@@ -143,20 +143,20 @@ class TestArrayColumns < HakumiORM::TestCase
     assert_equal HakumiORM::Codegen::HakumiType::BooleanArray, ht
   end
 
-  test "IntegerArray cast expression parses array" do
+  test "IntegerArray cast expression delegates to dialect" do
     expr = HakumiORM::Codegen::TypeMap.cast_expression(
       HakumiORM::Codegen::HakumiType::IntegerArray, "raw", nullable: false
     )
 
-    assert_includes expr, "to_int_array"
+    assert_includes expr, "dialect.cast_int_array"
   end
 
-  test "StringArray cast expression parses array" do
+  test "StringArray cast expression delegates to dialect" do
     expr = HakumiORM::Codegen::TypeMap.cast_expression(
       HakumiORM::Codegen::HakumiType::StringArray, "raw", nullable: false
     )
 
-    assert_includes expr, "to_str_array"
+    assert_includes expr, "dialect.cast_str_array"
   end
 
   test "IntArrayField eq compiles to parameterized SQL" do

@@ -764,7 +764,7 @@ class TestCodegen < HakumiORM::TestCase
 
       assert_includes schema, "::HakumiORM::JsonField"
       assert_includes record, "::HakumiORM::Json"
-      assert_includes record, "Cast.to_json"
+      assert_includes record, "dialect.cast_json"
     end
   end
 

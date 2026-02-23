@@ -140,8 +140,8 @@ module HakumiORM
       self
     end
 
-    sig { abstract.params(result: Adapter::Result).returns(T::Array[ModelType]) }
-    def hydrate(result); end
+    sig { abstract.params(result: Adapter::Result, dialect: Dialect::Base).returns(T::Array[ModelType]) }
+    def hydrate(result, dialect); end
 
     sig { params(adapter: Adapter::Base).returns(T::Array[ModelType]) }
     def to_a(adapter: HakumiORM.adapter)
@@ -158,8 +158,9 @@ module HakumiORM
       preloaded = @_preloaded_results
       return preloaded.first if preloaded
 
-      compiled = build_select(adapter.dialect, limit_override: 1)
-      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))) { |r| hydrate(r).first }
+      dialect = adapter.dialect
+      compiled = build_select(dialect, limit_override: 1)
+      use_result(adapter.exec_params(compiled.sql, compiled.params_for(dialect))) { |r| hydrate(r, dialect).first }
     end
 
     sig { params(adapter: Adapter::Base).returns(Integer) }
@@ -304,8 +305,9 @@ module HakumiORM
 
     sig { params(adapter: Adapter::Base).returns(T::Array[ModelType]) }
     def fetch_records(adapter)
-      compiled = build_select(adapter.dialect)
-      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))) { |r| hydrate(r) }
+      dialect = adapter.dialect
+      compiled = build_select(dialect)
+      use_result(adapter.exec_params(compiled.sql, compiled.params_for(dialect))) { |r| hydrate(r, dialect) }
     end
 
     sig { returns(T.nilable(Expr)) }
