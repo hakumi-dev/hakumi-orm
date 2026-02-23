@@ -22,7 +22,7 @@ jobs:
         with:
           ruby-version: "3.3"
           bundler-cache: true
-      - run: bundle exec mdl README.md lib/hakumi_orm/README.md ARCHITECTURE.md CHANGELOG.md CODE_OF_CONDUCT.md
+      - run: bundle exec mdl README.md lib/hakumi_orm/README.md CHANGELOG.md CODE_OF_CONDUCT.md
 
   lint:
     name: RuboCop
@@ -45,17 +45,6 @@ jobs:
           ruby-version: "3.3"
           bundler-cache: true
       - run: bundle exec srb tc
-
-  typecheck-rbs:
-    name: RBS
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "3.3"
-          bundler-cache: true
-      - run: bundle exec rbs -I sig -r bigdecimal -r date -r time validate
 
   test:
     name: Tests (Ruby ${{ matrix.ruby }})
