@@ -80,6 +80,10 @@ Naming/MethodParameterName:
     - id
     - qn
 
+# Sorbet requires named block params in sigs; anonymous forwarding is incompatible
+Naming/BlockForwarding:
+  EnforcedStyle: explicit
+
 # is_null / is_not_null are SQL semantics, not Ruby predicates
 Naming/PredicatePrefix:
   Enabled: false

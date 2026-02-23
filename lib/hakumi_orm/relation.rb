@@ -248,11 +248,11 @@ module HakumiORM
     end
 
     sig { params(batch_size: Integer, adapter: Adapter::Base, blk: T.proc.params(batch: T::Array[ModelType]).void).void }
-    def find_in_batches(batch_size: 1000, adapter: HakumiORM.adapter, &blk) # rubocop:disable Style/ArgumentsForwarding
+    def find_in_batches(batch_size: 1000, adapter: HakumiORM.adapter, &blk)
       if adapter.dialect.supports_cursors?
-        find_in_batches_cursor(batch_size, adapter, &blk) # rubocop:disable Style/ArgumentsForwarding
+        find_in_batches_cursor(batch_size, adapter, &blk)
       else
-        find_in_batches_limit(batch_size, adapter, &blk) # rubocop:disable Style/ArgumentsForwarding
+        find_in_batches_limit(batch_size, adapter, &blk)
       end
     end
 

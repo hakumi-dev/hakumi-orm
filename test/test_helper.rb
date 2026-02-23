@@ -10,9 +10,9 @@ require_relative "support/fixtures"
 
 module HakumiORM
   class TestCase < Minitest::Test
-    def self.test(name, &)
+    def self.test(name, &blk)
       method_name = "test_#{name.gsub(/\s+/, "_")}"
-      define_method(method_name, &)
+      define_method(method_name, &blk)
     end
   end
 end

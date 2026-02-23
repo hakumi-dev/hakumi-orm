@@ -58,6 +58,7 @@ require_relative "hakumi_orm/validation_error"
 require_relative "hakumi_orm/adapter/timeout_error"
 require_relative "hakumi_orm/adapter/connection_pool"
 
+require_relative "hakumi_orm/loggable"
 require_relative "hakumi_orm/database_config"
 require_relative "hakumi_orm/database_url_parser"
 require_relative "hakumi_orm/database_config_builder"

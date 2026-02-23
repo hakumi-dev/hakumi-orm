@@ -1,8 +1,6 @@
 # typed: strict
 # frozen_string_literal: true
 
-require "logger"
-
 module HakumiORM
   class Configuration
     extend T::Sig
@@ -45,7 +43,7 @@ module HakumiORM
     sig { returns(Float) }
     attr_accessor :pool_timeout
 
-    sig { returns(T.nilable(::Logger)) }
+    sig { returns(T.nilable(Loggable)) }
     attr_accessor :logger
 
     sig { returns(String) }
@@ -75,7 +73,7 @@ module HakumiORM
       @module_name = T.let(nil, T.nilable(String))
       @pool_size = T.let(5, Integer)
       @pool_timeout = T.let(5.0, Float)
-      @logger = T.let(nil, T.nilable(::Logger))
+      @logger = T.let(nil, T.nilable(Loggable))
       @migrations_path = T.let("db/migrate", String)
       @associations_path = T.let("db/associations", String)
       @enums_path = T.let("db/enums", String)
@@ -98,8 +96,9 @@ module HakumiORM
       numeric = LOG_LEVELS.fetch(level) do
         raise ArgumentError, "Invalid log level: #{level.inspect}. Use: #{valid_levels.join(", ")}"
       end
-      @logger = ::Logger.new($stdout, progname: "HakumiORM")
-      @logger.level = numeric
+      stdlib_logger = ::Logger.new($stdout, progname: "HakumiORM")
+      stdlib_logger.level = numeric
+      @logger = stdlib_logger
     end
 
     sig { params(url: String).void }

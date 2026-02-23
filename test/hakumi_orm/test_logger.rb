@@ -113,4 +113,29 @@ class TestLogger < HakumiORM::TestCase
   ensure
     $stdout = old_stdout
   end
+
+  test "accepts any object implementing Loggable" do
+    custom = CustomLogger.new
+    HakumiORM.config.logger = custom
+
+    UserRelation.new.to_a(adapter: @adapter)
+
+    assert_includes custom.messages, :debug
+  end
+end
+
+class CustomLogger
+  include HakumiORM::Loggable
+
+  attr_reader :messages
+
+  def initialize
+    @messages = []
+  end
+
+  def debug(_message = nil, &_blk) = (@messages << :debug)
+  def info(_message = nil, &_blk) = (@messages << :info)
+  def warn(_message = nil, &_blk) = (@messages << :warn)
+  def error(_message = nil, &_blk) = (@messages << :error)
+  def fatal(_message = nil, &_blk) = (@messages << :fatal)
 end
