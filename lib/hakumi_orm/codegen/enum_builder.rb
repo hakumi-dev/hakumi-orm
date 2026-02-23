@@ -6,8 +6,6 @@ module HakumiORM
     class EnumBuilder
       extend T::Sig
 
-      EnumMappingValue = T.type_alias { T.any(String, Integer, Symbol) }
-
       sig { returns(String) }
       attr_reader :table_name
 
@@ -20,9 +18,16 @@ module HakumiORM
         @definitions = T.let([], T::Array[EnumDefinition])
       end
 
-      sig { params(column_name: Symbol, prefix: T.nilable(Symbol), suffix: T.nilable(Symbol), values: T.any(String, Integer)).void }
-      def enum(column_name, prefix: nil, suffix: nil, **values)
+      sig { params(column_name: Symbol, values: T::Hash[Symbol, Integer], prefix: T.nilable(Symbol), suffix: T.nilable(Symbol)).void }
+      def enum(column_name, values, prefix: nil, suffix: nil)
         raise HakumiORM::Error, "Enum :#{column_name} on '#{@table_name}' must have at least one value" if values.empty?
+
+        bad = values.reject { |_, v| v.is_a?(Integer) }
+        unless bad.empty?
+          raise HakumiORM::Error,
+                "Enum :#{column_name} on '#{@table_name}': all values must be integers (sym: int). " \
+                "Got non-integer values: #{bad.map { |k, v| "#{k}: #{v.inspect}" }.join(", ")}"
+        end
 
         @definitions << EnumDefinition.new(
           column_name: column_name.to_s,

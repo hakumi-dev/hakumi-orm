@@ -1204,10 +1204,16 @@ For databases without native enum types (SQLite, MySQL), or when you want explic
 ```ruby
 # db/enums/users.rb
 HakumiORM.define_enums("users") do |e|
-  e.enum :role, admin: "admin", author: "author", reader: "reader", prefix: :role
-  e.enum :status, active: "active", banned: "banned", suffix: :status
+  e.enum :role, { admin: 0, author: 1, reader: 2 }, prefix: :role
+  e.enum :status, { active: 0, banned: 1 }, suffix: :status
 end
 ```
+
+Signature: `e.enum(column_name, values_hash, prefix: nil, suffix: nil)`
+
+- **column_name** — Symbol matching the integer column in the DB.
+- **values_hash** — `{ sym: int }` mapping. Positions are explicit and customizable.
+- **prefix / suffix** — Optional. Controls predicate method naming.
 
 The generator produces "T::Enum" classes and predicate methods:
 
@@ -1217,17 +1223,7 @@ user.role_admin?       # => true  (prefix: :role generates role_admin?, role_aut
 user.active_status?    # => true  (suffix: :status generates active_status?, banned_status?)
 ```
 
-Both string-backed and integer-backed values are supported:
-
-```ruby
-# String-backed (stored as "admin", "author" in the DB)
-e.enum :role, admin: "admin", author: "author", reader: "reader"
-
-# Integer-backed (stored as 0, 1, 2 in the DB) — more efficient for storage and indexing
-e.enum :role, admin: 0, author: 1, reader: 2
-```
-
-The generator validates column compatibility at codegen time: enums require a matching column type (string values on string/text columns, integer values on integer columns). PG native enums are auto-detected from the schema and do not need manual declaration.
+The generator validates column compatibility at codegen time: user-defined enums require an integer column. PG native enums are auto-detected from the schema and do not need manual declaration.
 
 ### UUID Columns
 

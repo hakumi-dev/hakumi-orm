@@ -16,9 +16,8 @@ module HakumiORM
         @user_enums.each do |table_name, defs|
           defs.each do |enum_def|
             udt = "#{table_name}_#{enum_def.column_name}"
-            int = enum_def.db_type == "integer"
             seen[udt] = enum_def.values.map do |key, db_val|
-              { const: key.to_s.upcase.gsub(/[^A-Z0-9_]/, "_"), serialized: db_val.to_s, integer: int }
+              { const: key.to_s.upcase.gsub(/[^A-Z0-9_]/, "_"), serialized: db_val.to_s, integer: true }
             end
           end
         end
@@ -118,7 +117,7 @@ module HakumiORM
           ev = col.enum_values
           if ev
             enum_cls = qualify(enum_class_name(col.udt_name))
-            raw = "c#{ci}[i]"
+            raw = "row[#{ci}]"
             int_enum = @integer_backed_enums.include?(col.udt_name)
             coerce = int_enum ? ".to_i" : ""
             if nullable
@@ -127,7 +126,7 @@ module HakumiORM
               "#{enum_cls}.deserialize(#{raw}#{coerce})"
             end
           else
-            TypeMap.cast_expression(hakumi_type_for(col), "c#{ci}[i]", nullable: nullable)
+            TypeMap.cast_expression(hakumi_type_for(col), "row[#{ci}]", nullable: nullable)
           end
         end
       end

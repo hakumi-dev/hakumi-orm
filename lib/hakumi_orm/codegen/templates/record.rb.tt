@@ -51,12 +51,11 @@ module <%= module_name %>
 <%= ind %>    n = result.row_count
 <%= ind %>    return [] if n.zero?
 <%= ind %>
-<%- columns.each_with_index do |_col, ci| -%>
-<%= ind %>    c<%= ci %> = result.column_values(<%= ci %>)
-<%- end -%>
+<%= ind %>    all_rows = result.values
 <%= ind %>    rows = ::Array.new(n)
 <%= ind %>    i = 0
 <%= ind %>    while i < n
+<%= ind %>      row = all_rows[i]
 <%= ind %>      obj = allocate
 <%- columns.each_with_index do |col, ci| -%>
 <%= ind %>      obj.instance_variable_set(:@<%= col[:name] %>, <%= cast_lines[ci] %>)

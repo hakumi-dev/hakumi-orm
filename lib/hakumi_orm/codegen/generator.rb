@@ -14,15 +14,7 @@ module HakumiORM
         String
       )
 
-      ENUM_COMPATIBLE_TYPES = T.let(
-        [HakumiType::Integer, HakumiType::String].to_set.freeze,
-        T::Set[HakumiType]
-      )
-
-      ENUM_TYPE_COHERENCE = T.let({
-        "integer" => HakumiType::Integer,
-        "string" => HakumiType::String
-      }.freeze, T::Hash[String, HakumiType])
+      ENUM_COLUMN_TYPE = T.let(HakumiType::Integer, HakumiType)
 
       sig { params(tables: T::Hash[String, TableInfo], options: GeneratorOptions).void }
       def initialize(tables, options = GeneratorOptions.new)
@@ -151,7 +143,8 @@ module HakumiORM
         fields = table.columns.map do |col|
           ev = col.enum_values
           field_cls = if ev
-                        "::HakumiORM::EnumField[#{qualify(enum_class_name(col.udt_name))}]"
+                        base = @integer_backed_enums.include?(col.udt_name) ? "IntEnumField" : "EnumField"
+                        "::HakumiORM::#{base}[#{qualify(enum_class_name(col.udt_name))}]"
                       else
                         hakumi_type_for(col).field_class
                       end
@@ -360,7 +353,7 @@ module HakumiORM
             validate_enum_column!(table_name, enum_def, old)
 
             udt = "#{table_name}_#{enum_def.column_name}"
-            @integer_backed_enums.add(udt) if enum_def.db_type == "integer"
+            @integer_backed_enums.add(udt)
             table.columns[idx] = ColumnInfo.new(
               name: old.name, data_type: old.data_type, udt_name: udt,
               nullable: old.nullable, default: old.default, max_length: old.max_length,
@@ -375,25 +368,12 @@ module HakumiORM
         col_type = hakumi_type_for(col)
         col_name = enum_def.column_name
 
-        unless ENUM_COMPATIBLE_TYPES.include?(col_type)
-          raise HakumiORM::Error,
-                "Enum :#{col_name} on '#{table_name}': column type '#{col.data_type}' " \
-                "(#{col_type.serialize}) is not compatible with enums. " \
-                "Only integer and string/text columns support user-defined enums."
-        end
-
-        expected = ENUM_TYPE_COHERENCE[enum_def.db_type]
-        return if expected == col_type
+        return if col_type == ENUM_COLUMN_TYPE
 
         raise HakumiORM::Error,
-              "Enum :#{col_name} on '#{table_name}': enum values are #{enum_def.db_type}s " \
-              "but column type '#{col.data_type}' maps to #{col_type.serialize}. " \
-              "Use #{expected_values_hint(col_type)} values instead."
-      end
-
-      sig { params(col_type: HakumiType).returns(String) }
-      def expected_values_hint(col_type)
-        col_type == HakumiType::Integer ? "integer (e.g. admin: 0)" : "string (e.g. admin: \"admin\")"
+              "Enum :#{col_name} on '#{table_name}': column type '#{col.data_type}' " \
+              "(#{col_type.serialize}) is not compatible with user-defined enums. " \
+              "User-defined enums require an integer column (sym: int)."
       end
 
       sig { void }

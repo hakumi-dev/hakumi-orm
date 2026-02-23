@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require_relative "migration/schema_fingerprint"
+
 module HakumiORM
   class Configuration
     extend T::Sig
