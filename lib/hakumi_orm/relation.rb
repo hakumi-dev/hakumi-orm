@@ -145,6 +145,7 @@ module HakumiORM
 
     sig { params(adapter: Adapter::Base).returns(T::Array[ModelType]) }
     def to_a(adapter: HakumiORM.adapter)
+      reject_partial_select!
       preloaded = @_preloaded_results
       return preloaded if preloaded
 
@@ -155,6 +156,7 @@ module HakumiORM
 
     sig { params(adapter: Adapter::Base).returns(T.nilable(ModelType)) }
     def first(adapter: HakumiORM.adapter)
+      reject_partial_select!
       preloaded = @_preloaded_results
       return preloaded.first if preloaded
 
@@ -242,6 +244,7 @@ module HakumiORM
 
     sig { params(batch_size: Integer, adapter: Adapter::Base, blk: T.proc.params(record: ModelType).void).void }
     def find_each(batch_size: 1000, adapter: HakumiORM.adapter, &blk)
+      reject_partial_select!
       find_in_batches(batch_size: batch_size, adapter: adapter) do |batch|
         batch.each(&blk)
       end
@@ -305,6 +308,14 @@ module HakumiORM
       blk.call(result)
     ensure
       result.close
+    end
+
+    sig { void }
+    def reject_partial_select!
+      return unless @select_columns
+
+      raise HakumiORM::Error,
+            "Cannot hydrate records with a partial column set. Use pluck or pluck_raw for column subsets"
     end
 
     sig { params(adapter: Adapter::Base).returns(T::Array[ModelType]) }

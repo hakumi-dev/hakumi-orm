@@ -647,4 +647,38 @@ class TestRelation < HakumiORM::TestCase
 
     assert_equal [25, nil], d[:age]
   end
+
+  test "to_a raises when select narrows columns" do
+    err = assert_raises(HakumiORM::Error) do
+      UserRecord.all.select(UserSchema::ID, UserSchema::NAME).to_a(adapter: @adapter)
+    end
+
+    assert_includes err.message, "Cannot hydrate records with a partial column set"
+  end
+
+  test "first raises when select narrows columns" do
+    assert_raises(HakumiORM::Error) do
+      UserRecord.all.select(UserSchema::ID).first(adapter: @adapter)
+    end
+  end
+
+  test "find_each raises when select narrows columns" do
+    assert_raises(HakumiORM::Error) do
+      UserRecord.all.select(UserSchema::ID).find_each(adapter: @adapter, &:id)
+    end
+  end
+
+  test "select does not raise for pluck_raw" do
+    @adapter.stub_default([["Alice"], ["Bob"]])
+
+    result = UserRecord.all.select(UserSchema::NAME).pluck_raw(UserSchema::NAME, adapter: @adapter)
+
+    assert_equal 2, result.length
+  end
+
+  test "select does not raise for to_sql" do
+    compiled = UserRecord.all.select(UserSchema::ID, UserSchema::NAME).to_sql(adapter: @adapter)
+
+    assert_includes compiled.sql, "SELECT"
+  end
 end
