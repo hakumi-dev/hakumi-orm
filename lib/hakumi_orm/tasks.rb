@@ -159,8 +159,9 @@ module HakumiORM
         raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
 
         tables = read_schema(config, adapter)
-        custom_assocs = HakumiORM::Codegen::AssociationLoader.load(config.associations_path)
-        user_enums = HakumiORM::Codegen::EnumLoader.load(config.enums_path)
+        defs = HakumiORM::Codegen::DefinitionLoader.load(config.definitions_path)
+        custom_assocs = defs[:associations]
+        user_enums = defs[:enums]
 
         user_tables = tables.except(*INTERNAL_TABLES)
         canonical = HakumiORM::Migration::SchemaFingerprint.build_canonical(user_tables)
@@ -244,7 +245,8 @@ module HakumiORM
         raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
 
         tables = read_schema(config, adapter)
-        custom_assocs = HakumiORM::Codegen::AssociationLoader.load(config.associations_path)
+        defs = HakumiORM::Codegen::DefinitionLoader.load(config.definitions_path)
+        custom_assocs = defs[:associations]
         opts = HakumiORM::Codegen::GeneratorOptions.new(dialect: adapter.dialect, custom_associations: custom_assocs)
         generator = HakumiORM::Codegen::Generator.new(tables, opts)
 

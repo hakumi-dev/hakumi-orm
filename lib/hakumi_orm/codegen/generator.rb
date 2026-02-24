@@ -304,7 +304,7 @@ module HakumiORM
         render("manifest",
                table_names: @tables.keys.map { |n| singularize(n) },
                internal_names: @internal_tables.to_set { |n| singularize(n) },
-               enum_files: collect_enum_types.keys,
+               enum_entries: enum_manifest_entries(collect_enum_types),
                schema_fingerprint: @schema_fingerprint)
       end
 
@@ -353,7 +353,7 @@ module HakumiORM
 
             validate_enum_column!(table_name, enum_def, old)
 
-            udt = "#{table_name}_#{enum_def.column_name}"
+            udt = "#{singularize(table_name)}_#{enum_def.column_name}"
             @integer_backed_enums.add(udt)
             table.columns[idx] = ColumnInfo.new(
               name: old.name, data_type: old.data_type, udt_name: udt,

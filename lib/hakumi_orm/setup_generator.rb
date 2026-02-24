@@ -18,6 +18,7 @@ module HakumiORM
     sig { returns(T::Hash[Symbol, T::Array[String]]) }
     def run!
       create_directories
+      create_definitions_file
       create_initializer
       { created: @created, skipped: @skipped }
     end
@@ -26,7 +27,7 @@ module HakumiORM
 
     sig { void }
     def create_directories
-      dirs = %w[db/migrate db/associations db/enums db/generated]
+      dirs = %w[db/migrate db/schema]
       dirs.push("app/models", "app/contracts") if @framework == :rails
 
       dirs.each do |dir|
@@ -40,6 +41,11 @@ module HakumiORM
           @created << dir
         end
       end
+    end
+
+    sig { void }
+    def create_definitions_file
+      write_file("db/definitions.rb", definitions_file)
     end
 
     sig { void }
@@ -113,6 +119,25 @@ module HakumiORM
 
         # Add to your Rakefile:
         # require "hakumi_orm/tasks"
+      RUBY
+    end
+
+    sig { returns(String) }
+    def definitions_file
+      <<~RUBY
+        # frozen_string_literal: true
+
+        # Custom associations and user-defined enums for code generation.
+        # This file is loaded by `rake hakumi:generate`.
+        #
+        # Example:
+        # HakumiORM.associate("users") do |a|
+        #   a.has_many :posts, target: "posts", foreign_key: "user_id"
+        # end
+        #
+        # HakumiORM.define_enums("users") do |e|
+        #   e.enum :status, active: 0, banned: 1
+        # end
       RUBY
     end
   end

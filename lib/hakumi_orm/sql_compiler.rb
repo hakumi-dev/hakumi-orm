@@ -46,7 +46,7 @@ module HakumiORM
       buf << (distinct ? "SELECT DISTINCT " : "SELECT ")
       columns.each_with_index do |col, i|
         buf << ", " if i.positive?
-        buf << col.qualified_name
+        buf << qualify(col)
       end
 
       buf << " FROM "
@@ -56,9 +56,9 @@ module HakumiORM
         buf << join_keyword(j.join_type)
         buf << @dialect.quote_id(j.target_table)
         buf << " ON "
-        buf << j.source_field.qualified_name
+        buf << qualify(j.source_field)
         buf << " = "
-        buf << j.target_field.qualified_name
+        buf << qualify(j.target_field)
       end
 
       if where_expr
@@ -70,7 +70,7 @@ module HakumiORM
         buf << " GROUP BY "
         group_fields.each_with_index do |f, i|
           buf << ", " if i.positive?
-          buf << f.qualified_name
+          buf << qualify(f)
         end
       end
 
@@ -83,7 +83,7 @@ module HakumiORM
         buf << " ORDER BY "
         orders.each_with_index do |o, i|
           buf << ", " if i.positive?
-          buf << o.field.qualified_name
+          buf << qualify(o.field)
           buf << (o.direction == :desc ? " DESC" : " ASC")
         end
       end
@@ -108,7 +108,7 @@ module HakumiORM
       idx = T.let(0, Integer)
       buf = String.new(capacity: 128)
 
-      buf << "SELECT " << function << "(" << field.qualified_name << ") FROM "
+      buf << "SELECT " << function << "(" << qualify(field) << ") FROM "
       buf << @dialect.quote_id(table)
 
       if where_expr
@@ -138,9 +138,9 @@ module HakumiORM
         buf << join_keyword(j.join_type)
         buf << @dialect.quote_id(j.target_table)
         buf << " ON "
-        buf << j.source_field.qualified_name
+        buf << qualify(j.source_field)
         buf << " = "
-        buf << j.target_field.qualified_name
+        buf << qualify(j.target_field)
       end
 
       if where_expr
@@ -170,9 +170,9 @@ module HakumiORM
         buf << join_keyword(j.join_type)
         buf << @dialect.quote_id(j.target_table)
         buf << " ON "
-        buf << j.source_field.qualified_name
+        buf << qualify(j.source_field)
         buf << " = "
-        buf << j.target_field.qualified_name
+        buf << qualify(j.target_field)
       end
 
       if where_expr
@@ -283,6 +283,11 @@ module HakumiORM
     end
 
     private
+
+    sig { params(field: FieldRef).returns(String) }
+    def qualify(field)
+      "#{@dialect.quote_id(field.table_name)}.#{@dialect.quote_id(field.column_name)}"
+    end
 
     sig { params(join_type: Symbol).returns(String) }
     def join_keyword(join_type)

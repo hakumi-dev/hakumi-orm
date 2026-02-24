@@ -172,18 +172,12 @@ module HakumiORM
 
       reject_count_with_grouping!
 
-      stmt = stmt_count_all
-      sql = sql_count_all
-      result = if @where_exprs.empty? && @defaults_pristine && @joins.empty? && stmt && sql
-                 adapter.prepare_exec(stmt, sql, [])
-               else
-                 compiled = adapter.dialect.compiler.count(
-                   table: @table_name,
-                   where_expr: combined_where,
-                   joins: @joins
-                 )
-                 adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))
-               end
+      compiled = adapter.dialect.compiler.count(
+        table: @table_name,
+        where_expr: combined_where,
+        joins: @joins
+      )
+      result = adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))
       use_result(result) { |r| r.fetch_value(0, 0).to_i }
     end
 

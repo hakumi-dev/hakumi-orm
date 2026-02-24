@@ -12,9 +12,9 @@ module HakumiORM
 
         return unless root
 
-        config.output_dir = "#{root}/db/generated"
+        config.output_dir = "#{root}/db/schema"
         config.migrations_path = "#{root}/db/migrate"
-        config.associations_path = "#{root}/db/associations"
+        config.definitions_path = "#{root}/db/definitions.rb"
       end
     end
   end

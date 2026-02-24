@@ -19,11 +19,16 @@ class TestSetupGeneratorStandalone < Minitest::Test
     gen = HakumiORM::SetupGenerator.new(root: @tmpdir)
     result = gen.run!
 
-    %w[db/migrate db/associations db/generated].each do |dir|
+    %w[db/migrate db/schema].each do |dir|
       assert Dir.exist?(File.join(@tmpdir, dir))
       assert_path_exists File.join(@tmpdir, dir, ".keep")
       assert_includes result[:created], dir
     end
+
+    defs_path = File.join(@tmpdir, "db/definitions.rb")
+
+    assert_path_exists defs_path
+    assert_includes result[:created], "db/definitions.rb"
   end
 
   def test_does_not_create_rails_directories
@@ -104,11 +109,13 @@ class TestSetupGeneratorRails < Minitest::Test
     gen = HakumiORM::SetupGenerator.new(root: @tmpdir, framework: :rails)
     result = gen.run!
 
-    %w[db/migrate db/associations db/generated app/models app/contracts].each do |dir|
+    %w[db/migrate db/schema app/models app/contracts].each do |dir|
       assert Dir.exist?(File.join(@tmpdir, dir))
       assert_path_exists File.join(@tmpdir, dir, ".keep")
       assert_includes result[:created], dir
     end
+
+    assert_path_exists File.join(@tmpdir, "db/definitions.rb")
   end
 
   def test_creates_rails_initializer

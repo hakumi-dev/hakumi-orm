@@ -4,7 +4,8 @@
 module HakumiORM
   module Codegen
     EnumValue = T.type_alias { T::Hash[Symbol, T.any(String, T::Boolean)] }
-    EnumTypeMap = T.type_alias { T::Hash[String, T::Array[EnumValue]] }
+    EnumEntry = T.type_alias { T::Hash[Symbol, T.untyped] }
+    EnumTypeMap = T.type_alias { T::Hash[String, EnumEntry] }
 
     class Generator
       private
@@ -15,10 +16,14 @@ module HakumiORM
 
         @user_enums.each do |table_name, defs|
           defs.each do |enum_def|
-            udt = "#{table_name}_#{enum_def.column_name}"
-            seen[udt] = enum_def.values.map do |key, db_val|
-              { const: key.to_s.upcase.gsub(/[^A-Z0-9_]/, "_"), serialized: db_val.to_s, integer: true }
-            end
+            udt = "#{singularize(table_name)}_#{enum_def.column_name}"
+            seen[udt] = {
+              table: table_name,
+              column: enum_def.column_name,
+              values: enum_def.values.map do |key, db_val|
+                { const: key.to_s.upcase.gsub(/[^A-Z0-9_]/, "_"), serialized: db_val.to_s, integer: true }
+              end
+            }
           end
         end
 
@@ -28,9 +33,13 @@ module HakumiORM
             next unless ev
             next if seen.key?(col.udt_name)
 
-            seen[col.udt_name] = ev.map do |v|
-              { const: v.upcase.gsub(/[^A-Z0-9_]/, "_"), serialized: v, integer: false }
-            end
+            seen[col.udt_name] = {
+              table: table.name,
+              column: col.name,
+              values: ev.map do |v|
+                { const: v.upcase.gsub(/[^A-Z0-9_]/, "_"), serialized: v, integer: false }
+              end
+            }
           end
         end
         seen
@@ -38,23 +47,36 @@ module HakumiORM
 
       sig { params(enum_types: EnumTypeMap).void }
       def generate_enum_files!(enum_types)
-        enum_dir = File.join(@output_dir, "enums")
-        FileUtils.mkdir_p(enum_dir)
+        enum_types.each do |udt_name, entry|
+          table_name = entry[:table]
+          values = entry[:values]
+          column = entry[:column]
+          table_dir = File.join(@output_dir, singularize(table_name))
+          FileUtils.mkdir_p(table_dir)
 
-        enum_types.each do |udt_name, values|
           cls_name = enum_class_name(udt_name)
           code = render("enum",
                         module_name: @module_name,
                         ind: indent,
                         enum_class_name: qualify(cls_name),
+                        short_enum_class_name: cls_name,
                         values: values)
-          File.write(File.join(enum_dir, "#{udt_name}.rb"), code)
+          File.write(File.join(table_dir, "#{column}_enum.rb"), code)
         end
       end
 
       sig { params(udt_name: String).returns(String) }
       def enum_class_name(udt_name)
         "#{classify(udt_name)}Enum"
+      end
+
+      sig { params(enum_types: EnumTypeMap).returns(T::Array[T::Hash[Symbol, String]]) }
+      def enum_manifest_entries(enum_types)
+        enum_types.map do |udt_name, entry|
+          table_name = entry[:table]
+          column = entry[:column]
+          { path: "#{singularize(table_name)}/#{column}_enum" }
+        end
       end
 
       sig { params(table: TableInfo).returns(T::Hash[Symbol, T.nilable(String)]) }

@@ -5,7 +5,7 @@
 <%- if module_name -%>
 module <%= module_name %>
 <%- end -%>
-<%= ind %>class <%= enum_class_name %> < T::Enum
+<%= ind %>class <%= short_enum_class_name %> < T::Enum
 <%= ind %>  enums do
 <%- values.each do |v| -%>
 <%- if v[:integer] -%>

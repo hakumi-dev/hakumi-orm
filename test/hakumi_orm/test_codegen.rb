@@ -1128,7 +1128,7 @@ class TestCodegen < HakumiORM::TestCase
       gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
       gen.generate!
 
-      enum_code = File.read(File.join(dir, "enums/post_status.rb"))
+      enum_code = File.read(File.join(dir, "post/status_enum.rb"))
 
       assert_includes enum_code, "class PostStatusEnum < T::Enum"
       assert_includes enum_code, 'DRAFT = new("draft")'
@@ -1182,7 +1182,7 @@ class TestCodegen < HakumiORM::TestCase
       gen.generate!
 
       manifest = File.read(File.join(dir, "manifest.rb"))
-      enum_pos = manifest.index("enums/post_status")
+      enum_pos = manifest.index("post/status_enum")
       table_pos = manifest.index("post/schema")
 
       refute_nil enum_pos
@@ -1439,24 +1439,24 @@ class TestUserDefinedEnums < HakumiORM::TestCase
       gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
-      role_enum_path = File.join(dir, "enums", "users_role.rb")
+      role_enum_path = File.join(dir, "user", "role_enum.rb")
 
       assert_path_exists role_enum_path
 
       content = File.read(role_enum_path)
 
-      assert_includes content, "class UsersRoleEnum < T::Enum"
+      assert_includes content, "class UserRoleEnum < T::Enum"
       assert_includes content, "ADMIN = new(0)"
       assert_includes content, "AUTHOR = new(1)"
       assert_includes content, "READER = new(2)"
 
-      status_enum_path = File.join(dir, "enums", "users_status.rb")
+      status_enum_path = File.join(dir, "user", "status_enum.rb")
 
       assert_path_exists status_enum_path
 
       status_content = File.read(status_enum_path)
 
-      assert_includes status_content, "class UsersStatusEnum < T::Enum"
+      assert_includes status_content, "class UserStatusEnum < T::Enum"
       assert_includes status_content, "ACTIVE = new(0)"
       assert_includes status_content, "BANNED = new(1)"
     end
@@ -1470,8 +1470,8 @@ class TestUserDefinedEnums < HakumiORM::TestCase
       record_path = File.join(dir, "user", "record.rb")
       content = File.read(record_path)
 
-      assert_includes content, "sig { returns(UsersRoleEnum) }"
-      assert_includes content, "sig { returns(UsersStatusEnum) }"
+      assert_includes content, "sig { returns(UserRoleEnum) }"
+      assert_includes content, "sig { returns(UserStatusEnum) }"
     end
   end
 
@@ -1486,7 +1486,7 @@ class TestUserDefinedEnums < HakumiORM::TestCase
       assert_includes content, "def role_admin?"
       assert_includes content, "def role_author?"
       assert_includes content, "def role_reader?"
-      assert_includes content, "UsersRoleEnum::ADMIN"
+      assert_includes content, "UserRoleEnum::ADMIN"
     end
   end
 
@@ -1500,7 +1500,7 @@ class TestUserDefinedEnums < HakumiORM::TestCase
 
       assert_includes content, "def active_status?"
       assert_includes content, "def banned_status?"
-      assert_includes content, "UsersStatusEnum::ACTIVE"
+      assert_includes content, "UserStatusEnum::ACTIVE"
     end
   end
 
@@ -1511,8 +1511,8 @@ class TestUserDefinedEnums < HakumiORM::TestCase
 
       manifest = File.read(File.join(dir, "manifest.rb"))
 
-      assert_includes manifest, "enums/users_role"
-      assert_includes manifest, "enums/users_status"
+      assert_includes manifest, "user/role_enum"
+      assert_includes manifest, "user/status_enum"
     end
   end
 
@@ -1524,8 +1524,8 @@ class TestUserDefinedEnums < HakumiORM::TestCase
       record_path = File.join(dir, "user", "record.rb")
       content = File.read(record_path)
 
-      assert_includes content, "UsersRoleEnum.deserialize("
-      assert_includes content, "UsersStatusEnum.deserialize("
+      assert_includes content, "UserRoleEnum.deserialize("
+      assert_includes content, "UserStatusEnum.deserialize("
     end
   end
 
@@ -1655,7 +1655,7 @@ class TestUserDefinedEnums < HakumiORM::TestCase
       gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
 
-      content = File.read(File.join(dir, "enums", "users_role.rb"))
+      content = File.read(File.join(dir, "user", "role_enum.rb"))
 
       assert_includes content, "ADMIN = new(0)"
     end

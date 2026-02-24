@@ -42,7 +42,7 @@ module HakumiORM
 
     sig { params(pred: Predicate, buf: String, binds: T::Array[Bind], idx: Integer).returns(Integer) }
     def compile_predicate(pred, buf, binds, idx)
-      qn = pred.field.qualified_name
+      qn = qualify(pred.field)
 
       case pred.op
       when :eq       then compile_simple_op(qn, " = ", pred, buf, binds, idx)
@@ -131,7 +131,7 @@ module HakumiORM
     sig { params(expr: SubqueryExpr, buf: String, binds: T::Array[Bind], idx: Integer).returns(Integer) }
     def compile_subquery_expr(expr, buf, binds, idx)
       sub = expr.subquery
-      buf << expr.field.qualified_name
+      buf << qualify(expr.field)
       buf << (expr.op == :in ? " IN (" : " NOT IN (")
       rebased_sql = rebase_binds(sub.sql, idx)
       buf << rebased_sql

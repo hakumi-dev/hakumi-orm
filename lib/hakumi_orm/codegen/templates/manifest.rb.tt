@@ -6,8 +6,8 @@
 HakumiORM.config.schema_fingerprint = "<%= schema_fingerprint %>"
 
 <%- end -%>
-<%- enum_files.each do |ef| -%>
-require_relative "enums/<%= ef %>"
+<%- enum_entries.each do |entry| -%>
+require_relative "<%= entry[:path] %>"
 <%- end -%>
 <%- table_names.each do |name| -%>
 <%- if internal_names.include?(name) -%>

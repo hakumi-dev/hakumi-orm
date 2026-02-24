@@ -52,10 +52,7 @@ module HakumiORM
     attr_accessor :migrations_path
 
     sig { returns(String) }
-    attr_accessor :associations_path
-
-    sig { returns(String) }
-    attr_accessor :enums_path
+    attr_accessor :definitions_path
 
     sig { returns(T.nilable(String)) }
     attr_accessor :schema_fingerprint
@@ -72,7 +69,7 @@ module HakumiORM
       @port = T.let(nil, T.nilable(Integer))
       @username = T.let(nil, T.nilable(String))
       @password = T.let(nil, T.nilable(String))
-      @output_dir = T.let("db/generated", String)
+      @output_dir = T.let("db/schema", String)
       @models_dir = T.let(nil, T.nilable(String))
       @contracts_dir = T.let(nil, T.nilable(String))
       @module_name = T.let(nil, T.nilable(String))
@@ -80,8 +77,7 @@ module HakumiORM
       @pool_timeout = T.let(5.0, Float)
       @logger = T.let(nil, T.nilable(Loggable))
       @migrations_path = T.let("db/migrate", String)
-      @associations_path = T.let("db/associations", String)
-      @enums_path = T.let("db/enums", String)
+      @definitions_path = T.let("db/definitions.rb", String)
       @schema_fingerprint = T.let(nil, T.nilable(String))
       @connection_options = T.let({}, T::Hash[String, String])
       @named_databases = T.let({}, T::Hash[Symbol, DatabaseConfig])

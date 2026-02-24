@@ -211,9 +211,9 @@ class TestSinatraConfig < Minitest::Test
 
     HakumiORM::Framework::SinatraConfig.apply_defaults(config, root: "/tmp/myapp")
 
-    assert_equal "/tmp/myapp/db/generated", config.output_dir
+    assert_equal "/tmp/myapp/db/schema", config.output_dir
     assert_equal "/tmp/myapp/db/migrate", config.migrations_path
-    assert_equal "/tmp/myapp/db/associations", config.associations_path
+    assert_equal "/tmp/myapp/db/definitions.rb", config.definitions_path
   end
 
   def test_skips_paths_without_root
