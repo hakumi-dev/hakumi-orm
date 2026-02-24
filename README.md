@@ -111,7 +111,7 @@ User.columns  # discovered at runtime via method_missing
 In HakumiORM, every model is generated from the schema as typed, explicit code:
 
 ```
-db/generated/              <-- always overwritten by codegen
+db/schema/                 <-- always overwritten by codegen
   user/
     checkable.rb           # UserRecord::Checkable -- interface for validatable fields
     schema.rb              # UserSchema -- typed Field constants
@@ -131,6 +131,8 @@ app/contracts/             <-- generated once, never overwritten
   user_contract.rb         # UserRecord::Contract < UserRecord::BaseContract
   post_contract.rb         # PostRecord::Contract < PostRecord::BaseContract
 ```
+
+If you set `module_name` (for example `"App"` or `"App::Core"`), generated Ruby code is wrapped in that module and stub paths in `models_dir` / `contracts_dir` are nested to match it (for example `app/models/app/user.rb`, `app/contracts/app/user_contract.rb`).
 
 ### Querying
 
@@ -244,7 +246,7 @@ Associations are generated automatically from foreign keys. "has_many" returns a
 Add to your application's Gemfile:
 
 ```ruby
-gem "hakumi-orm"
+gem "hakumi_orm"
 ```
 
 Then run:
@@ -363,10 +365,11 @@ end
 
 ```ruby
 HakumiORM.configure do |config|
-  config.output_dir    = "db/generated"
+  config.output_dir    = "db/schema"
   config.models_dir    = "app/models"
   config.contracts_dir = "app/contracts"
   config.module_name   = "App"
+  config.definitions_path = "db/definitions.rb"
 end
 ```
 
@@ -383,12 +386,12 @@ end
 | "adapter" | auto | Set directly to skip lazy building. Takes precedence over connection params. |
 | "log_level" | -- | Symbol (":debug", ":info", ":warn", ":error", ":fatal"). Creates an internal logger to "$stdout". |
 | "logger" | "nil" | Any "HakumiORM::Loggable" implementor ("::Logger", Rails.logger, custom). "nil" = no logging, zero overhead. |
-| "output_dir" | ""db/generated"" | Directory for generated schemas, records, and relations. |
+| "output_dir" | ""db/schema"" | Directory for generated schemas, records, and relations. |
 | "models_dir" | "nil" | Directory for model stubs. "nil" = skip. |
 | "contracts_dir" | "nil" | Directory for contract stubs. "nil" = skip. |
 | "module_name" | "nil" | Namespace wrapping for generated code. |
 | "migrations_path" | ""db/migrate"" | Directory for migration files. |
-| "enums_path" | ""db/enums"" | Directory for user-defined enum declaration files. |
+| "definitions_path" | ""db/definitions.rb"" | Ruby file (or directory) loaded before codegen for custom associations and user-defined enums. |
 
 All generated methods ("find", "where", "save!", associations, etc.) default to "HakumiORM.adapter", so you never pass the adapter manually.
 
@@ -424,17 +427,18 @@ generator = HakumiORM::Codegen::Generator.new(tables, opts)
 | Action | Requires regeneration? |
 |---|---|
 | Run a migration (add/remove column, table, FK) | Yes (automatic if using "hakumi:migrate") |
-| Add/change a custom association in "db/associations/" | Yes |
+| Add/change a custom association or enum in "db/definitions.rb" | Yes |
 | Add a scope to a Relation | No |
 | Edit a Contract hook | No |
 | Override "custom_preload" (escape hatch) | No |
 | Change "GeneratorOptions" (soft delete, timestamps) | Yes |
 
 Regeneration also updates model annotations ("# == Schema Information ==" block) with the latest schema and associations.
+When a model file has a module wrapper, the annotation block is inserted above the `module` line (not between `module` and `class`).
 
 ## Custom Models
 
-Generated code lives in "db/generated/" and is always overwritten. Your models live in "app/models/" and are never touched after the initial stub generation:
+Generated code lives in "db/schema/" and is always overwritten. Your models live in "app/models/" and are never touched after the initial stub generation:
 
 ```ruby
 class User < UserRecord
@@ -809,10 +813,10 @@ User.all.preload(:profile, posts: [:comments, :tags]).to_a
 
 ### Custom Associations (non-FK based)
 
-For associations based on a different column match (email, slug, external_id), declare them in "db/associations/" and the generator produces everything -- lazy accessor, batch preload, cache, and dispatch:
+For associations based on a different column match (email, slug, external_id), declare them in "db/definitions.rb" and the generator produces everything -- lazy accessor, batch preload, cache, and dispatch:
 
 ```ruby
-# db/associations/users.rb
+# db/definitions.rb
 HakumiORM.associate("users") do |a|
   a.has_many "authored_articles", target: "articles", foreign_key: "author_email", primary_key: "email"
   a.has_one  "latest_comment",    target: "comments", foreign_key: "user_email",   primary_key: "email", order_by: "created_at"
@@ -841,11 +845,11 @@ Available methods inside the "associate" block:
 
 The generator validates at codegen time: tables and columns must exist, source column must be NOT NULL, types must be compatible, names must not collide with existing associations or columns.
 
-The associations directory is configurable:
+The definitions file/path is configurable:
 
 ```ruby
 HakumiORM.configure do |c|
-  c.associations_path = "db/associations"  # default
+  c.definitions_path = "db/definitions.rb" # default
 end
 ```
 
@@ -1239,10 +1243,10 @@ opts = HakumiORM::Codegen::GeneratorOptions.new(
 
 ### User-Defined Enums
 
-For databases without native enum types (SQLite, MySQL), or when you want explicit control over enum values, declare enums in "db/enums/":
+For databases without native enum types (SQLite, MySQL), or when you want explicit control over enum values, declare enums in the same "db/definitions.rb" file:
 
 ```ruby
-# db/enums/users.rb
+# db/definitions.rb
 HakumiORM.define_enums("users") do |e|
   e.enum :role, { admin: 0, author: 1, reader: 2 }, prefix: :role
   e.enum :status, { active: 0, banned: 1 }, suffix: :status
