@@ -230,11 +230,17 @@ class TestCodegen < HakumiORM::TestCase
 
       schema_code = File.read(File.join(dir, "user/schema.rb"))
       record_code = File.read(File.join(dir, "user/record.rb"))
+      validated_code = File.read(File.join(dir, "user/validated_record.rb"))
       rel_code = File.read(File.join(dir, "user/relation.rb"))
 
       assert_includes schema_code, "module App"
       assert_includes record_code, "module App"
+      assert_includes validated_code, "module App"
       assert_includes rel_code, "module App"
+      assert_includes record_code, "class UserRecord"
+      refute_includes record_code, "class App::UserRecord"
+      assert_includes validated_code, "class UserRecord::Validated"
+      refute_includes validated_code, "class App::UserRecord::Validated"
       assert_includes rel_code, "App::UserRecord"
     end
   end
@@ -420,6 +426,26 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
+  test "contracts_dir with module_name writes nested contract path" do
+    Dir.mktmpdir do |dir|
+      gen_dir = File.join(dir, "generated")
+      contracts_dir = File.join(dir, "contracts")
+
+      gen = HakumiORM::Codegen::Generator.new(@tables, opts(gen_dir, contracts_dir: contracts_dir, module_name: "App"))
+      gen.generate!
+
+      contract_path = File.join(contracts_dir, "app", "user_contract.rb")
+
+      assert_path_exists contract_path
+
+      code = File.read(contract_path)
+
+      assert_includes code, "module App"
+      assert_includes code, "class UserRecord::Contract < UserRecord::BaseContract"
+      refute_includes code, "class App::UserRecord::Contract < App::UserRecord::BaseContract"
+    end
+  end
+
   test "validated_record uses Time.now for created_at and updated_at on insert" do
     col_id = HakumiORM::Codegen::ColumnInfo.new(
       name: "id", data_type: "integer", udt_name: "int4",
@@ -505,10 +531,11 @@ class TestCodegen < HakumiORM::TestCase
       gen = HakumiORM::Codegen::Generator.new(@tables, opts(gen_dir, models_dir: models_dir, module_name: "App"))
       gen.generate!
 
-      code = File.read(File.join(models_dir, "user.rb"))
+      code = File.read(File.join(models_dir, "app", "user.rb"))
 
       assert_includes code, "module App"
-      assert_includes code, "class App::User < App::UserRecord"
+      assert_includes code, "class User < UserRecord"
+      refute_includes code, "class App::User < App::UserRecord"
     end
   end
 

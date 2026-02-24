@@ -485,7 +485,7 @@ module <%= module_name %>
 
 <%- scope_chain = assoc[:scope_expr] ? ".where(#{assoc[:scope_expr]})" : "" -%>
 <%- if assoc[:order_by_const] -%>
-<%= ind %>    <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.eq(@<%= assoc[:pk_attr] %>))<%= scope_chain %>.order(<%= assoc[:schema_module] %>::<%= assoc[:order_by_const] %>.desc).first(adapter: adapter)
+<%= ind %>    <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.eq(@<%= assoc[:pk_attr] %>))<%= scope_chain %>.order(<%= assoc[:schema_module] %>::<%= assoc[:order_by_const] %>.<%= assoc[:order_by_dir] || "desc" %>).first(adapter: adapter)
 <%- else -%>
 <%= ind %>    <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.eq(@<%= assoc[:pk_attr] %>))<%= scope_chain %>.first(adapter: adapter)
 <%- end -%>
@@ -499,12 +499,12 @@ module <%= module_name %>
 <%= ind %>    return if ids.empty?
 
 <%- if assoc[:order_by_const] -%>
-<%= ind %>    all_related = <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.in_list(ids))<%= scope_chain %>.order(<%= assoc[:schema_module] %>::<%= assoc[:order_by_const] %>.desc).to_a(adapter: adapter)
+<%= ind %>    all_related = <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.in_list(ids))<%= scope_chain %>.order(<%= assoc[:schema_module] %>::<%= assoc[:order_by_const] %>.<%= assoc[:order_by_dir] || "desc" %>).to_a(adapter: adapter)
 <%- else -%>
 <%= ind %>    all_related = <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.in_list(ids))<%= scope_chain %>.to_a(adapter: adapter)
 <%- end -%>
 <%= ind %>    indexed = T.let({}, T::Hash[<%= assoc[:pk_ruby_type] %>, <%= assoc[:record_class] %>])
-<%= ind %>    all_related.each { |r| indexed[r.<%= assoc[:fk_attr] %>] = r }
+<%= ind %>    all_related.each { |r| indexed[r.<%= assoc[:fk_attr] %>] ||= r }
 
 <%- if assoc[:inverse_method] -%>
 <%= ind %>    indexed_parents = T.let({}, T::Hash[<%= assoc[:pk_ruby_type] %>, <%= record_class_name %>])

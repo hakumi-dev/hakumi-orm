@@ -4,7 +4,13 @@
 module HakumiORM
   module Codegen
     EnumValue = T.type_alias { T::Hash[Symbol, T.any(String, T::Boolean)] }
-    EnumEntry = T.type_alias { T::Hash[Symbol, T.untyped] }
+    EnumEntry = T.type_alias do
+      {
+        table: String,
+        column: String,
+        values: T::Array[EnumValue]
+      }
+    end
     EnumTypeMap = T.type_alias { T::Hash[String, EnumEntry] }
 
     class Generator
@@ -17,13 +23,7 @@ module HakumiORM
         @user_enums.each do |table_name, defs|
           defs.each do |enum_def|
             udt = "#{singularize(table_name)}_#{enum_def.column_name}"
-            seen[udt] = {
-              table: table_name,
-              column: enum_def.column_name,
-              values: enum_def.values.map do |key, db_val|
-                { const: key.to_s.upcase.gsub(/[^A-Z0-9_]/, "_"), serialized: db_val.to_s, integer: true }
-              end
-            }
+            seen[udt] = build_user_enum_entry(table_name, enum_def)
           end
         end
 
@@ -33,13 +33,7 @@ module HakumiORM
             next unless ev
             next if seen.key?(col.udt_name)
 
-            seen[col.udt_name] = {
-              table: table.name,
-              column: col.name,
-              values: ev.map do |v|
-                { const: v.upcase.gsub(/[^A-Z0-9_]/, "_"), serialized: v, integer: false }
-              end
-            }
+            seen[col.udt_name] = build_native_enum_entry(table.name, col.name, ev)
           end
         end
         seen
@@ -72,11 +66,33 @@ module HakumiORM
 
       sig { params(enum_types: EnumTypeMap).returns(T::Array[T::Hash[Symbol, String]]) }
       def enum_manifest_entries(enum_types)
-        enum_types.map do |udt_name, entry|
+        enum_types.map do |_udt_name, entry|
           table_name = entry[:table]
           column = entry[:column]
           { path: "#{singularize(table_name)}/#{column}_enum" }
         end
+      end
+
+      sig { params(table_name: String, enum_def: EnumDefinition).returns(EnumEntry) }
+      def build_user_enum_entry(table_name, enum_def)
+        {
+          table: table_name,
+          column: enum_def.column_name,
+          values: enum_def.values.map do |key, db_val|
+            { const: key.to_s.upcase.gsub(/[^A-Z0-9_]/, "_"), serialized: db_val.to_s, integer: true }
+          end
+        }
+      end
+
+      sig { params(table_name: String, column_name: String, values: T::Array[String]).returns(EnumEntry) }
+      def build_native_enum_entry(table_name, column_name, values)
+        {
+          table: table_name,
+          column: column_name,
+          values: values.map do |v|
+            { const: v.upcase.gsub(/[^A-Z0-9_]/, "_"), serialized: v, integer: false }
+          end
+        }
       end
 
       sig { params(table: TableInfo).returns(T::Hash[Symbol, T.nilable(String)]) }

@@ -8,12 +8,13 @@ module HakumiORM
 
       sig { params(contracts_dir: String).void }
       def generate_contracts!(contracts_dir)
-        FileUtils.mkdir_p(contracts_dir)
+        root_dir = namespaced_codegen_dir(contracts_dir)
+        FileUtils.mkdir_p(root_dir)
 
         @tables.each_value do |table|
           next if @internal_tables.include?(table.name)
 
-          contract_path = File.join(contracts_dir, "#{singularize(table.name)}_contract.rb")
+          contract_path = File.join(root_dir, "#{singularize(table.name)}_contract.rb")
           next if File.exist?(contract_path)
 
           File.write(contract_path, build_contract(table))
@@ -29,7 +30,7 @@ module HakumiORM
         render("checkable",
                module_name: @module_name,
                ind: indent,
-               record_class_name: qualify(record_cls),
+               record_class_name: record_cls,
                columns: ins_cols.map { |c| { name: c.name, ruby_type: ruby_type(c) } })
       end
 
@@ -51,7 +52,7 @@ module HakumiORM
         render("validated_record",
                module_name: @module_name,
                ind: indent,
-               record_class_name: qualify(record_cls),
+               record_class_name: record_cls,
                columns: cols,
                insert_sql: build_insert_sql(table),
                validated_bind_list: validated_bind_list,
@@ -124,7 +125,7 @@ module HakumiORM
         render("base_contract",
                module_name: @module_name,
                ind: indent,
-               record_class_name: qualify(record_cls))
+               record_class_name: record_cls)
       end
 
       sig { params(table: TableInfo).returns(String) }
@@ -135,7 +136,7 @@ module HakumiORM
         render("contract",
                module_name: @module_name,
                ind: indent,
-               record_class_name: qualify(record_cls))
+               record_class_name: record_cls)
       end
 
       sig { params(table: TableInfo, ins_cols: T::Array[ColumnInfo]).returns(T::Hash[Symbol, TemplateLocal]) }
@@ -308,7 +309,7 @@ module HakumiORM
         render("variant_base",
                module_name: @module_name,
                ind: indent,
-               record_class_name: qualify(record_cls),
+               record_class_name: record_cls,
                to_h_value_type: to_h_value_type(table),
                as_json_value_type: as_json_value_type(table),
                all_columns: table.columns.map { |c| { name: c.name, ruby_type: record_ruby_type(table, c) } })

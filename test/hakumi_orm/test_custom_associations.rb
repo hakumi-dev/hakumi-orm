@@ -270,6 +270,24 @@ class TestCustomAssociations < HakumiORM::TestCase
     end
   end
 
+  test "has_one with explicit DESC order_by parses column and direction" do
+    tables = build_users_articles_tables
+
+    Dir.mktmpdir do |dir|
+      generate(tables, output_dir: dir, custom_associations: {
+                 "users" => [assoc("latest_article", target: "articles",
+                                                     foreign_key: "author_email", primary_key: "email",
+                                                     kind: :has_one, order_by: "created_at DESC")]
+               })
+
+      record = File.read(File.join(dir, "user/record.rb"))
+
+      assert_includes record, "order(ArticleSchema::CREATED_AT.desc)"
+      assert_includes record, "||= r"
+      refute_includes record, "CREATED_AT DESC"
+    end
+  end
+
   test "custom associations coexist with FK associations" do
     users = make_table("users", columns: [pk_col("users"), str_col("name"), str_col("email")])
     posts = make_table("posts",

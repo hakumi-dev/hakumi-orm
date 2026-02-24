@@ -92,12 +92,13 @@ module HakumiORM
 
       sig { params(models_dir: String).void }
       def generate_models!(models_dir)
-        FileUtils.mkdir_p(models_dir)
+        root_dir = namespaced_codegen_dir(models_dir)
+        FileUtils.mkdir_p(root_dir)
 
         @tables.each_value do |table|
           next if @internal_tables.include?(table.name)
 
-          model_path = File.join(models_dir, "#{singularize(table.name)}.rb")
+          model_path = File.join(root_dir, "#{singularize(table.name)}.rb")
           next if File.exist?(model_path)
 
           File.write(model_path, build_model(table))
@@ -184,7 +185,7 @@ module HakumiORM
         render("record",
                module_name: @module_name,
                ind: indent,
-               record_class_name: qualify(record_cls),
+               record_class_name: record_cls,
                to_h_value_type: to_h_value_type(table),
                as_json_value_type: as_json_value_type(table),
                columns: table.columns.map { |c| { name: c.name, ruby_type: record_ruby_type(table, c), json_expr: json_expr(c) } },
@@ -246,7 +247,7 @@ module HakumiORM
         render("new_record",
                module_name: @module_name,
                ind: indent,
-               record_class_name: qualify(record_cls),
+               record_class_name: record_cls,
                columns: cols,
                init_sig_params: ordered.map { |c| "#{c.name}: #{ruby_type(c)}" }.join(", "),
                init_args: (required_ins.map { |c| "#{c.name}:" } +
@@ -293,8 +294,8 @@ module HakumiORM
         render("model",
                module_name: @module_name,
                ind: indent,
-               model_class_name: qualify(cls),
-               record_class_name: qualify("#{cls}Record"),
+               model_class_name: cls,
+               record_class_name: "#{cls}Record",
                relation_class_name: qualify("#{cls}Relation"),
                schema_module: qualify("#{cls}Schema"))
       end

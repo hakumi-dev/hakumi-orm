@@ -322,6 +322,32 @@ class TestModelAnnotator < HakumiORM::TestCase
     assert_includes result, "def greet"
   end
 
+  test "insert_annotation inserts before module when module wrapper exists" do
+    original = <<~RUBY
+      # typed: strict
+      # frozen_string_literal: true
+
+      module App
+        class App::User < App::UserRecord
+        end
+      end
+    RUBY
+
+    annotation = "# == Schema Information ==\n# content\n# == End Schema Information =="
+    result = Annotator.insert_annotation(original, annotation)
+    lines = result.lines
+
+    marker_idx = lines.index { |l| l.include?("# == Schema Information ==") }
+    module_idx = lines.index { |l| l.include?("module App") }
+    class_idx = lines.index { |l| l.include?("class App::User") }
+
+    refute_nil marker_idx
+    refute_nil module_idx
+    refute_nil class_idx
+    assert_operator marker_idx, :<, module_idx
+    assert_operator module_idx, :<, class_idx
+  end
+
   test "insert_annotation prepends when no class definition exists" do
     original = "# just a comment\nsome_code\n"
     annotation = "# == Schema Information ==\n# content\n# == End Schema Information =="

@@ -71,7 +71,11 @@ require_relative "hakumi_orm/schema_drift_checker"
 require_relative "hakumi_orm/setup_generator"
 
 require_relative "hakumi_orm/framework"
-require_relative "hakumi_orm/framework/rails" if defined?(Rails::Railtie)
+begin
+  require_relative "hakumi_orm/framework/rails"
+rescue LoadError => e
+  raise unless e.respond_to?(:path) && e.path == "rails/railtie"
+end
 
 module HakumiORM
   class << self

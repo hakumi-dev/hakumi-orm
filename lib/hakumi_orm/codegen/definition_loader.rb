@@ -21,7 +21,7 @@ module HakumiORM
         if File.file?(path)
           Kernel.load(path)
         elsif File.directory?(path)
-          Dir.glob(File.join(path, "*.rb")).sort.each { |f| Kernel.load(f) }
+          Dir.glob(File.join(path, "*.rb")).each { |f| Kernel.load(f) }
         end
 
         {

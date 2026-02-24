@@ -25,26 +25,50 @@ module HakumiORM
       end
 
       initializer "hakumi_orm.load_generated" do
-        manifest = ::Rails.root.join(HakumiORM.config.output_dir, "manifest.rb")
-        require manifest.to_s if manifest.exist?
+        config.after_initialize do
+          load_generated_hakumi_code!
+        end
+      end
 
-        %w[contracts_dir models_dir].each do |dir_method|
-          dir = HakumiORM.config.send(dir_method)
+      rake_tasks do
+        require "hakumi_orm/tasks"
+      end
+
+      private
+
+      def load_generated_hakumi_code!
+        return if running_hakumi_rake_task?
+
+        manifest = path_from_root_or_absolute(HakumiORM.config.output_dir).join("manifest.rb")
+        return unless manifest.exist?
+
+        require manifest.to_s
+
+        %w[models_dir contracts_dir].each do |dir_method|
+          dir = HakumiORM.config.public_send(dir_method)
           next unless dir
 
-          path = ::Rails.root.join(dir)
+          path = path_from_root_or_absolute(dir)
           next unless path.exist?
 
           Dir[path.join("**", "*.rb")].sort_by { |f| f.count(File::SEPARATOR) }.each { |f| require f }
         end
       end
 
-      rake_tasks do
-        require "hakumi_orm/tasks"
+      def path_from_root_or_absolute(path)
+        pn = Pathname.new(path)
+        pn.absolute? ? pn : ::Rails.root.join(path)
+      end
 
-        %w[migrate rollback migrate:status version generate associations].each do |t|
-          Rake::Task["hakumi:#{t}"].enhance([:environment])
-        end
+      def running_hakumi_rake_task?
+        return false unless defined?(::Rake) && ::Rake.respond_to?(:application)
+
+        app = ::Rake.application
+        return false unless app
+
+        app.top_level_tasks.any? { |t| t.start_with?("hakumi:") }
+      rescue StandardError
+        false
       end
     end
   end

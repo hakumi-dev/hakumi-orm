@@ -18,9 +18,10 @@ module HakumiORM
         ).void
       end
       def annotate_models!(models_dir, has_many_map, has_one_map, through_map)
+        model_root = namespaced_codegen_dir(models_dir)
         @tables.each_value do |table|
           singular = singularize(table.name)
-          model_path = File.join(models_dir, "#{singular}.rb")
+          model_path = File.join(model_root, "#{singular}.rb")
           next unless File.exist?(model_path)
 
           ctx = ModelAnnotator::Context.new(
@@ -34,7 +35,7 @@ module HakumiORM
             enum_predicates: build_enum_predicates(table)
           )
           ModelAnnotator.annotate!(model_path, ctx)
-          annotate_variants!(models_dir, singular, ctx)
+          annotate_variants!(model_root, singular, ctx)
         end
       end
 
@@ -336,6 +337,28 @@ module HakumiORM
           singular: info.fetch(:singular, "false").to_s
         }
       end
+
+      sig { params(base_dir: String).returns(String) }
+      def namespaced_codegen_dir(base_dir)
+        mod = @module_name
+        return base_dir unless mod
+
+        path = T.let(base_dir, String)
+        mod.split("::").each do |part|
+          path = File.join(path, underscore(part))
+        end
+        path
+      end
+
+      sig { params(name: String).returns(String) }
+      def underscore(name)
+        name
+          .gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
+          .gsub(/([a-z\d])([A-Z])/, '\1_\2')
+          .tr("-", "_")
+          .downcase
+      end
+
       sig { params(hash: AssocEntry, key: Symbol).returns(String) }
       def str(hash, key)
         hash.fetch(key).to_s

@@ -122,10 +122,25 @@ module HakumiORM
       def build_custom_assoc_hash(table, a)
         result = build_custom_assoc_base(table, a)
         ob = a.order_by
-        result[:order_by_const] = ob.upcase if ob
+        if ob
+          col_name, dir = parse_order_by(ob)
+          result[:order_by_const] = col_name.upcase
+          result[:order_by_dir] = dir
+        end
         sc = a.scope
         result[:scope_expr] = sc if sc
         result
+      end
+
+      sig { params(order_by: String).returns([String, String]) }
+      def parse_order_by(order_by)
+        raw = order_by.strip
+        m = /\A([a-zA-Z_][a-zA-Z0-9_]*)(?:\s+(ASC|DESC))?\z/i.match(raw)
+        if m && (col_name = m[1])
+          [col_name, (m[2] || "DESC").downcase]
+        else
+          [raw, "desc"]
+        end
       end
 
       sig { params(table: TableInfo, a: CustomAssociation).returns(AssocEntry) }

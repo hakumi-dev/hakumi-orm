@@ -65,11 +65,17 @@ module HakumiORM
 
       sig { params(lines: T::Array[String], annotation: String).returns(String) }
       def self.insert_before_class(lines, annotation)
+        module_idx = lines.index { |l| l.match?(/^\s*module\s/) }
         class_idx = lines.index { |l| l.match?(/^\s*class\s/) }
+        insert_idx = if module_idx && class_idx
+                       [module_idx, class_idx].min
+                     else
+                       module_idx || class_idx
+                     end
 
-        if class_idx
-          before = (lines[0...class_idx] || []).map(&:chomp)
-          after = (lines[class_idx..] || []).map(&:chomp)
+        if insert_idx
+          before = (lines[0...insert_idx] || []).map(&:chomp)
+          after = (lines[insert_idx..] || []).map(&:chomp)
           "#{(before + [annotation, ""] + after).join("\n")}\n"
         else
           "#{annotation}\n\n#{lines.map(&:chomp).join("\n")}\n"
