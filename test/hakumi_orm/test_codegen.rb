@@ -729,6 +729,21 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
+  test "has_many through name collisions are disambiguated" do
+    tables = build_tasks_attachments_comments_users_tables
+    Dir.mktmpdir do |dir|
+      gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
+      gen.generate!
+
+      task_code = File.read(File.join(dir, "task/record.rb"))
+
+      assert_equal 1, task_code.scan("def users(adapter: ::HakumiORM.adapter)").length
+      assert_includes task_code, "def users_via_comment(adapter: ::HakumiORM.adapter)"
+      assert_includes task_code, "AttachmentRelation"
+      assert_includes task_code, "CommentRelation"
+    end
+  end
+
   test "has_one through generates singular method with first" do
     tables = build_users_profiles_avatars_tables
     Dir.mktmpdir do |dir|
@@ -1345,6 +1360,23 @@ class TestCodegen < HakumiORM::TestCase
                                     col("body", type: "text", udt: "text")],
                           fks: [fk("post_id", "posts")])
     { "users" => users, "posts" => posts, "comments" => comments }
+  end
+
+  def build_tasks_attachments_comments_users_tables
+    users = make_table("users", columns: [pk_col("users"), str_col("name")])
+    tasks = make_table("tasks", columns: [pk_col("tasks"), str_col("title")])
+    attachments = make_table("attachments",
+                             columns: [pk_col("attachments"), fk_col("task_id"), fk_col("uploader_id")],
+                             fks: [fk("task_id", "tasks"), fk("uploader_id", "users")])
+    comments = make_table("comments",
+                          columns: [pk_col("comments"), fk_col("task_id"), fk_col("author_id")],
+                          fks: [fk("task_id", "tasks"), fk("author_id", "users")])
+    {
+      "users" => users,
+      "tasks" => tasks,
+      "attachments" => attachments,
+      "comments" => comments
+    }
   end
 
   def build_enum_definition(column:, values:, prefix: nil, suffix: nil)

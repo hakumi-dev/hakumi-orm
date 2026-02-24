@@ -272,8 +272,50 @@ module HakumiORM
 
       sig { params(table: TableInfo, through_map: AssocMap).returns(T::Array[AssocEntry]) }
       def build_has_many_through_assocs(table, through_map)
-        assocs = (through_map[table.name] || []).map { |info| build_through_entry(info) }
+        infos = disambiguate_through_names(through_map[table.name] || [])
+        assocs = infos.map { |info| build_through_entry(info) }
         assocs.sort_by { |a| a[:method_name].to_s }
+      end
+
+      sig { params(infos: T::Array[AssocEntry]).returns(T::Array[AssocEntry]) }
+      def disambiguate_through_names(infos)
+        ordered = infos.sort_by do |info|
+          [
+            str(info, :method_name),
+            str(info, :join_table),
+            str(info, :join_fk_to_source),
+            str(info, :join_select_field),
+            str(info, :target_table),
+            str(info, :target_match_field)
+          ]
+        end
+
+        used = T.let({}, T::Hash[String, Integer])
+        ordered.map do |info|
+          base = str(info, :method_name)
+          join_table = singularize(str(info, :join_table))
+          join_select = str(info, :join_select_field)
+
+          chosen = if used.key?(base)
+                     via_name = "#{base}_via_#{join_table}"
+                     if used.key?(via_name)
+                       via_field_name = "#{via_name}_#{join_select}"
+                       if used.key?(via_field_name)
+                         n = used.fetch(via_field_name, 0) + 1
+                         "#{via_field_name}_#{n}"
+                       else
+                         via_field_name
+                       end
+                     else
+                       via_name
+                     end
+                   else
+                     base
+                   end
+
+          used[chosen] = used.fetch(chosen, 0) + 1
+          info.merge(method_name: chosen)
+        end
       end
 
       sig { params(info: AssocEntry).returns(AssocEntry) }
