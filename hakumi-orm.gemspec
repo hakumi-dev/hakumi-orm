@@ -3,7 +3,7 @@
 require_relative "lib/hakumi_orm/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "hakumi-orm"
+  spec.name = "hakumi_orm"
   spec.version = HakumiORM::VERSION
   spec.authors = ["kb714"]
   spec.email = ["aaguirre@buk.cl"]
