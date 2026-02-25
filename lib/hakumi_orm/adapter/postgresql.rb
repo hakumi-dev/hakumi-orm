@@ -9,6 +9,8 @@ module HakumiORM
     class Postgresql < Base
       extend T::Sig
 
+      EXEC_PARAMS_STMT_CACHE_MAX = 64
+
       sig { override.returns(Dialect::Postgresql) }
       attr_reader :dialect
 
@@ -17,6 +19,9 @@ module HakumiORM
         @pg_conn = T.let(pg_conn, PG::Connection)
         @dialect = T.let(Dialect::Postgresql.new, Dialect::Postgresql)
         @prepared = T.let({}, T::Hash[String, TrueClass])
+        @exec_params_stmt_by_sql = T.let({}, T::Hash[String, String])
+        @exec_params_stmt_order = T.let([], T::Array[String])
+        @exec_params_stmt_seq = T.let(0, Integer)
       end
 
       sig { params(params: T::Hash[Symbol, T.any(String, Integer)]).returns(Postgresql) }
@@ -36,7 +41,8 @@ module HakumiORM
         end
 
         start = log_query_start
-        result = PostgresqlResult.new(@pg_conn.exec_params(sql, params))
+        stmt_name = cached_exec_params_stmt_name(sql)
+        result = PostgresqlResult.new(@pg_conn.exec_prepared(stmt_name, params))
         log_query_done(sql, params, start)
         result
       end
@@ -75,6 +81,38 @@ module HakumiORM
       sig { override.void }
       def close
         @pg_conn.close
+      end
+
+      private
+
+      sig { params(sql: String).returns(String) }
+      def cached_exec_params_stmt_name(sql)
+        cached = @exec_params_stmt_by_sql[sql]
+        return cached if cached
+
+        evict_exec_params_stmt_if_needed
+
+        @exec_params_stmt_seq += 1
+        stmt_name = "hakumi_auto_#{@exec_params_stmt_seq}"
+        @pg_conn.prepare(stmt_name, sql)
+        @exec_params_stmt_by_sql[sql] = stmt_name
+        @exec_params_stmt_order << sql
+        stmt_name
+      end
+
+      sig { void }
+      def evict_exec_params_stmt_if_needed
+        return unless @exec_params_stmt_order.length >= EXEC_PARAMS_STMT_CACHE_MAX
+
+        oldest_sql = @exec_params_stmt_order.shift
+        return unless oldest_sql
+
+        stmt_name = @exec_params_stmt_by_sql.delete(oldest_sql)
+        return unless stmt_name
+
+        @pg_conn.exec("DEALLOCATE #{stmt_name}").clear
+      rescue PG::Error
+        nil
       end
     end
   end
