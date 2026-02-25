@@ -35,6 +35,13 @@ module HakumiORM
          AND tc.table_schema = kcu.table_schema
          AND tc.table_name = kcu.table_name
         WHERE tc.constraint_type = 'UNIQUE' AND tc.table_schema = ?
+          AND (
+            SELECT COUNT(*)
+            FROM information_schema.key_column_usage k2
+            WHERE k2.table_schema = tc.table_schema
+              AND k2.table_name = tc.table_name
+              AND k2.constraint_name = tc.constraint_name
+          ) = 1
       SQL
 
       FOREIGN_KEYS_SQL = <<~SQL

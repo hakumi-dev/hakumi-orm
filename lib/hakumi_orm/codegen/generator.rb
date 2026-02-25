@@ -323,10 +323,8 @@ module HakumiORM
 
       sig { params(col: ColumnInfo).returns(String) }
       def insert_all_bind_expr(col)
-        if col.enum_values && @integer_backed_enums.include?(col.udt_name)
-          "T.cast(rec.#{col.name}.serialize, Integer)"
-        elsif col.enum_values
-          "T.cast(rec.#{col.name}.serialize, String)"
+        if col.enum_values
+          "rec.#{col.name}.serialize"
         elsif col.nullable
           "((_hv = rec.#{col.name}).nil? ? nil : adapter.encode(#{hakumi_type_for(col).bind_class}.new(_hv)))"
         else

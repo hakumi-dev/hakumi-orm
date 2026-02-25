@@ -156,10 +156,18 @@ class TestCodegen < HakumiORM::TestCase
       assert_includes code, "returns(T::Boolean)"
       assert_includes code, "def initialize(active:, age:, email:, id:, name:)"
       assert_includes code, "def self.from_result"
+      assert_includes code, "::HakumiORM::RecordRuntime.hydrate_result_rows"
+      refute_includes code, "instance_variable_set("
       assert_includes code, "def self.where"
       assert_includes code, "def self.all"
       assert_includes code, "def self.find"
       assert_includes code, "def self.build"
+      assert_includes code, "@_pg_type_map = T.let("
+      assert_includes code, "PostgresqlResult.build_type_map_from_exprs"
+      refute_includes code, "::PG::TypeMapByColumn.new("
+      assert_includes code, "if (tm = _pg_type_map)"
+      assert_includes code, "result.apply_type_map!(tm)"
+      refute_includes code, "respond_to?(:apply_type_map!)"
     end
   end
 
@@ -1213,7 +1221,7 @@ class TestCodegen < HakumiORM::TestCase
       record = File.read(File.join(dir, "task/record.rb"))
 
       assert_includes record, "returns(T.nilable(TaskPriorityEnum))"
-      assert_includes record, "TaskPriorityEnum.deserialize(_hv)"
+      assert_includes record, "TaskPriorityEnum.deserialize(dialect.cast_string(_hv))"
     end
   end
 
@@ -1727,8 +1735,8 @@ class TestUserDefinedEnums < HakumiORM::TestCase
 
       validated = File.read(File.join(dir, "user", "validated_record.rb"))
 
-      assert_includes validated, "IntBind.new(T.cast(@record.role.serialize, Integer))"
-      assert_includes validated, "IntBind.new(T.cast(@record.status.serialize, Integer))"
+      assert_includes validated, "IntBind.new(@record.role.serialize)"
+      assert_includes validated, "IntBind.new(@record.status.serialize)"
     end
   end
 
@@ -1739,8 +1747,8 @@ class TestUserDefinedEnums < HakumiORM::TestCase
 
       record = File.read(File.join(dir, "user", "record.rb"))
 
-      assert_includes record, "T.cast(rec.role.serialize, Integer)"
-      assert_includes record, "T.cast(rec.status.serialize, Integer)"
+      assert_includes record, "rec.role.serialize"
+      assert_includes record, "rec.status.serialize"
     end
   end
 
@@ -1751,8 +1759,8 @@ class TestUserDefinedEnums < HakumiORM::TestCase
 
       record = File.read(File.join(dir, "user", "record.rb"))
 
-      assert_includes record, "deserialize(row[2].to_i)"
-      assert_includes record, "deserialize(row[3].to_i)"
+      assert_includes record, "deserialize(dialect.cast_integer(row[2]))"
+      assert_includes record, "deserialize(dialect.cast_integer(row[3]))"
     end
   end
 

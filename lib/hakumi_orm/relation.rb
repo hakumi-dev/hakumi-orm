@@ -172,7 +172,7 @@ module HakumiORM
 
       reject_count_with_grouping!
 
-      if can_use_prepared_count_all?
+      if can_use_prepared_count_all?(adapter)
         stmt = stmt_count_all
         sql = sql_count_all
         return use_result(adapter.prepare_exec(stmt, sql, [])) { |r| r.fetch_value(0, 0).to_i } if stmt && sql
@@ -321,8 +321,10 @@ module HakumiORM
             "Use to_a.length or a custom aggregate query instead"
     end
 
-    sig { returns(T::Boolean) }
-    def can_use_prepared_count_all?
+    sig { params(adapter: Adapter::Base).returns(T::Boolean) }
+    def can_use_prepared_count_all?(adapter)
+      return false unless adapter.dialect.is_a?(Dialect::Postgresql)
+
       @where_exprs.empty? && @joins.empty? && @defaults_pristine
     end
 

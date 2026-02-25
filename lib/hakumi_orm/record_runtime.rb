@@ -1,0 +1,40 @@
+# typed: strict
+# frozen_string_literal: true
+
+module HakumiORM
+  module RecordRuntime
+    extend T::Sig
+
+    module_function
+
+    sig do
+      type_parameters(:R)
+        .params(
+          result: ::HakumiORM::Adapter::Result,
+          dialect: ::HakumiORM::Dialect::Base,
+          blk: T.proc
+               .params(row: T::Array[::HakumiORM::Adapter::CellValue], dialect: ::HakumiORM::Dialect::Base)
+               .returns(T.type_parameter(:R))
+        )
+        .returns(T::Array[T.type_parameter(:R)])
+    end
+    def hydrate_result_rows(result, dialect, &blk)
+      n = result.row_count
+      return [] if n.zero?
+
+      all_rows = result.values
+      rows = T.let(::Array.new(n), T::Array[T.type_parameter(:R)])
+      i = 0
+      while i < n
+        rows[i] = blk.call(all_rows.fetch(i), dialect)
+        i += 1
+      end
+      rows
+    end
+
+    sig { overridable.params(_row: T::Array[::HakumiORM::Adapter::CellValue], _dialect: ::HakumiORM::Dialect::Base).void }
+    def _hydrate_row_values!(_row, _dialect)
+      Kernel.raise NotImplementedError, "generated record must implement _hydrate_row_values!"
+    end
+  end
+end

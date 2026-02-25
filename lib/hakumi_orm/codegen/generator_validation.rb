@@ -201,9 +201,9 @@ module HakumiORM
       sig { params(accessor: String, col: ColumnInfo).returns(String) }
       def enum_bind_expr(accessor, col)
         if @integer_backed_enums.include?(col.udt_name)
-          "adapter.encode(::HakumiORM::IntBind.new(T.cast(#{accessor}.serialize, Integer)))"
+          "adapter.encode(::HakumiORM::IntBind.new(#{accessor}.serialize))"
         else
-          "adapter.encode(::HakumiORM::StrBind.new(T.cast(#{accessor}.serialize, String)))"
+          "adapter.encode(::HakumiORM::StrBind.new(#{accessor}.serialize))"
         end
       end
 

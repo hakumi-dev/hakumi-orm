@@ -8,6 +8,7 @@ require "bigdecimal"
 module <%= module_name %>
 <%- end -%>
 <%= ind %>class <%= record_class_name %>
+<%= ind %>  include ::HakumiORM::RecordRuntime
 <%= ind %>  extend T::Sig
 
 <%- columns.each do |col| -%>
@@ -50,38 +51,45 @@ module <%= module_name %>
 <%- if has_pg_decoders -%>
 <%= ind %>  sig { returns(T.nilable(Object)) }
 <%= ind %>  def self._pg_type_map
-<%= ind %>    return @_pg_type_map if defined?(@_pg_type_map)
-<%= ind %>    @_pg_type_map = PG::TypeMapByColumn.new([<%= pg_decoders.map { |d| d || 'nil' }.join(', ') %>])
-<%= ind %>  rescue ::NameError
-<%= ind %>    @_pg_type_map = nil
+<%= ind %>    if defined?(@_pg_type_map_loaded) && @_pg_type_map_loaded
+<%= ind %>      return @_pg_type_map
+<%= ind %>    end
+<%= ind %>    @_pg_type_map = T.let(::HakumiORM::Adapter::PostgresqlResult.build_type_map_from_exprs([<%= pg_decoders.map { |d| d ? d.inspect : 'nil' }.join(', ') %>]), T.nilable(Object))
+<%= ind %>    @_pg_type_map_loaded = T.let(true, T.nilable(T::Boolean))
+<%= ind %>    @_pg_type_map
 <%= ind %>  end
 
 <%- end -%>
 <%= ind %>  sig { params(result: ::HakumiORM::Adapter::Result, dialect: ::HakumiORM::Dialect::Base).returns(T::Array[<%= record_class_name %>]) }
 <%= ind %>  def self.from_result(result, dialect: ::HakumiORM.adapter.dialect)
-<%= ind %>    n = result.row_count
-<%= ind %>    return [] if n.zero?
-<%= ind %>
+<%= ind %>    _prepare_result_for_hydration(result)
+<%= ind %>    ::HakumiORM::RecordRuntime.hydrate_result_rows(result, dialect) do |row, row_dialect|
+<%= ind %>      obj = allocate
+<%= ind %>      obj.__send__(:_hydrate_row_values!, row, row_dialect)
+<%= ind %>      obj
+<%= ind %>    end
+<%= ind %>  end
+
 <%- if has_pg_decoders -%>
-<%= ind %>    if (tm = _pg_type_map) && result.respond_to?(:apply_type_map!)
+<%= ind %>  sig { params(result: ::HakumiORM::Adapter::Result).void }
+<%= ind %>  def self._prepare_result_for_hydration(result)
+<%= ind %>    if (tm = _pg_type_map)
 <%= ind %>      result.apply_type_map!(tm)
 <%= ind %>    end
-<%= ind %>
-<%- end -%>
-<%= ind %>    all_rows = result.values
-<%= ind %>    rows = ::Array.new(n)
-<%= ind %>    i = 0
-<%= ind %>    while i < n
-<%= ind %>      row = all_rows[i]
-<%= ind %>      obj = allocate
-<%- columns.each_with_index do |col, ci| -%>
-<%= ind %>      obj.instance_variable_set(:@<%= col[:name] %>, <%= cast_lines[ci] %>)
-<%- end -%>
-<%= ind %>      rows[i] = obj
-<%= ind %>      i += 1
-<%= ind %>    end
-<%= ind %>    rows
 <%= ind %>  end
+
+<%- else -%>
+<%= ind %>  sig { overridable.params(_result: ::HakumiORM::Adapter::Result).void }
+<%= ind %>  def self._prepare_result_for_hydration(_result); end
+
+<%- end -%>
+<%= ind %>  sig { override.params(row: T::Array[::HakumiORM::Adapter::CellValue], dialect: ::HakumiORM::Dialect::Base).void }
+<%= ind %>  def _hydrate_row_values!(row, dialect)
+<%- columns.each_with_index do |col, ci| -%>
+<%= ind %>    @<%= col[:name] %> = <%= cast_lines[ci] %>
+<%- end -%>
+<%= ind %>  end
+<%= ind %>  private :_hydrate_row_values!
 
 <%- if find_sql -%>
 <%= ind %>  SQL_FIND_BY_PK = T.let('<%= find_sql %>', String)
@@ -458,6 +466,9 @@ module <%= module_name %>
 <%= ind %>    grouped = T.let({}, T::Hash[<%= assoc[:pk_ruby_type] %>, T::Array[<%= assoc[:record_class] %>]])
 <%= ind %>    all_related.each do |related|
 <%= ind %>      key = related.<%= assoc[:fk_attr] %>
+<%- if assoc[:fk_nullable] -%>
+<%= ind %>      next if key.nil?
+<%- end -%>
 <%= ind %>      (grouped[key] ||= []) << related
 <%= ind %>    end
 
@@ -466,7 +477,13 @@ module <%= module_name %>
 <%= ind %>    records.each { |r| indexed_parents[r.<%= assoc[:pk_attr] %>] = r }
 
 <%= ind %>    all_related.each do |child|
+<%- if assoc[:fk_nullable] -%>
+<%= ind %>      fk = child.<%= assoc[:fk_attr] %>
+<%= ind %>      next if fk.nil?
+<%= ind %>      parent = indexed_parents[fk]
+<%- else -%>
 <%= ind %>      parent = indexed_parents[child.<%= assoc[:fk_attr] %>]
+<%- end -%>
 <%= ind %>      child._preloaded_<%= assoc[:inverse_method] %> = [parent] if parent
 <%= ind %>    end
 
@@ -504,14 +521,26 @@ module <%= module_name %>
 <%= ind %>    all_related = <%= assoc[:relation_class] %>.new.where(<%= assoc[:schema_module] %>::<%= assoc[:fk_const] %>.in_list(ids))<%= scope_chain %>.to_a(adapter: adapter)
 <%- end -%>
 <%= ind %>    indexed = T.let({}, T::Hash[<%= assoc[:pk_ruby_type] %>, <%= assoc[:record_class] %>])
-<%= ind %>    all_related.each { |r| indexed[r.<%= assoc[:fk_attr] %>] ||= r }
+<%= ind %>    all_related.each do |r|
+<%= ind %>      fk = r.<%= assoc[:fk_attr] %>
+<%- if assoc[:fk_nullable] -%>
+<%= ind %>      next if fk.nil?
+<%- end -%>
+<%= ind %>      indexed[fk] ||= r
+<%= ind %>    end
 
 <%- if assoc[:inverse_method] -%>
 <%= ind %>    indexed_parents = T.let({}, T::Hash[<%= assoc[:pk_ruby_type] %>, <%= record_class_name %>])
 <%= ind %>    records.each { |r| indexed_parents[r.<%= assoc[:pk_attr] %>] = r }
 
 <%= ind %>    all_related.each do |child|
+<%- if assoc[:fk_nullable] -%>
+<%= ind %>      fk = child.<%= assoc[:fk_attr] %>
+<%= ind %>      next if fk.nil?
+<%= ind %>      parent = indexed_parents[fk]
+<%- else -%>
 <%= ind %>      parent = indexed_parents[child.<%= assoc[:fk_attr] %>]
+<%- end -%>
 <%= ind %>      child._preloaded_<%= assoc[:inverse_method] %> = [parent] if parent
 <%= ind %>    end
 

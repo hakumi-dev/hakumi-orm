@@ -174,6 +174,7 @@ module HakumiORM
       def build_fk_assoc_entry(method_name, src, fk_c, pk_attr, pk_type)
         target_cls = classify(src)
         target_table = @tables[src]
+        fk_col = target_table&.columns&.find { |c| c.name == fk_c }
         {
           method_name: method_name,
           relation_class: qualify("#{target_cls}Relation"),
@@ -181,6 +182,7 @@ module HakumiORM
           schema_module: qualify("#{target_cls}Schema"),
           fk_const: fk_c.upcase,
           fk_attr: fk_c,
+          fk_nullable: fk_col&.nullable || false,
           pk_attr: pk_attr,
           pk_ruby_type: pk_type,
           delete_sql: assoc_delete_sql(src, fk_c),

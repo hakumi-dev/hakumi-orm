@@ -8,6 +8,36 @@ module HakumiORM
     class PostgresqlResult < Result
       extend T::Sig
 
+      DECODER_BUILDERS = T.let(
+        {
+          "PG::TextDecoder::Integer.new" => -> { PG::TextDecoder::Integer.new },
+          "PG::TextDecoder::Float.new" => -> { PG::TextDecoder::Float.new },
+          "PG::TextDecoder::Boolean.new" => -> { PG::TextDecoder::Boolean.new },
+          "PG::TextDecoder::Date.new" => -> { PG::TextDecoder::Date.new },
+          "PG::TextDecoder::TimestampUtc.new" => -> { PG::TextDecoder::TimestampUtc.new }
+        }.freeze,
+        T::Hash[String, T.proc.returns(Object)]
+      )
+
+      sig { params(decoder_exprs: T::Array[T.nilable(String)]).returns(T.nilable(Object)) }
+      def self.build_type_map_from_exprs(decoder_exprs)
+        decoders = T.let([], T::Array[T.nilable(Object)])
+        decoder_exprs.each do |expr|
+          if expr.nil?
+            decoders << nil
+            next
+          end
+
+          builder = DECODER_BUILDERS[expr]
+          raise ::HakumiORM::Error, "Unknown PG decoder expr: #{expr}" unless builder
+
+          decoders << builder.call
+        end
+        PG::TypeMapByColumn.new(decoders)
+      rescue ::NameError
+        nil
+      end
+
       sig { params(pg_result: PG::Result).void }
       def initialize(pg_result)
         @pg_result = T.let(pg_result, PG::Result)
@@ -15,9 +45,10 @@ module HakumiORM
         @values_cache = T.let(nil, T.nilable(T::Array[T::Array[CellValue]]))
       end
 
-      sig { params(type_map: PG::TypeMapByColumn).void }
+      sig { override.params(type_map: Object).void }
       def apply_type_map!(type_map)
         return if @typed
+        return unless type_map.is_a?(PG::TypeMapByColumn)
 
         @pg_result.map_types!(type_map)
         @typed = true

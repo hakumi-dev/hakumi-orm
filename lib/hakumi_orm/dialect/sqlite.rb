@@ -50,8 +50,13 @@ module HakumiORM
       sig { override.params(value: Time).returns(PGValue) }
       def encode_time(value) = value.utc.strftime("%Y-%m-%d %H:%M:%S")
 
-      sig { override.params(raw: String).returns(T::Boolean) }
-      def cast_boolean(raw) = raw == "1"
+      sig { override.params(raw: Adapter::CellValue).returns(T::Boolean) }
+      def cast_boolean(raw)
+        return raw if raw.equal?(true) || raw.equal?(false)
+        return !raw.zero? if raw.is_a?(Integer)
+
+        raw == "1"
+      end
 
       sig { override.params(_value: T::Array[T.nilable(Integer)]).returns(PGValue) }
       def encode_int_array(_value) = unsupported!(:integer_array)
@@ -65,16 +70,16 @@ module HakumiORM
       sig { override.params(_value: T::Array[T.nilable(T::Boolean)]).returns(PGValue) }
       def encode_bool_array(_value) = unsupported!(:boolean_array)
 
-      sig { override.params(_raw: String).returns(T::Array[T.nilable(Integer)]) }
+      sig { override.params(_raw: Adapter::CellValue).returns(T::Array[T.nilable(Integer)]) }
       def cast_int_array(_raw) = unsupported!(:integer_array)
 
-      sig { override.params(_raw: String).returns(T::Array[T.nilable(String)]) }
+      sig { override.params(_raw: Adapter::CellValue).returns(T::Array[T.nilable(String)]) }
       def cast_str_array(_raw) = unsupported!(:string_array)
 
-      sig { override.params(_raw: String).returns(T::Array[T.nilable(Float)]) }
+      sig { override.params(_raw: Adapter::CellValue).returns(T::Array[T.nilable(Float)]) }
       def cast_float_array(_raw) = unsupported!(:float_array)
 
-      sig { override.params(_raw: String).returns(T::Array[T.nilable(T::Boolean)]) }
+      sig { override.params(_raw: Adapter::CellValue).returns(T::Array[T.nilable(T::Boolean)]) }
       def cast_bool_array(_raw) = unsupported!(:boolean_array)
 
       private

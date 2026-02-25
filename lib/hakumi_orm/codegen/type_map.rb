@@ -25,6 +25,7 @@ module HakumiORM
         def cast_expression(hakumi_type, raw_expr, nullable:)
           case hakumi_type
           when HakumiType::Integer     then dialect_cast("cast_integer", raw_expr, nullable)
+          when HakumiType::String      then dialect_cast("cast_string", raw_expr, nullable)
           when HakumiType::Boolean     then dialect_cast("cast_boolean", raw_expr, nullable)
           when HakumiType::Float       then dialect_cast("cast_float", raw_expr, nullable)
           when HakumiType::Decimal     then dialect_cast("cast_decimal", raw_expr, nullable)

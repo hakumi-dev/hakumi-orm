@@ -157,11 +157,15 @@ module HakumiORM
             enum_cls = qualify(enum_class_name(col.udt_name))
             raw = "row[#{ci}]"
             int_enum = @integer_backed_enums.include?(col.udt_name)
-            coerce = int_enum ? ".to_i" : ""
+            cast_expr = if int_enum
+                          "dialect.cast_integer(_hv)"
+                        else
+                          "dialect.cast_string(_hv)"
+                        end
             if nullable
-              "((_hv = #{raw}).nil? ? nil : #{enum_cls}.deserialize(_hv#{coerce}))"
+              "((_hv = #{raw}).nil? ? nil : #{enum_cls}.deserialize(#{cast_expr}))"
             else
-              "#{enum_cls}.deserialize(#{raw}#{coerce})"
+              "#{enum_cls}.deserialize(#{int_enum ? "dialect.cast_integer(#{raw})" : "dialect.cast_string(#{raw})"})"
             end
           else
             TypeMap.cast_expression(hakumi_type_for(col), "row[#{ci}]", nullable: nullable)

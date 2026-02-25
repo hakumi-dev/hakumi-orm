@@ -70,23 +70,26 @@ module HakumiORM
       # native Ruby types. The generated from_result still calls cast_* so
       # these guards pass through pre-decoded values without re-parsing.
 
-      sig { override.params(raw: T.any(String, T::Boolean)).returns(T::Boolean) }
+      sig { override.params(raw: Adapter::CellValue).returns(T::Boolean) }
       def cast_boolean(raw)
         return raw if raw.equal?(true) || raw.equal?(false)
+        raise TypeError, "Expected boolean-like cell, got #{raw.class}" unless raw.is_a?(String)
 
         TRUTHY.include?(raw)
       end
 
-      sig { override.params(raw: T.any(String, Time)).returns(Time) }
+      sig { override.params(raw: Adapter::CellValue).returns(Time) }
       def cast_time(raw)
         return raw if raw.is_a?(Time)
+        raise TypeError, "Expected time-like cell, got #{raw.class}" unless raw.is_a?(String)
 
         ByteTime.parse_utc(raw)
       end
 
-      sig { override.params(raw: T.any(String, Date)).returns(Date) }
+      sig { override.params(raw: Adapter::CellValue).returns(Date) }
       def cast_date(raw)
         return raw if raw.is_a?(Date)
+        raise TypeError, "Expected date-like cell, got #{raw.class}" unless raw.is_a?(String)
 
         Date.new(raw[0, 4].to_i, raw[5, 2].to_i, raw[8, 2].to_i)
       end

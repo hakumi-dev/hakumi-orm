@@ -35,6 +35,11 @@ module HakumiORM
       sig { abstract.returns(T::Array[T::Array[CellValue]]) }
       def values; end
 
+      # Adapters that support driver-level decoding (e.g. PG) can override this.
+      # Default is a no-op so generated code can call it without adapter checks.
+      sig { params(_type_map: Object).void }
+      def apply_type_map!(_type_map); end
+
       sig { abstract.params(col: Integer).returns(T::Array[CellValue]) }
       def column_values(col); end
 

@@ -113,47 +113,104 @@ module HakumiORM
 
       # -- Decoding: DB raw string → Ruby type --
 
-      sig { overridable.params(raw: String).returns(Integer) }
-      def cast_integer(raw) = raw.to_i
+      sig { overridable.params(raw: Adapter::CellValue).returns(Integer) }
+      def cast_integer(raw)
+        case raw
+        when Integer then raw
+        when String, Float then raw.to_i
+        else raise TypeError, "Expected integer-like cell, got #{raw.class}"
+        end
+      end
 
-      sig { overridable.params(raw: String).returns(String) }
-      def cast_string(raw) = raw
+      sig { overridable.params(raw: Adapter::CellValue).returns(String) }
+      def cast_string(raw)
+        case raw
+        when String then raw
+        else raise TypeError, "Expected string cell, got #{raw.class}"
+        end
+      end
 
       TRUTHY = T.let(%w[t 1 true].to_set.freeze, T::Set[String])
 
-      sig { overridable.params(raw: String).returns(T::Boolean) }
-      def cast_boolean(raw) = TRUTHY.include?(raw)
+      sig { overridable.params(raw: Adapter::CellValue).returns(T::Boolean) }
+      def cast_boolean(raw)
+        case raw
+        when TrueClass, FalseClass then raw
+        when Integer, Float then !raw.zero?
+        when String then TRUTHY.include?(raw)
+        else raise TypeError, "Expected boolean-like cell, got #{raw.class}"
+        end
+      end
 
-      sig { overridable.params(raw: String).returns(Time) }
+      sig { overridable.params(raw: Adapter::CellValue).returns(Time) }
       def cast_time(raw)
+        return raw if raw.is_a?(Time)
+        raise TypeError, "Expected time-like cell, got #{raw.class}" unless raw.is_a?(String)
+
         ByteTime.parse_utc(raw)
       end
 
-      sig { overridable.params(raw: String).returns(Date) }
+      sig { overridable.params(raw: Adapter::CellValue).returns(Date) }
       def cast_date(raw)
+        return raw if raw.is_a?(Date)
+        raise TypeError, "Expected date-like cell, got #{raw.class}" unless raw.is_a?(String)
+
         Date.new(raw[0, 4].to_i, raw[5, 2].to_i, raw[8, 2].to_i)
       end
 
-      sig { overridable.params(raw: String).returns(Float) }
-      def cast_float(raw) = raw.to_f
+      sig { overridable.params(raw: Adapter::CellValue).returns(Float) }
+      def cast_float(raw)
+        case raw
+        when Float then raw
+        when Integer, String then raw.to_f
+        else raise TypeError, "Expected float-like cell, got #{raw.class}"
+        end
+      end
 
-      sig { overridable.params(raw: String).returns(BigDecimal) }
-      def cast_decimal(raw) = BigDecimal(raw)
+      sig { overridable.params(raw: Adapter::CellValue).returns(BigDecimal) }
+      def cast_decimal(raw)
+        case raw
+        when BigDecimal then raw
+        when Integer, Float then BigDecimal(raw.to_s)
+        when String then BigDecimal(raw)
+        else raise TypeError, "Expected decimal-like cell, got #{raw.class}"
+        end
+      end
 
-      sig { overridable.params(raw: String).returns(Json) }
-      def cast_json(raw) = Json.parse(raw)
+      sig { overridable.params(raw: Adapter::CellValue).returns(Json) }
+      def cast_json(raw)
+        raise TypeError, "Expected JSON string cell, got #{raw.class}" unless raw.is_a?(String)
 
-      sig { overridable.params(raw: String).returns(T::Array[T.nilable(Integer)]) }
-      def cast_int_array(raw) = parse_pg_array(raw).map { |v| v&.to_i }
+        Json.parse(raw)
+      end
 
-      sig { overridable.params(raw: String).returns(T::Array[T.nilable(String)]) }
-      def cast_str_array(raw) = parse_pg_array(raw)
+      sig { overridable.params(raw: Adapter::CellValue).returns(T::Array[T.nilable(Integer)]) }
+      def cast_int_array(raw)
+        raise TypeError, "Expected array string cell, got #{raw.class}" unless raw.is_a?(String)
 
-      sig { overridable.params(raw: String).returns(T::Array[T.nilable(Float)]) }
-      def cast_float_array(raw) = parse_pg_array(raw).map { |v| v&.to_f }
+        parse_pg_array(raw).map { |v| v&.to_i }
+      end
 
-      sig { overridable.params(raw: String).returns(T::Array[T.nilable(T::Boolean)]) }
-      def cast_bool_array(raw) = parse_pg_array(raw).map { |v| v.nil? ? nil : v == "t" }
+      sig { overridable.params(raw: Adapter::CellValue).returns(T::Array[T.nilable(String)]) }
+      def cast_str_array(raw)
+        raise TypeError, "Expected array string cell, got #{raw.class}" unless raw.is_a?(String)
+
+        parse_pg_array(raw)
+      end
+
+      sig { overridable.params(raw: Adapter::CellValue).returns(T::Array[T.nilable(Float)]) }
+      def cast_float_array(raw)
+        raise TypeError, "Expected array string cell, got #{raw.class}" unless raw.is_a?(String)
+
+        parse_pg_array(raw).map { |v| v&.to_f }
+      end
+
+      sig { overridable.params(raw: Adapter::CellValue).returns(T::Array[T.nilable(T::Boolean)]) }
+      def cast_bool_array(raw)
+        raise TypeError, "Expected array string cell, got #{raw.class}" unless raw.is_a?(String)
+
+        parse_pg_array(raw).map { |v| v.nil? ? nil : v == "t" }
+      end
 
       # -- Bind dispatch --
 

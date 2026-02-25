@@ -47,6 +47,13 @@ module HakumiORM
         return unless tbl
 
         result = @adapter.exec("PRAGMA table_info(#{quote_pragma_id(table_name)})")
+        pk_column_count = T.let(0, Integer)
+        i = T.let(0, Integer)
+        while i < result.row_count
+          pk_column_count += 1 unless result.fetch_value(i, 5) == "0"
+          i += 1
+        end
+
         i = T.let(0, Integer)
         while i < result.row_count
           col_name = result.fetch_value(i, 1)
@@ -57,12 +64,13 @@ module HakumiORM
 
           tbl.primary_key = col_name if pk == "1"
           normalized = normalize_type(col_type)
+          effective_default = (pk_column_count == 1 && pk != "0" && normalized == "INTEGER") ? "auto_increment" : dflt
           tbl.columns << ColumnInfo.new(
             name: col_name,
             data_type: normalized,
             udt_name: normalized,
-            nullable: notnull == "0",
-            default: dflt,
+            nullable: notnull == "0" && pk == "0",
+            default: effective_default,
             max_length: nil
           )
           i += 1
@@ -93,13 +101,15 @@ module HakumiORM
       sig { params(idx_name: String, tbl: TableInfo).void }
       def read_index_columns(idx_name, tbl)
         result = @adapter.exec("PRAGMA index_info(#{quote_pragma_id(idx_name)})")
+        cols = T.let([], T::Array[String])
         i = T.let(0, Integer)
         while i < result.row_count
-          col_name = result.fetch_value(i, 2)
-          tbl.unique_columns << col_name
+          cols << result.fetch_value(i, 2)
           i += 1
         end
         result.close
+
+        tbl.unique_columns << cols.fetch(0) if cols.length == 1
       end
 
       sig { params(tables: T::Hash[String, TableInfo]).void }

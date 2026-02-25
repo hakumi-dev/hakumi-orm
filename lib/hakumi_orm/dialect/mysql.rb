@@ -66,37 +66,42 @@ module HakumiORM
       sig { override.params(value: T::Boolean).returns(PGValue) }
       def encode_boolean(value) = value ? 1 : 0
 
-      sig { override.params(raw: T.any(String, Integer, T::Boolean)).returns(T::Boolean) }
+      sig { override.params(raw: Adapter::CellValue).returns(T::Boolean) }
       def cast_boolean(raw)
         return raw if raw.equal?(true) || raw.equal?(false)
 
         [1, "1"].include?(raw)
       end
 
-      sig { override.params(raw: T.any(String, Integer)).returns(Integer) }
+      sig { override.params(raw: Adapter::CellValue).returns(Integer) }
       def cast_integer(raw)
         return raw if raw.is_a?(Integer)
+        raise TypeError, "Expected integer-like cell, got #{raw.class}" unless raw.is_a?(String)
 
         raw.to_i
       end
 
-      sig { override.params(raw: T.any(String, Time)).returns(Time) }
+      sig { override.params(raw: Adapter::CellValue).returns(Time) }
       def cast_time(raw)
         return raw if raw.is_a?(Time)
+        raise TypeError, "Expected time-like cell, got #{raw.class}" unless raw.is_a?(String)
 
         ByteTime.parse_utc(raw)
       end
 
-      sig { override.params(raw: T.any(String, Float)).returns(Float) }
+      sig { override.params(raw: Adapter::CellValue).returns(Float) }
       def cast_float(raw)
         return raw if raw.is_a?(Float)
+        return raw.to_f if raw.is_a?(Integer)
+        raise TypeError, "Expected float-like cell, got #{raw.class}" unless raw.is_a?(String)
 
         raw.to_f
       end
 
-      sig { override.params(raw: T.any(String, Date)).returns(Date) }
+      sig { override.params(raw: Adapter::CellValue).returns(Date) }
       def cast_date(raw)
         return raw if raw.is_a?(Date)
+        raise TypeError, "Expected date-like cell, got #{raw.class}" unless raw.is_a?(String)
 
         Date.new(raw[0, 4].to_i, raw[5, 2].to_i, raw[8, 2].to_i)
       end
@@ -113,16 +118,16 @@ module HakumiORM
       sig { override.params(_value: T::Array[T.nilable(T::Boolean)]).returns(PGValue) }
       def encode_bool_array(_value) = unsupported!(:boolean_array)
 
-      sig { override.params(_raw: String).returns(T::Array[T.nilable(Integer)]) }
+      sig { override.params(_raw: Adapter::CellValue).returns(T::Array[T.nilable(Integer)]) }
       def cast_int_array(_raw) = unsupported!(:integer_array)
 
-      sig { override.params(_raw: String).returns(T::Array[T.nilable(String)]) }
+      sig { override.params(_raw: Adapter::CellValue).returns(T::Array[T.nilable(String)]) }
       def cast_str_array(_raw) = unsupported!(:string_array)
 
-      sig { override.params(_raw: String).returns(T::Array[T.nilable(Float)]) }
+      sig { override.params(_raw: Adapter::CellValue).returns(T::Array[T.nilable(Float)]) }
       def cast_float_array(_raw) = unsupported!(:float_array)
 
-      sig { override.params(_raw: String).returns(T::Array[T.nilable(T::Boolean)]) }
+      sig { override.params(_raw: Adapter::CellValue).returns(T::Array[T.nilable(T::Boolean)]) }
       def cast_bool_array(_raw) = unsupported!(:boolean_array)
 
       private
