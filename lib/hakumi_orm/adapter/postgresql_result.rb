@@ -12,6 +12,7 @@ module HakumiORM
       def initialize(pg_result)
         @pg_result = T.let(pg_result, PG::Result)
         @typed = T.let(false, T::Boolean)
+        @values_cache = T.let(nil, T.nilable(T::Array[T::Array[CellValue]]))
       end
 
       sig { params(type_map: PG::TypeMapByColumn).void }
@@ -20,6 +21,7 @@ module HakumiORM
 
         @pg_result.map_types!(type_map)
         @typed = true
+        @values_cache = nil
       end
 
       sig { override.returns(Integer) }
@@ -34,7 +36,12 @@ module HakumiORM
 
       sig { override.returns(T::Array[T::Array[CellValue]]) }
       def values
-        @pg_result.values
+        cached = @values_cache
+        return cached if cached
+
+        vals = @pg_result.values
+        @values_cache = vals
+        vals
       end
 
       sig { override.params(col: Integer).returns(T::Array[CellValue]) }
@@ -49,6 +56,7 @@ module HakumiORM
 
       sig { override.void }
       def close
+        @values_cache = nil
         @pg_result.clear
       end
     end
