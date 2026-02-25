@@ -41,9 +41,9 @@ module HakumiORM
         end
 
         start = log_query_start
-        stmt_name = cached_exec_params_stmt_name(sql)
+        stmt_name, cache_hit = cached_exec_params_stmt_name(sql)
         result = PostgresqlResult.new(@pg_conn.exec_prepared(stmt_name, params))
-        log_query_done(sql, params, start)
+        log_query_done(sql, params, start, note: cache_hit ? "CACHED" : nil)
         result
       end
 
@@ -85,10 +85,10 @@ module HakumiORM
 
       private
 
-      sig { params(sql: String).returns(String) }
+      sig { params(sql: String).returns([String, T::Boolean]) }
       def cached_exec_params_stmt_name(sql)
         cached = @exec_params_stmt_by_sql[sql]
-        return cached if cached
+        return [cached, true] if cached
 
         evict_exec_params_stmt_if_needed
 
@@ -97,7 +97,7 @@ module HakumiORM
         @pg_conn.prepare(stmt_name, sql)
         @exec_params_stmt_by_sql[sql] = stmt_name
         @exec_params_stmt_order << sql
-        stmt_name
+        [stmt_name, false]
       end
 
       sig { void }

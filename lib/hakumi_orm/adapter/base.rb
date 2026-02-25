@@ -102,15 +102,18 @@ module HakumiORM
         T.cast(Process.clock_gettime(Process::CLOCK_MONOTONIC), Float)
       end
 
-      sig { params(sql: String, params: T::Array[PGValue], start: T.nilable(Float)).void }
-      def log_query_done(sql, params, start)
+      sig { params(sql: String, params: T::Array[PGValue], start: T.nilable(Float), note: T.nilable(String)).void }
+      def log_query_done(sql, params, start, note: nil)
         return unless start
 
         log = HakumiORM.config.logger
         return unless log
 
         elapsed = ((T.cast(Process.clock_gettime(Process::CLOCK_MONOTONIC), Float) - start) * 1000).round(2)
-        log.debug { params.empty? ? "[HakumiORM] (#{elapsed}ms) #{sql}" : "[HakumiORM] (#{elapsed}ms) #{sql} #{params.inspect}" }
+        suffix = note ? " [#{note}]" : ""
+        log.debug do
+          params.empty? ? "[HakumiORM] (#{elapsed}ms) #{sql}#{suffix}" : "[HakumiORM] (#{elapsed}ms) #{sql} #{params.inspect}#{suffix}"
+        end
       end
 
       sig { params(blk: T.proc.params(adapter: Base).void).void }

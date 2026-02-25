@@ -43,13 +43,13 @@ module HakumiORM
         end
 
         start = log_query_start
-        stmt = cached_exec_params_stmt(sql)
+        stmt, cache_hit = cached_exec_params_stmt(sql)
         # Sorbet cannot verify splats on dynamically-sized arrays (error 7019);
         # mysql2's C extension requires positional args for bind parameters.
         result = T.unsafe(stmt).execute(*mysql_params(params), as: :array)
         rows = result_to_rows(result)
         r = MysqlResult.new(rows, stmt.affected_rows)
-        log_query_done(sql, params, start)
+        log_query_done(sql, params, start, note: cache_hit ? "CACHED" : nil)
         r
       end
 
@@ -109,16 +109,16 @@ module HakumiORM
 
       private
 
-      sig { params(sql: String).returns(Mysql2::Statement) }
+      sig { params(sql: String).returns([Mysql2::Statement, T::Boolean]) }
       def cached_exec_params_stmt(sql)
         cached = @exec_params_prepared[sql]
-        return cached if cached
+        return [cached, true] if cached
 
         evict_exec_params_stmt_if_needed
         stmt = @client.prepare(sql)
         @exec_params_prepared[sql] = stmt
         @exec_params_order << sql
-        stmt
+        [stmt, false]
       end
 
       sig { void }
