@@ -9,6 +9,8 @@ module HakumiORM
     class Mysql < Base
       extend T::Sig
 
+      EXEC_PARAMS_STMT_CACHE_MAX = 64
+
       sig { override.returns(Dialect::Mysql) }
       attr_reader :dialect
 
@@ -17,6 +19,8 @@ module HakumiORM
         @client = T.let(client, Mysql2::Client)
         @dialect = T.let(Dialect::Mysql.new, Dialect::Mysql)
         @prepared = T.let({}, T::Hash[String, Mysql2::Statement])
+        @exec_params_prepared = T.let({}, T::Hash[String, Mysql2::Statement])
+        @exec_params_order = T.let([], T::Array[String])
       end
 
       sig { params(params: T::Hash[Symbol, T.any(String, Integer)]).returns(Mysql) }
@@ -39,7 +43,7 @@ module HakumiORM
         end
 
         start = log_query_start
-        stmt = @client.prepare(sql)
+        stmt = cached_exec_params_stmt(sql)
         # Sorbet cannot verify splats on dynamically-sized arrays (error 7019);
         # mysql2's C extension requires positional args for bind parameters.
         result = T.unsafe(stmt).execute(*mysql_params(params), as: :array)
@@ -47,8 +51,6 @@ module HakumiORM
         r = MysqlResult.new(rows, stmt.affected_rows)
         log_query_done(sql, params, start)
         r
-      ensure
-        stmt&.close
       end
 
       sig { override.params(sql: String).returns(MysqlResult) }
@@ -99,10 +101,36 @@ module HakumiORM
       def close
         @prepared.each_value(&:close)
         @prepared.clear
+        @exec_params_prepared.each_value(&:close)
+        @exec_params_prepared.clear
+        @exec_params_order.clear
         @client.close
       end
 
       private
+
+      sig { params(sql: String).returns(Mysql2::Statement) }
+      def cached_exec_params_stmt(sql)
+        cached = @exec_params_prepared[sql]
+        return cached if cached
+
+        evict_exec_params_stmt_if_needed
+        stmt = @client.prepare(sql)
+        @exec_params_prepared[sql] = stmt
+        @exec_params_order << sql
+        stmt
+      end
+
+      sig { void }
+      def evict_exec_params_stmt_if_needed
+        return unless @exec_params_order.length >= EXEC_PARAMS_STMT_CACHE_MAX
+
+        oldest_sql = @exec_params_order.shift
+        return unless oldest_sql
+
+        stmt = @exec_params_prepared.delete(oldest_sql)
+        stmt&.close
+      end
 
       sig { params(params: T::Array[PGValue]).returns(T::Array[PGValue]) }
       def mysql_params(params)
