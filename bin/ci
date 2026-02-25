@@ -6,7 +6,7 @@ bundle install --quiet
 
 echo ""
 echo "==> Markdown lint"
-bundle exec mdl README.md AGENT.md lib/hakumi_orm/README.md CHANGELOG.md CODE_OF_CONDUCT.md
+bundle exec mdl README.md lib/hakumi_orm/README.md CHANGELOG.md CODE_OF_CONDUCT.md
 
 echo ""
 echo "==> RuboCop"

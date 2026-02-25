@@ -28,15 +28,13 @@ module HakumiORM
 
       sig { override.params(sql: String, params: T::Array[PGValue]).returns(SqliteResult) }
       def exec_params(sql, params)
+        return exec(sql) if params.empty?
+
         start = log_query_start
-        stmt = @db.prepare(sql)
-        bind_each(stmt, params)
-        rows = collect_rows(stmt)
+        rows = @db.execute(sql, params).map { |r| r.map { |v| v&.to_s } }
         r = SqliteResult.new(rows, @db.changes)
         log_query_done(sql, params, start)
         r
-      ensure
-        stmt&.close
       end
 
       sig { override.params(sql: String).returns(SqliteResult) }
@@ -62,8 +60,7 @@ module HakumiORM
         raise HakumiORM::Error, "Statement #{name.inspect} not prepared" unless stmt
 
         stmt.reset!
-        bind_each(stmt, params)
-        rows = collect_rows(stmt)
+        rows = stmt.execute!(params).map { |r| r.map { |v| v&.to_s } }
         r = SqliteResult.new(rows, @db.changes)
         log_query_done(name, params, start)
         r

@@ -47,12 +47,7 @@ module HakumiORM
         return unless tbl
 
         result = @adapter.exec("PRAGMA table_info(#{quote_pragma_id(table_name)})")
-        pk_column_count = T.let(0, Integer)
-        i = T.let(0, Integer)
-        while i < result.row_count
-          pk_column_count += 1 unless result.fetch_value(i, 5) == "0"
-          i += 1
-        end
+        pk_column_count = count_primary_key_columns(result)
 
         i = T.let(0, Integer)
         while i < result.row_count
@@ -64,7 +59,7 @@ module HakumiORM
 
           tbl.primary_key = col_name if pk == "1"
           normalized = normalize_type(col_type)
-          effective_default = (pk_column_count == 1 && pk != "0" && normalized == "INTEGER") ? "auto_increment" : dflt
+          effective_default = sqlite_default_for(pk_column_count, pk, normalized, dflt)
           tbl.columns << ColumnInfo.new(
             name: col_name,
             data_type: normalized,
@@ -78,6 +73,31 @@ module HakumiORM
         result.close
 
         read_unique_indexes(table_name, tbl)
+      end
+
+      sig { params(result: Adapter::Result).returns(Integer) }
+      def count_primary_key_columns(result)
+        count = T.let(0, Integer)
+        i = T.let(0, Integer)
+        while i < result.row_count
+          count += 1 unless result.fetch_value(i, 5) == "0"
+          i += 1
+        end
+        count
+      end
+
+      sig do
+        params(
+          pk_column_count: Integer,
+          pk_marker: String,
+          normalized: String,
+          dflt: T.nilable(String)
+        ).returns(T.nilable(String))
+      end
+      def sqlite_default_for(pk_column_count, pk_marker, normalized, dflt)
+        return "auto_increment" if pk_column_count == 1 && pk_marker != "0" && normalized == "INTEGER"
+
+        dflt
       end
 
       sig { params(raw: String).returns(String) }
