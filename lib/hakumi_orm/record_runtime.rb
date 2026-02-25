@@ -32,6 +32,24 @@ module HakumiORM
       rows
     end
 
+    sig do
+      type_parameters(:R)
+        .params(
+          result: ::HakumiORM::Adapter::Result,
+          dialect: ::HakumiORM::Dialect::Base,
+          blk: T.proc
+               .params(row: T::Array[::HakumiORM::Adapter::CellValue], dialect: ::HakumiORM::Dialect::Base)
+               .returns(T.type_parameter(:R))
+        )
+        .returns(T.nilable(T.type_parameter(:R)))
+    end
+    def hydrate_result_first(result, dialect, &blk)
+      return nil if result.row_count.zero?
+
+      row = result.values.fetch(0)
+      blk.call(row, dialect)
+    end
+
     sig { overridable.params(_row: T::Array[::HakumiORM::Adapter::CellValue], _dialect: ::HakumiORM::Dialect::Base).void }
     def _hydrate_row_values!(_row, _dialect)
       Kernel.raise NotImplementedError, "generated record must implement _hydrate_row_values!"

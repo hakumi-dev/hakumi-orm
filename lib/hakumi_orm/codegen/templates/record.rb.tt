@@ -70,6 +70,16 @@ module <%= module_name %>
 <%= ind %>    end
 <%= ind %>  end
 
+<%= ind %>  sig { params(result: ::HakumiORM::Adapter::Result, dialect: ::HakumiORM::Dialect::Base).returns(T.nilable(<%= record_class_name %>)) }
+<%= ind %>  def self.from_result_first(result, dialect: ::HakumiORM.adapter.dialect)
+<%= ind %>    _prepare_result_for_hydration(result)
+<%= ind %>    ::HakumiORM::RecordRuntime.hydrate_result_first(result, dialect) do |row, row_dialect|
+<%= ind %>      obj = allocate
+<%= ind %>      obj.__send__(:_hydrate_row_values!, row, row_dialect)
+<%= ind %>      obj
+<%= ind %>    end
+<%= ind %>  end
+
 <%- if has_pg_decoders -%>
 <%= ind %>  sig { params(result: ::HakumiORM::Adapter::Result).void }
 <%= ind %>  def self._prepare_result_for_hydration(result)
@@ -100,7 +110,7 @@ module <%= module_name %>
 <%= ind %>    result = adapter.prepare_exec(STMT_FIND_BY_PK, SQL_FIND_BY_PK, [pk_value])
 <%= ind %>    return nil if result.row_count.zero?
 
-<%= ind %>    from_result(result, dialect: adapter.dialect).first
+<%= ind %>    from_result_first(result, dialect: adapter.dialect)
 <%= ind %>  ensure
 <%= ind %>    result&.close
 <%= ind %>  end
@@ -362,7 +372,7 @@ module <%= module_name %>
 <%- end -%>
 <%= ind %>    result = adapter.exec_params(sql, binds)
 <%- if supports_returning -%>
-<%= ind %>    record = <%= record_class_name %>.from_result(result, dialect: adapter.dialect).first
+<%= ind %>    record = <%= record_class_name %>.from_result_first(result, dialect: adapter.dialect)
 <%- else -%>
 <%= ind %>    raise ::HakumiORM::StaleObjectError, "Attempted to update a stale #{<%= record_class_name %>.name}" if result.affected_rows.zero?
 <%= ind %>    result.close
@@ -378,7 +388,7 @@ module <%= module_name %>
 <%= ind %>    binds << @<%= pk_attr %>
 <%= ind %>    result = adapter.exec_params(sql, binds)
 <%- if supports_returning -%>
-<%= ind %>    record = <%= record_class_name %>.from_result(result, dialect: adapter.dialect).first
+<%= ind %>    record = <%= record_class_name %>.from_result_first(result, dialect: adapter.dialect)
 <%- else -%>
 <%= ind %>    raise ::HakumiORM::Error, "UPDATE returned no rows" if result.affected_rows.zero?
 <%= ind %>    result.close
