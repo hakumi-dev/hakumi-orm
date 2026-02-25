@@ -172,6 +172,12 @@ module HakumiORM
 
       reject_count_with_grouping!
 
+      if can_use_prepared_count_all?
+        stmt = stmt_count_all
+        sql = sql_count_all
+        return use_result(adapter.prepare_exec(stmt, sql, [])) { |r| r.fetch_value(0, 0).to_i } if stmt && sql
+      end
+
       compiled = adapter.dialect.compiler.count(
         table: @table_name,
         where_expr: combined_where,
@@ -313,6 +319,11 @@ module HakumiORM
       raise HakumiORM::Error,
             "count with group/having/distinct is ambiguous. " \
             "Use to_a.length or a custom aggregate query instead"
+    end
+
+    sig { returns(T::Boolean) }
+    def can_use_prepared_count_all?
+      @where_exprs.empty? && @joins.empty? && @defaults_pristine
     end
 
     sig { void }

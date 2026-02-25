@@ -29,6 +29,15 @@ module HakumiORM
 
       sig { override.params(sql: String, params: T::Array[PGValue]).returns(MysqlResult) }
       def exec_params(sql, params)
+        if params.empty?
+          start = log_query_start
+          result = @client.query(sql, as: :array, cast: true)
+          rows = result_to_rows(result)
+          r = MysqlResult.new(rows, safe_affected_rows)
+          log_query_done(sql, params, start)
+          return r
+        end
+
         start = log_query_start
         stmt = @client.prepare(sql)
         # Sorbet cannot verify splats on dynamically-sized arrays (error 7019);
