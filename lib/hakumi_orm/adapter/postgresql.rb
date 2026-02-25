@@ -28,6 +28,13 @@ module HakumiORM
 
       sig { override.params(sql: String, params: T::Array[PGValue]).returns(PostgresqlResult) }
       def exec_params(sql, params)
+        if params.empty?
+          start = log_query_start
+          result = PostgresqlResult.new(@pg_conn.exec(sql))
+          log_query_done(sql, params, start)
+          return result
+        end
+
         start = log_query_start
         result = PostgresqlResult.new(@pg_conn.exec_params(sql, params))
         log_query_done(sql, params, start)
