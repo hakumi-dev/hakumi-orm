@@ -14,18 +14,11 @@ module HakumiORM
 
       MIGRATION_FILE_PATTERN = T.let(/\A(\d{14})_(\w+)\.rb\z/, Regexp)
 
-      CREATE_TABLE_SQL = T.let(<<~SQL, String)
-        CREATE TABLE IF NOT EXISTS hakumi_migrations (
-          version varchar(14) PRIMARY KEY,
-          name varchar(255) NOT NULL,
-          migrated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-      SQL
-
       sig { params(adapter: Adapter::Base, migrations_path: String).void }
       def initialize(adapter, migrations_path: "db/migrate")
         @adapter = T.let(adapter, Adapter::Base)
         @migrations_path = T.let(migrations_path, String)
+        @version_store = T.let(VersionStore.new(adapter), VersionStore)
       end
 
       sig { returns(T::Array[FileInfo]) }
@@ -87,20 +80,12 @@ module HakumiORM
 
       sig { void }
       def ensure_table!
-        @adapter.exec(CREATE_TABLE_SQL).close
+        @version_store.ensure_table!
       end
 
       sig { returns(T::Array[String]) }
       def applied_versions
-        result = @adapter.exec("SELECT version FROM hakumi_migrations ORDER BY version")
-        versions = T.let([], T::Array[String])
-        i = T.let(0, Integer)
-        while i < result.row_count
-          versions << result.fetch_value(i, 0)
-          i += 1
-        end
-        result.close
-        versions
+        @version_store.applied_versions
       end
 
       sig { returns(T::Array[FileInfo]) }
@@ -216,18 +201,12 @@ module HakumiORM
 
       sig { params(version: String, name: String).void }
       def record_version(version, name)
-        d = @adapter.dialect
-        sql = "INSERT INTO hakumi_migrations (version, name) VALUES (#{d.bind_marker(0)}, #{d.bind_marker(1)})"
-        result = @adapter.exec_params(sql, [version, name])
-        result.close
+        @version_store.record_version(version, name)
       end
 
       sig { params(version: String).void }
       def remove_version(version)
-        d = @adapter.dialect
-        sql = "DELETE FROM hakumi_migrations WHERE version = #{d.bind_marker(0)}"
-        result = @adapter.exec_params(sql, [version])
-        result.close
+        @version_store.remove_version(version)
       end
     end
   end
