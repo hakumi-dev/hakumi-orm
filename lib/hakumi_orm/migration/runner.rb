@@ -18,6 +18,7 @@ module HakumiORM
       def initialize(adapter, migrations_path: "db/migrate")
         @adapter = T.let(adapter, Adapter::Base)
         @migrations_path = T.let(migrations_path, String)
+        @migration_lock = T.let(Lock.new(adapter), Lock)
         @version_store = T.let(VersionStore.new(adapter), VersionStore)
       end
 
@@ -143,30 +144,7 @@ module HakumiORM
 
       sig { params(blk: T.proc.void).void }
       def with_advisory_lock(&blk)
-        dialect = @adapter.dialect
-        unless dialect.supports_advisory_lock?
-          blk.call
-          return
-        end
-
-        lock_sql = dialect.advisory_lock_sql
-        unlock_sql = dialect.advisory_unlock_sql
-        acquire_advisory_lock!(lock_sql) if lock_sql
-        begin
-          blk.call
-        ensure
-          @adapter.exec(unlock_sql).close if unlock_sql
-        end
-      end
-
-      sig { params(sql: String).void }
-      def acquire_advisory_lock!(sql)
-        result = @adapter.exec(sql)
-        begin
-          @adapter.dialect.verify_advisory_lock!(result)
-        ensure
-          result.close
-        end
+        @migration_lock.with_advisory_lock(&blk)
       end
 
       sig { void }
