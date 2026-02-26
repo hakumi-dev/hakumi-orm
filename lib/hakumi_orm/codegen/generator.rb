@@ -1,18 +1,12 @@
 # typed: strict
 # frozen_string_literal: true
 
-require "erb"
 require "fileutils"
 
 module HakumiORM
   module Codegen
     class Generator
       extend T::Sig
-
-      TEMPLATE_DIR = T.let(
-        File.join(File.dirname(File.expand_path(__FILE__)), "templates").freeze,
-        String
-      )
 
       ENUM_COLUMN_TYPE = T.let(HakumiType::Integer, HakumiType)
 
@@ -51,6 +45,7 @@ module HakumiORM
           ),
           GenerationPlan
         )
+        @template_renderer = T.let(TemplateRenderer.new, TemplateRenderer)
 
         inject_user_enums!
         normalize_column_order!
@@ -146,8 +141,7 @@ module HakumiORM
 
       sig { params(template_name: String, locals: T::Hash[Symbol, TemplateLocal]).returns(String) }
       def render(template_name, locals)
-        path = File.join(TEMPLATE_DIR, "#{template_name}.rb.tt")
-        T.cast(ERB.new(File.read(path), trim_mode: "-").result_with_hash(locals), String)
+        @template_renderer.render(template_name, locals)
       end
 
       sig { params(table: TableInfo).returns(String) }
