@@ -10,6 +10,19 @@ module HakumiORM
 
     INTERNAL_TABLES = %w[hakumi_migrations hakumi_schema_meta].freeze
 
+    def run_install(root:)
+      framework = HakumiORM::Framework.current || HakumiORM::Framework.detect
+      generator = HakumiORM::SetupGenerator.new(root: root, framework: framework)
+      result = generator.run!
+      HakumiORM::TaskOutput.install_result(result)
+    end
+
+    def run_type_scaffold(name:)
+      output_dir = HakumiORM.config.output_dir || "lib/types"
+      HakumiORM::Codegen::TypeScaffold.generate(name: name, output_dir: output_dir)
+      HakumiORM::TaskOutput.custom_type_scaffolded(name: name, output_dir: output_dir)
+    end
+
     def build_runner
       config = HakumiORM.config
       adapter = config.adapter
@@ -49,6 +62,37 @@ module HakumiORM
       HakumiORM::Migration::SchemaFingerprint.store!(adapter, fingerprint, canonical)
 
       HakumiORM::TaskOutput.generated_tables(count: tables.size, output_dir: config.output_dir)
+    end
+
+    def run_migrate(task_prefix:)
+      runner = build_runner
+      applied = runner.migrate!
+      version = runner.current_version || "none"
+      HakumiORM::TaskOutput.migrate_result(applied: applied, version: version)
+      post_migrate_fingerprint!(task_prefix: task_prefix)
+    end
+
+    def run_rollback(count:, task_prefix:)
+      runner = build_runner
+      runner.rollback!(count: count)
+      HakumiORM::TaskOutput.rollback_result(count: count, version: runner.current_version || "none")
+      post_migrate_fingerprint!(task_prefix: task_prefix)
+    end
+
+    def show_migration_status
+      runner = build_runner
+      HakumiORM::TaskOutput.migration_status(runner.status)
+    end
+
+    def show_current_version
+      runner = build_runner
+      HakumiORM::TaskOutput.current_version(runner.current_version || "none")
+    end
+
+    def create_migration_file(name:)
+      path = HakumiORM.config.migrations_path
+      filepath = HakumiORM::Migration::FileGenerator.generate(name: name, path: path)
+      HakumiORM::TaskOutput.migration_file_created(filepath)
     end
 
     def run_scaffold(table_name)

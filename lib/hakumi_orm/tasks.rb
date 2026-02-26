@@ -22,11 +22,7 @@ module HakumiORM
       desc "Install HakumiORM (creates config and directory structure)"
       task :install do
         require "hakumi_orm"
-
-        framework = HakumiORM::Framework.current || HakumiORM::Framework.detect
-        generator = HakumiORM::SetupGenerator.new(root: Dir.pwd, framework: framework)
-        result = generator.run!
-        HakumiORM::TaskOutput.install_result(result)
+        HakumiORM::TaskCommands.run_install(root: Dir.pwd)
       end
 
       desc "Generate HakumiORM models from the database schema"
@@ -46,9 +42,7 @@ module HakumiORM
         name = args[:name]
         raise ArgumentError, "Usage: rake #{HakumiORM::Tasks.task_prefix}type[name]" unless name
 
-        output_dir = HakumiORM.config.output_dir || "lib/types"
-        HakumiORM::Codegen::TypeScaffold.generate(name: name, output_dir: output_dir)
-        HakumiORM::TaskOutput.custom_type_scaffolded(name: name, output_dir: output_dir)
+        HakumiORM::TaskCommands.run_type_scaffold(name: name)
       end
 
       desc "Run pending migrations (set HAKUMI_SKIP_GENERATE=1 to skip auto-generate)"
@@ -56,12 +50,7 @@ module HakumiORM
         require "hakumi_orm"
         require "hakumi_orm/migration"
 
-        runner = HakumiORM::TaskCommands.build_runner
-        applied = runner.migrate!
-        version = runner.current_version || "none"
-        HakumiORM::TaskOutput.migrate_result(applied: applied, version: version)
-
-        HakumiORM::TaskCommands.post_migrate_fingerprint!(task_prefix: HakumiORM::Tasks.task_prefix)
+        HakumiORM::TaskCommands.run_migrate(task_prefix: HakumiORM::Tasks.task_prefix)
       end
 
       desc "Rollback the last migration (usage: rake #{HakumiORM::Tasks.task_prefix}rollback or rake #{HakumiORM::Tasks.task_prefix}rollback[N])"
@@ -70,11 +59,7 @@ module HakumiORM
         require "hakumi_orm/migration"
 
         count = (args[:count] || 1).to_i
-        runner = HakumiORM::TaskCommands.build_runner
-        runner.rollback!(count: count)
-        HakumiORM::TaskOutput.rollback_result(count: count, version: runner.current_version || "none")
-
-        HakumiORM::TaskCommands.post_migrate_fingerprint!(task_prefix: HakumiORM::Tasks.task_prefix)
+        HakumiORM::TaskCommands.run_rollback(count: count, task_prefix: HakumiORM::Tasks.task_prefix)
       end
 
       namespace :migrate do
@@ -83,9 +68,7 @@ module HakumiORM
           require "hakumi_orm"
           require "hakumi_orm/migration"
 
-          runner = HakumiORM::TaskCommands.build_runner
-          statuses = runner.status
-          HakumiORM::TaskOutput.migration_status(statuses)
+          HakumiORM::TaskCommands.show_migration_status
         end
       end
 
@@ -94,8 +77,7 @@ module HakumiORM
         require "hakumi_orm"
         require "hakumi_orm/migration"
 
-        runner = HakumiORM::TaskCommands.build_runner
-        HakumiORM::TaskOutput.current_version(runner.current_version || "none")
+        HakumiORM::TaskCommands.show_current_version
       end
 
       desc "Generate a new migration file (usage: rake #{HakumiORM::Tasks.task_prefix}migration[create_users])"
@@ -106,9 +88,7 @@ module HakumiORM
         name = args[:name]
         raise ArgumentError, "Usage: rake #{HakumiORM::Tasks.task_prefix}migration[name]" unless name
 
-        path = HakumiORM.config.migrations_path
-        filepath = HakumiORM::Migration::FileGenerator.generate(name: name, path: path)
-        HakumiORM::TaskOutput.migration_file_created(filepath)
+        HakumiORM::TaskCommands.create_migration_file(name: name)
       end
 
       desc "List all associations (usage: rake #{HakumiORM::Tasks.task_prefix}associations or #{HakumiORM::Tasks.task_prefix}associations[users])"
