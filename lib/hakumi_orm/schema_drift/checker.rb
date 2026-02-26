@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "digest"
+require_relative "issues"
 require_relative "reporter"
 
 module HakumiORM
@@ -39,34 +40,45 @@ module HakumiORM
 
     sig { returns(T::Array[String]) }
     def check
-      lines = T.let([], T::Array[String])
-      lines.concat(check_pending_migrations)
-      lines.concat(check_schema_drift)
-      lines
+      SchemaDrift::Reporter.render_all(check_issues)
+    end
+
+    sig { returns(T::Array[SchemaDrift::Issue]) }
+    def check_issues
+      issues = T.let([], T::Array[SchemaDrift::Issue])
+      pending = pending_migrations_issue
+      issues << pending if pending
+      schema = schema_drift_issue
+      issues << schema if schema
+      issues
     end
 
     private
 
-    sig { returns(T::Array[String]) }
-    def check_pending_migrations
+    sig { returns(T.nilable(SchemaDrift::PendingMigrationsIssue)) }
+    def pending_migrations_issue
       config = HakumiORM.config
       pending = Migration::SchemaFingerprint.pending_migrations(@adapter, config.migrations_path)
-      return [] if pending.empty?
+      return nil if pending.empty?
 
-      SchemaDrift::Reporter.pending_migrations(pending)
+      SchemaDrift::PendingMigrationsIssue.new(versions: pending)
     end
 
-    sig { returns(T::Array[String]) }
-    def check_schema_drift
+    sig { returns(T.nilable(SchemaDrift::Issue)) }
+    def schema_drift_issue
       stored_fp = Migration::SchemaFingerprint.read_from_db(@adapter)
-      return SchemaDrift::Reporter.no_schema_fingerprint unless stored_fp
+      return SchemaDrift::NoSchemaFingerprintIssue.new unless stored_fp
 
       canonical, live_fp = compute_live
-      return [] if live_fp == stored_fp
+      return nil if live_fp == stored_fp
 
       stored_canonical = Migration::SchemaFingerprint.read_canonical_from_db(@adapter)
       diff = stored_canonical ? Migration::SchemaFingerprint.diff_canonical(stored_canonical, canonical) : []
-      SchemaDrift::Reporter.schema_drift(expected: stored_fp, actual: live_fp, diff_lines: diff)
+      SchemaDrift::SchemaMismatchIssue.new(
+        expected_fingerprint: stored_fp,
+        actual_fingerprint: live_fp,
+        diff_lines: diff
+      )
     end
 
     sig { returns([String, String]) }

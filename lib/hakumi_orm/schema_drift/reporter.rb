@@ -1,10 +1,37 @@
 # typed: strict
 # frozen_string_literal: true
 
+require_relative "issues"
+
 module HakumiORM
   module SchemaDrift
     class Reporter
       extend T::Sig
+
+      sig { params(issues: T::Array[Issue]).returns(T::Array[String]) }
+      def self.render_all(issues)
+        lines = T.let([], T::Array[String])
+        issues.each { |issue| lines.concat(render(issue)) }
+        lines
+      end
+
+      sig { params(issue: Issue).returns(T::Array[String]) }
+      def self.render(issue)
+        case issue
+        when PendingMigrationsIssue
+          pending_migrations(issue.versions)
+        when NoSchemaFingerprintIssue
+          no_schema_fingerprint
+        when SchemaMismatchIssue
+          schema_drift(
+            expected: issue.expected_fingerprint,
+            actual: issue.actual_fingerprint,
+            diff_lines: issue.diff_lines
+          )
+        else
+          T.absurd(issue)
+        end
+      end
 
       sig { params(versions: T::Array[String]).returns(T::Array[String]) }
       def self.pending_migrations(versions)
