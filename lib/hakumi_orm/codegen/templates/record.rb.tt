@@ -412,27 +412,17 @@ module <%= module_name %>
 <%= ind %>    return [] if records.empty?
 <%= ind %>
 <%= ind %>    dialect = adapter.dialect
-<%= ind %>    buf = ::String.new(capacity: 256)
-<%= ind %>    binds = T.let([], T::Array[::HakumiORM::PGValue])
+<%= ind %>    binds = T.let(::Array.new(records.length * <%= insert_all_columns.length %>), T::Array[::HakumiORM::PGValue])
 <%= ind %>    idx = 0
 <%= ind %>
-<%= ind %>    buf << '<%= insert_all_prefix %>'
-<%= ind %>    records.each_with_index do |rec, ri|
-<%= ind %>      buf << ", " if ri > 0
-<%= ind %>      buf << "("
+<%= ind %>    records.each do |rec|
 <%- insert_all_columns.each_with_index do |col, ci| -%>
-<%= ind %>      buf << ", " if <%= ci %> > 0
-<%= ind %>      buf << dialect.bind_marker(idx)
-<%= ind %>      binds << <%= col[:bind_expr] %>
+<%= ind %>      binds[idx] = <%= col[:bind_expr] %>
 <%= ind %>      idx += 1
 <%- end -%>
-<%= ind %>      buf << ")"
 <%= ind %>    end
-<%- if supports_returning -%>
-<%= ind %>    buf << ' RETURNING <%= returning_cols %>'
-<%- end -%>
 <%= ind %>
-<%= ind %>    result = adapter.exec_params(buf, binds)
+<%= ind %>    result = adapter.exec_params(_insert_all_sql(dialect, records.length), binds)
 <%- if supports_returning -%>
 <%= ind %>    from_result(result, dialect: dialect)
 <%- else -%>
@@ -448,6 +438,42 @@ module <%= module_name %>
 <%- unless supports_returning -%>
 <%= ind %>    fetch&.close
 <%- end -%>
+<%= ind %>  end
+
+<%= ind %>  sig { params(dialect: ::HakumiORM::Dialect::Base, row_count: Integer).returns(String) }
+<%= ind %>  def self._insert_all_sql(dialect, row_count)
+<%= ind %>    cache =
+<%= ind %>      if defined?(@_insert_all_sql_cache) && @_insert_all_sql_cache
+<%= ind %>        T.cast(@_insert_all_sql_cache, T::Hash[String, String])
+<%= ind %>      else
+<%= ind %>        @_insert_all_sql_cache = T.let({}, T.nilable(T::Hash[String, String]))
+<%= ind %>        T.cast(@_insert_all_sql_cache, T::Hash[String, String])
+<%= ind %>      end
+<%= ind %>
+<%= ind %>    key = "#{dialect.name}:#{row_count}"
+<%= ind %>    cached = cache[key]
+<%= ind %>    return cached if cached
+<%= ind %>
+<%= ind %>    idx = 0
+<%= ind %>    buf = ::String.new(capacity: 256)
+<%= ind %>    buf << '<%= insert_all_prefix %>'
+<%= ind %>    row_count.times do |ri|
+<%= ind %>      buf << ", " if ri > 0
+<%= ind %>      buf << "("
+<%- insert_all_columns.each_with_index do |col, ci| -%>
+<%= ind %>      buf << ", " if <%= ci %> > 0
+<%= ind %>      buf << dialect.bind_marker(idx)
+<%= ind %>      idx += 1
+<%- end -%>
+<%= ind %>      buf << ")"
+<%= ind %>    end
+<%- if supports_returning -%>
+<%= ind %>    buf << ' RETURNING <%= returning_cols %>'
+<%- end -%>
+<%= ind %>
+<%= ind %>    sql = -buf
+<%= ind %>    cache[key] = sql
+<%= ind %>    sql
 <%= ind %>  end
 <%- end -%>
 <%- has_many.each do |assoc| -%>

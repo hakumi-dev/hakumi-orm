@@ -15,6 +15,7 @@ module HakumiORM
     def initialize(sql, binds)
       @sql = T.let(sql, String)
       @binds = T.let(binds, T::Array[Bind])
+      @params_cache = T.let({}, T::Hash[Symbol, T::Array[PGValue]])
     end
 
     sig { returns(T::Array[PGValue]) }
@@ -24,7 +25,13 @@ module HakumiORM
 
     sig { params(dialect: Dialect::Base).returns(T::Array[PGValue]) }
     def params_for(dialect)
-      dialect.encode_binds(@binds)
+      key = dialect.name
+      cached = @params_cache[key]
+      return cached if cached
+
+      params = dialect.encode_binds(@binds)
+      @params_cache[key] = params
+      params
     end
   end
 end
