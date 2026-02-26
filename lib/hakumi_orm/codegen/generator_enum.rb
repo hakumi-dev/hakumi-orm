@@ -46,7 +46,7 @@ module HakumiORM
           values = entry[:values]
           column = entry[:column]
           table_dir = File.join(@output_dir, singularize(table_name))
-          FileUtils.mkdir_p(table_dir)
+          @file_writer.mkdir_p(table_dir)
 
           cls_name = enum_class_name(udt_name)
           code = render("enum",
@@ -55,7 +55,7 @@ module HakumiORM
                         enum_class_name: qualify(cls_name),
                         short_enum_class_name: cls_name,
                         values: values)
-          File.write(File.join(table_dir, "#{column}_enum.rb"), code)
+          @file_writer.write(File.join(table_dir, "#{column}_enum.rb"), code)
         end
       end
 

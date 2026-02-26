@@ -1,8 +1,6 @@
 # typed: strict
 # frozen_string_literal: true
 
-require "fileutils"
-
 module HakumiORM
   module Codegen
     class Generator
@@ -46,6 +44,7 @@ module HakumiORM
           GenerationPlan
         )
         @template_renderer = T.let(TemplateRenderer.new, TemplateRenderer)
+        @file_writer = T.let(FileWriter.new, FileWriter)
 
         inject_user_enums!
         normalize_column_order!
@@ -53,7 +52,7 @@ module HakumiORM
 
       sig { void }
       def generate!
-        FileUtils.mkdir_p(@generation_plan.output_dir)
+        @file_writer.mkdir_p(@generation_plan.output_dir)
 
         has_many_map = compute_has_many
         has_one_map = compute_has_one
@@ -68,21 +67,24 @@ module HakumiORM
         @tables.each_value do |table|
           singular = singularize(table.name)
           table_dir = @generation_plan.table_dir(singular)
-          FileUtils.mkdir_p(table_dir)
+          @file_writer.mkdir_p(table_dir)
 
-          File.write(@generation_plan.table_file_path(singular, "schema.rb"), build_schema(table))
+          @file_writer.write(@generation_plan.table_file_path(singular, "schema.rb"), build_schema(table))
           next if @internal_tables.include?(table.name)
 
-          File.write(@generation_plan.table_file_path(singular, "checkable.rb"), build_checkable(table))
-          File.write(@generation_plan.table_file_path(singular, "record.rb"), build_record(table, has_many_map, has_one_map, through_map))
-          File.write(@generation_plan.table_file_path(singular, "new_record.rb"), build_new_record(table))
-          File.write(@generation_plan.table_file_path(singular, "validated_record.rb"), build_validated_record(table))
-          File.write(@generation_plan.table_file_path(singular, "base_contract.rb"), build_base_contract(table))
-          File.write(@generation_plan.table_file_path(singular, "variant_base.rb"), build_variant_base(table))
-          File.write(@generation_plan.table_file_path(singular, "relation.rb"), build_relation(table, has_many_map, has_one_map))
+          @file_writer.write(@generation_plan.table_file_path(singular, "checkable.rb"), build_checkable(table))
+          @file_writer.write(
+            @generation_plan.table_file_path(singular, "record.rb"),
+            build_record(table, has_many_map, has_one_map, through_map)
+          )
+          @file_writer.write(@generation_plan.table_file_path(singular, "new_record.rb"), build_new_record(table))
+          @file_writer.write(@generation_plan.table_file_path(singular, "validated_record.rb"), build_validated_record(table))
+          @file_writer.write(@generation_plan.table_file_path(singular, "base_contract.rb"), build_base_contract(table))
+          @file_writer.write(@generation_plan.table_file_path(singular, "variant_base.rb"), build_variant_base(table))
+          @file_writer.write(@generation_plan.table_file_path(singular, "relation.rb"), build_relation(table, has_many_map, has_one_map))
         end
 
-        File.write(@generation_plan.manifest_path, build_manifest)
+        @file_writer.write(@generation_plan.manifest_path, build_manifest)
 
         if @generation_plan.models_root_dir
           generate_models!
@@ -98,16 +100,15 @@ module HakumiORM
         root_dir = @generation_plan.models_root_dir
         return unless root_dir
 
-        FileUtils.mkdir_p(root_dir)
+        @file_writer.mkdir_p(root_dir)
 
         @tables.each_value do |table|
           next if @internal_tables.include?(table.name)
 
           model_path = @generation_plan.model_stub_path(singularize(table.name))
           next unless model_path
-          next if File.exist?(model_path)
 
-          File.write(model_path, build_model(table))
+          @file_writer.write_if_missing(model_path, build_model(table))
         end
       end
 

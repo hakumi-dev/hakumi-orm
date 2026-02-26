@@ -24,7 +24,7 @@ module HakumiORM
           singular = singularize(table.name)
           model_path = @generation_plan.model_stub_path(singular)
           next unless model_path
-          next unless File.exist?(model_path)
+          next unless @file_writer.exist?(model_path)
 
           ctx = ModelAnnotator::Context.new(
             table: table, dialect: @dialect,

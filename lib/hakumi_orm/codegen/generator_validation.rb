@@ -11,16 +11,15 @@ module HakumiORM
         root_dir = @generation_plan.contracts_root_dir
         return unless root_dir
 
-        FileUtils.mkdir_p(root_dir)
+        @file_writer.mkdir_p(root_dir)
 
         @tables.each_value do |table|
           next if @internal_tables.include?(table.name)
 
           contract_path = @generation_plan.contract_stub_path(singularize(table.name))
           next unless contract_path
-          next if File.exist?(contract_path)
 
-          File.write(contract_path, build_contract(table))
+          @file_writer.write_if_missing(contract_path, build_contract(table))
         end
       end
 
