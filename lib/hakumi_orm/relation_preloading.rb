@@ -18,12 +18,18 @@ module HakumiORM
       self
     end
 
-    sig { overridable.params(_records: T::Array[ModelType], _nodes: T::Array[PreloadNode], _adapter: Adapter::Base, depth: Integer).void }
-    def run_preloads(_records, _nodes, _adapter, depth: 0)
-      raise HakumiORM::Error, "Preload depth limit (#{MAX_PRELOAD_DEPTH}) exceeded — possible circular preload" if depth > MAX_PRELOAD_DEPTH
+    sig { overridable.params(records: T::Array[ModelType], nodes: T::Array[PreloadNode], adapter: Adapter::Base, depth: Integer).void }
+    def run_preloads(records, nodes, adapter, depth: 0)
+      RelationPreloader.new(self, records, nodes, adapter).run(depth: depth, max_depth: MAX_PRELOAD_DEPTH)
     end
 
     sig { overridable.params(name: Symbol, records: T::Array[ModelType], adapter: Adapter::Base).void }
     def custom_preload(name, records, adapter); end
+
+    sig { overridable.params(node: PreloadNode, records: T::Array[ModelType], adapter: Adapter::Base, depth: Integer).void }
+    def dispatch_preload_node(node, records, adapter, depth: 0)
+      _ = depth
+      custom_preload(node.name, records, adapter)
+    end
   end
 end

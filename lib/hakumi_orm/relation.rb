@@ -359,6 +359,7 @@ module HakumiORM
 end
 
 require_relative "relation_query"
+require_relative "relation_preloader"
 require_relative "relation_preloading"
 require_relative "relation_batches"
 require_relative "relation_aggregates"

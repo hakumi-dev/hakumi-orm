@@ -55,11 +55,8 @@ module <%= module_name %>
 <%= ind %>    <%= qualified_record_class %>.from_result(result, dialect: dialect)
 <%= ind %>  end
 
-<%= ind %>  sig { override.params(records: T::Array[<%= qualified_record_class %>], nodes: T::Array[::HakumiORM::PreloadNode], adapter: ::HakumiORM::Adapter::Base, depth: Integer).void }
-<%= ind %>  def run_preloads(records, nodes, adapter, depth: 0)
-<%= ind %>    raise ::HakumiORM::Error, "Preload depth limit (#{MAX_PRELOAD_DEPTH}) exceeded — possible circular preload" if depth > MAX_PRELOAD_DEPTH
-
-<%= ind %>    nodes.each do |node|
+<%= ind %>  sig { override.params(node: ::HakumiORM::PreloadNode, records: T::Array[<%= qualified_record_class %>], adapter: ::HakumiORM::Adapter::Base, depth: Integer).void }
+<%= ind %>  def dispatch_preload_node(node, records, adapter, depth: 0)
 <%- if preloadable_assocs.any? -%>
 <%= ind %>      case node.name
 <%- preloadable_assocs.each do |assoc| -%>
@@ -78,7 +75,6 @@ module <%= module_name %>
 <%- else -%>
 <%= ind %>      custom_preload(node.name, records, adapter)
 <%- end -%>
-<%= ind %>    end
 <%= ind %>  end
 <%= ind %>end
 <%- if module_name -%>

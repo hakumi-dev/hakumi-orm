@@ -57,11 +57,12 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "sql_compiler.rb" | "SqlCompiler" | Compiles "Expr" trees, ordering, joins, limit/offset, DISTINCT, GROUP BY, HAVING, LOCK, and aggregate functions into parameterized SQL. Generates "SELECT", "INSERT", "UPDATE", "DELETE", "EXISTS", "AGGREGATE" with sequential bind markers. All values go through bind parameters, never interpolated. |
 | "sql_compiler_expr.rb" | "SqlCompiler" (reopened) | Expression compilation methods extracted for ClassLength: "compile_expr", "compile_binary", "compile_predicate", "compile_simple_op", "compile_list_op", "compile_between", "compile_raw_expr" (SQL-aware "?" replacement via "RawExpr::SQL_QUOTED_OR_PLACEHOLDER"), "compile_subquery_expr", "rebase_binds" (SQL-aware "$N" rebasing via "SQL_QUOTED_OR_BIND_MARKER"). Both methods skip placeholders inside single-quoted strings, double-quoted identifiers, line comments, and block comments. |
 | "preload_node.rb" | "PreloadNode", "PreloadSpec" | Type-safe preload specification. "PreloadSpec = T.any(Symbol, T::Hash[Symbol, T.any(Symbol, T::Array[Symbol])])". "PreloadNode" normalizes specs into a tree for nested preloading: ".preload(:posts, comments: :author)". |
+| "relation_preloader.rb" | "RelationPreloader[ModelType]" | Runtime coordinator for preload traversal. Applies depth guard and delegates each node to "Relation#dispatch_preload_node". |
 | "relation.rb" | "Relation[ModelType]" (abstract, generic) | Fluent query builder with mutable chaining: "where", "where_raw", "order", "order_by", "limit", "offset", "distinct", "group", "having", "lock", "join", "preload". Subclasses implement "hydrate" to materialize rows. Terminal methods: "to_a", "first", "count", "exists?", "pluck_raw", "delete_all", "update_all", "to_sql", "sum", "average", "minimum", "maximum", "pluck". "count" includes joins in its SQL and raises "HakumiORM::Error" when group/having/distinct are set (ambiguous aggregate semantics). Provides "compile(dialect)" for obtaining a "CompiledQuery" without an adapter. "overridable" "custom_preload(name, records, adapter)" (no-op by default) -- users override in their Relation to handle non-FK associations. Generated "run_preloads" dispatches known (FK-based) associations via "case" and delegates unknown names to "custom_preload". Depth guard: "MAX_PRELOAD_DEPTH = 8" prevents runaway recursion from circular preload nodes. "initialize_copy" deep-copies all internal arrays for safe "dup"/"clone" reuse. |
-| "relation_query.rb" | "Relation" (reopened) | Query helper methods extracted from "Relation": currently "combine_exprs" for composing WHERE/HAVING expressions. |
-| "relation_preloading.rb" | "Relation" (reopened) | Preload declaration/runtime hooks extracted from "Relation": "preload", "_set_preloaded", "run_preloads", "custom_preload", and the preload depth guard constant. |
-| "relation_batches.rb" | "Relation" (reopened) | Batch iteration strategies extracted from "Relation": cursor-based and limit/offset-based batching used by "find_in_batches". |
-| "relation_aggregates.rb" | "Relation" (reopened) | Aggregate and pluck helpers extracted from "Relation": "sum", "average", "minimum", "maximum", "pluck", plus private helpers "run_aggregate" and "build_pluck_rows". |
+| "relation_query.rb" | "Relation" (extension methods) | Query helper methods for "Relation": currently "combine_exprs" for composing WHERE/HAVING expressions. |
+| "relation_preloading.rb" | "Relation" (extension methods) | Preload declaration/runtime hooks for "Relation": "preload", "_set_preloaded", "run_preloads", "dispatch_preload_node", "custom_preload", and the preload depth guard constant. |
+| "relation_batches.rb" | "Relation" (extension methods) | Batch iteration strategies for "Relation": cursor-based and limit/offset-based batching used by "find_in_batches". |
+| "relation_aggregates.rb" | "Relation" (extension methods) | Aggregate and pluck helpers for "Relation": "sum", "average", "minimum", "maximum", "pluck", plus private helpers "run_aggregate" and "build_pluck_rows". |
 
 ## Adapter Layer
 
@@ -225,6 +226,7 @@ lib/
     ├── loggable.rb
     ├── order_clause.rb
     ├── preload_node.rb
+    ├── relation_preloader.rb
     ├── relation.rb
     ├── relation_preloading.rb
     ├── relation_batches.rb

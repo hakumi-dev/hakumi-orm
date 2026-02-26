@@ -639,7 +639,7 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
-  test "relation run_preloads dispatches nested and delegates unknown to custom_preload" do
+  test "relation preload dispatcher handles nested and delegates unknown to custom_preload" do
     tables = build_users_and_posts_tables
     Dir.mktmpdir do |dir|
       gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
@@ -651,11 +651,12 @@ class TestCodegen < HakumiORM::TestCase
       assert_includes rel_code, "node.name"
       assert_includes rel_code, "node.children"
       assert_includes rel_code, "PostRelation.new.run_preloads"
+      assert_includes rel_code, "def dispatch_preload_node"
       assert_includes rel_code, "custom_preload(node.name, records, adapter)"
     end
   end
 
-  test "relation run_preloads generated for table without FK-based associations" do
+  test "relation preload dispatcher generated for table without FK-based associations" do
     table = HakumiORM::Codegen::TableInfo.new("settings")
     table.columns << HakumiORM::Codegen::ColumnInfo.new(name: "id", data_type: "integer", udt_name: "int4", nullable: false)
     table.columns << HakumiORM::Codegen::ColumnInfo.new(name: "key", data_type: "character varying", udt_name: "varchar", nullable: false)
@@ -667,7 +668,7 @@ class TestCodegen < HakumiORM::TestCase
 
       rel_code = File.read(File.join(dir, "setting/relation.rb"))
 
-      assert_includes rel_code, "run_preloads"
+      assert_includes rel_code, "dispatch_preload_node"
       assert_includes rel_code, "custom_preload(node.name, records, adapter)"
     end
   end
