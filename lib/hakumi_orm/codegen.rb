@@ -35,4 +35,6 @@ require_relative "codegen/generator_validation"
 require_relative "codegen/generator_assoc"
 require_relative "codegen/generator_custom_assoc"
 require_relative "codegen/generator_enum"
+# Keep this after the generator slices because it references aliases/types
+# introduced by them (for example "EnumValue").
 require_relative "codegen/model_annotator"

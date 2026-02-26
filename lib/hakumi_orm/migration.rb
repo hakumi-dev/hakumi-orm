@@ -8,6 +8,7 @@ require_relative "migration/sql_generator"
 require_relative "migration/file_generator"
 require_relative "migration/schema_fingerprint"
 
+# These collaborators compose "Migration::Runner", so load them before "runner.rb".
 require_relative "migration/file_info"
 require_relative "migration/loader"
 require_relative "migration/lock"
