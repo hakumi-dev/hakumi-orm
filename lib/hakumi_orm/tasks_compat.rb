@@ -1,6 +1,11 @@
 # typed: false
 # frozen_string_literal: true
 
+# Temporary compatibility layer for Rails apps that still call `hakumi:*` tasks
+# while the canonical task namespace is `db:*`.
+# Keep this isolated (not in the core task definitions) and remove once the demo /
+# benchmark apps and docs no longer depend on `hakumi:*`.
+
 module HakumiORM
   module TasksCompat
     module_function

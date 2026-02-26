@@ -125,9 +125,9 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "migration/runner.rb" | "Migration::Runner" | Loads migration files from "migrations_path", tracks applied versions in "hakumi_migrations" table. "migrate!" runs pending, "rollback!(count:)" reverses N migrations, "status" reports up/down state, "current_version" returns latest. Wraps each migration AND its version bookkeeping (INSERT/DELETE into "hakumi_migrations") in the same transaction when dialect supports DDL transactions; logs warning otherwise. Respects "disable_ddl_transaction!". Acquires dialect-specific advisory lock before migrate!/rollback! to prevent concurrent execution (released in ensure block); "acquire_advisory_lock!" delegates to "Dialect#verify_advisory_lock!" so MySQL verifies GET_LOCK returned 1 (PG blocks until acquired, no verification needed). Advisory lock and DDL results are closed immediately after use. Filename pattern restricted to "\w+" for safety. Clear error messages for class name mismatches, syntax errors, and invalid inheritance. Inner "FileInfo < T::Struct" (version, name, filename) provides typed access to migration file metadata -- zero "T.must" on hash lookups. |
 | "migration/file_generator.rb" | "Migration::FileGenerator" | Generates timestamped migration file (e.g., "20260222120000_create_users.rb") with empty "up"/"down" methods. Validates migration names against "VALID_NAME_PATTERN" ("/\A[a-z]\w*\z/") -- rejects hyphens, spaces, leading digits, empty names. Prevents duplicate names. Bumps timestamp by 1 second on collision with existing files. |
 | "migration/schema_fingerprint.rb" | "Migration::SchemaFingerprint" | Computes deterministic SHA256 hash of schema. Prefixed with GENERATOR_VERSION to detect codegen changes. Sorts tables and columns alphabetically. Includes column types, nullability, defaults, PG native enum values, foreign keys, unique columns. "check!" compares two fingerprints: raises "SchemaDriftError" on mismatch (or warns if HAKUMI_ALLOW_SCHEMA_DRIFT is set). "drift_allowed?" checks env var. "pending_migrations(adapter, path)" compares migration files against applied versions. "read_applied_versions(adapter)" reads from "hakumi_migrations". "scan_file_versions(path)" extracts versions from migration filenames. "build_canonical(tables)" produces deterministic schema string. "store!(adapter, fingerprint, canonical)" persists to "hakumi_schema_meta" (DELETE + INSERT wrapped in a transaction for atomicity). "diff_canonical(stored, live)" produces line-by-line diff. |
-| "schema_drift_error.rb" | "SchemaDriftError" | Raised when boot fingerprint does not match DB. Message includes truncated fingerprints and remediation commands. Bypassed via HAKUMI_ALLOW_SCHEMA_DRIFT=1 env var (emergency only). |
+| "schema_drift/error.rb" | "SchemaDriftError" | Raised when boot fingerprint does not match DB. Message includes truncated fingerprints and remediation commands. Bypassed via HAKUMI_ALLOW_SCHEMA_DRIFT=1 env var (emergency only). |
 | "pending_migration_error.rb" | "PendingMigrationError < Error" | Raised when boot check detects unapplied migration files. Lists pending versions (up to 5) and remediation instructions. Bypassed via HAKUMI_SKIP_MIGRATION_CHECK=1 env var. |
-| "schema_drift_checker.rb" | "SchemaDriftChecker" | Encapsulates schema integrity checks. Class method "read_schema(config, adapter)" reads live schema. Instance methods: "update_fingerprint!" stores live fingerprint in DB, "check" returns array of issue descriptions (pending migrations + schema drift with line-by-line diff). Used by "db:check" task. |
+| "schema_drift/checker.rb" | "SchemaDriftChecker" | Encapsulates schema integrity checks. Class method "read_schema(config, adapter)" reads live schema. Instance methods: "update_fingerprint!" stores live fingerprint in DB, "check" returns array of issue descriptions (pending migrations + schema drift with line-by-line diff). Used by "db:check" task. |
 | "scaffold_generator.rb" | "ScaffoldGenerator" | Creates model stub + contract for a table. Singularizes table name, supports "module_name", skips existing files. Invoked via "rake db:scaffold[table]". |
 
 ## File Tree
@@ -236,8 +236,9 @@ lib/
     │   └── table_definition.rb
     ├── pending_migration_error.rb
     ├── scaffold_generator.rb
-    ├── schema_drift_checker.rb
-    ├── schema_drift_error.rb
+    ├── schema_drift/
+    │   ├── checker.rb
+    │   └── error.rb
     ├── setup_generator.rb
     ├── stale_object_error.rb
     ├── tasks.rb
