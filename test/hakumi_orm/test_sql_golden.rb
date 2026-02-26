@@ -68,16 +68,10 @@ class TestSqlGolden < HakumiORM::TestCase
     end
   end
 
-  test "eq and neq with NULL bind normalize to IS NULL and IS NOT NULL" do
+  test "eq nil and neq nil normalize to IS NULL and IS NOT NULL" do
     @dialects.each_value do |dialect_case|
-      q_eq = dialect_case.compiler.select(
-        table: "users", columns: [@users_id],
-        where_expr: HakumiORM::Predicate.new(@users_age, :eq, [HakumiORM::NullBind.new])
-      )
-      q_neq = dialect_case.compiler.select(
-        table: "users", columns: [@users_id],
-        where_expr: HakumiORM::Predicate.new(@users_age, :neq, [HakumiORM::NullBind.new])
-      )
+      q_eq = dialect_case.compiler.select(table: "users", columns: [@users_id], where_expr: @users_age.eq(nil))
+      q_neq = dialect_case.compiler.select(table: "users", columns: [@users_id], where_expr: @users_age.neq(nil))
 
       assert_equal %(SELECT #{dialect_case.quote}users#{dialect_case.quote}.#{dialect_case.quote}id#{dialect_case.quote} FROM #{dialect_case.quote}users#{dialect_case.quote} WHERE #{dialect_case.quote}users#{dialect_case.quote}.#{dialect_case.quote}age#{dialect_case.quote} IS NULL), q_eq.sql
       assert_equal %(SELECT #{dialect_case.quote}users#{dialect_case.quote}.#{dialect_case.quote}id#{dialect_case.quote} FROM #{dialect_case.quote}users#{dialect_case.quote} WHERE #{dialect_case.quote}users#{dialect_case.quote}.#{dialect_case.quote}age#{dialect_case.quote} IS NOT NULL), q_neq.sql
@@ -98,16 +92,10 @@ class TestSqlGolden < HakumiORM::TestCase
     end
   end
 
-  test "IN and NOT IN with NULL-only bind lists normalize to NULL predicates" do
+  test "IN and NOT IN with nil-only lists normalize to NULL predicates" do
     @dialects.each_value do |dialect_case|
-      q_in = dialect_case.compiler.select(
-        table: "users", columns: [@users_id],
-        where_expr: HakumiORM::Predicate.new(@users_age, :in, [HakumiORM::NullBind.new])
-      )
-      q_not_in = dialect_case.compiler.select(
-        table: "users", columns: [@users_id],
-        where_expr: HakumiORM::Predicate.new(@users_age, :not_in, [HakumiORM::NullBind.new])
-      )
+      q_in = dialect_case.compiler.select(table: "users", columns: [@users_id], where_expr: @users_age.in_list([nil]))
+      q_not_in = dialect_case.compiler.select(table: "users", columns: [@users_id], where_expr: @users_age.not_in_list([nil]))
 
       assert_includes q_in.sql, %(#{dialect_case.quote}users#{dialect_case.quote}.#{dialect_case.quote}age#{dialect_case.quote} IS NULL)
       assert_includes q_not_in.sql, %(#{dialect_case.quote}users#{dialect_case.quote}.#{dialect_case.quote}age#{dialect_case.quote} IS NOT NULL)
@@ -116,20 +104,10 @@ class TestSqlGolden < HakumiORM::TestCase
     end
   end
 
-  test "IN and NOT IN with mixed NULL bind lists split NULL semantics from value binds" do
+  test "IN and NOT IN with mixed nil lists split NULL semantics from value binds" do
     @dialects.each_value do |dialect_case|
-      q_in = dialect_case.compiler.select(
-        table: "users", columns: [@users_id],
-        where_expr: HakumiORM::Predicate.new(
-          @users_age, :in, [HakumiORM::IntBind.new(18), HakumiORM::NullBind.new, HakumiORM::IntBind.new(21)]
-        )
-      )
-      q_not_in = dialect_case.compiler.select(
-        table: "users", columns: [@users_id],
-        where_expr: HakumiORM::Predicate.new(
-          @users_age, :not_in, [HakumiORM::IntBind.new(18), HakumiORM::NullBind.new, HakumiORM::IntBind.new(21)]
-        )
-      )
+      q_in = dialect_case.compiler.select(table: "users", columns: [@users_id], where_expr: @users_age.in_list([18, nil, 21]))
+      q_not_in = dialect_case.compiler.select(table: "users", columns: [@users_id], where_expr: @users_age.not_in_list([18, nil, 21]))
 
       assert_includes q_in.sql, " OR "
       assert_includes q_in.sql, " IS NULL"
