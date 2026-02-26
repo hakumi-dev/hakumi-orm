@@ -88,8 +88,18 @@ module HakumiORM
       @definitions_path = T.let("db/definitions.rb", String)
       @schema_fingerprint = T.let(nil, T.nilable(String))
       @connection_options = T.let({}, T::Hash[String, String])
-      @named_databases = T.let({}, T::Hash[Symbol, DatabaseConfig])
-      @named_adapters = T.let({}, T::Hash[Symbol, Adapter::Base])
+      connect_adapter = T.let(
+        ->(db_config) { connect_from_config(db_config) },
+        T.proc.params(db_config: DatabaseConfig).returns(Adapter::Base)
+      )
+      primary_adapter = T.let(
+        -> { adapter },
+        T.proc.returns(T.nilable(Adapter::Base))
+      )
+      @adapter_registry = T.let(
+        AdapterRegistry.new(connect_adapter: connect_adapter, primary_adapter: primary_adapter),
+        AdapterRegistry
+      )
     end
 
     LOG_LEVELS = T.let({
@@ -133,54 +143,34 @@ module HakumiORM
 
     sig { params(name: Symbol, blk: T.proc.params(builder: DatabaseConfigBuilder).void).void }
     def database_config(name, &blk)
-      raise HakumiORM::Error, "Database name :primary is reserved for the main database" if name == :primary
-      raise HakumiORM::Error, "Database '#{name}' is already registered" if @named_databases.key?(name)
-
       builder = DatabaseConfigBuilder.new
       blk.call(builder)
-      @named_databases[name] = builder.build
+      @adapter_registry.register_database(name, builder.build)
     end
 
     sig { params(name: Symbol).returns(DatabaseConfig) }
     def named_database(name)
-      config = @named_databases[name]
-      raise HakumiORM::Error, "Database '#{name}' is not registered. Available: #{@named_databases.keys.inspect}" unless config
-
-      config
+      @adapter_registry.named_database(name)
     end
 
     sig { params(name: Symbol, adapter: Adapter::Base).void }
     def register_adapter(name, adapter)
-      @named_adapters[name] = adapter
+      @adapter_registry.register_adapter(name, adapter)
     end
 
     sig { params(name: Symbol).returns(Adapter::Base) }
     def adapter_for(name)
-      if name == :primary
-        primary = adapter
-        raise HakumiORM::Error, "No primary adapter configured" unless primary
-
-        return primary
-      end
-
-      existing = @named_adapters[name]
-      return existing if existing
-
-      db_config = named_database(name)
-      built = connect_from_config(db_config)
-      @named_adapters[name] = built
-      built
+      @adapter_registry.adapter_for(name)
     end
 
     sig { returns(T::Array[Symbol]) }
     def database_names
-      @named_databases.keys
+      @adapter_registry.database_names
     end
 
     sig { void }
     def close_named_adapters!
-      @named_adapters.each_value(&:close)
-      @named_adapters.clear
+      @adapter_registry.close_named_adapters!
     end
   end
 end
