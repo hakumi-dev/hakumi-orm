@@ -945,12 +945,12 @@ class TestCodegen < HakumiORM::TestCase
       code = File.read(File.join(dir, "user/record.rb"))
 
       assert_includes code, "def as_json(only: nil, except: nil)"
-      assert_includes code, 'h["id"]'
-      assert_includes code, 'h["name"]'
-      assert_includes code, 'h["active"]'
+      assert_includes code, 'key: "id"'
+      assert_includes code, 'key: "name"'
+      assert_includes code, 'key: "active"'
       assert_includes code, "T::Hash[String,"
-      assert_includes code, "only && !only.include?"
-      assert_includes code, "except&.include?"
+      assert_includes code, "::HakumiORM::RecordRuntime.append_json_field!"
+      assert_includes code, "only: only, except: except"
     end
   end
 

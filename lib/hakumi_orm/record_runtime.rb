@@ -53,6 +53,44 @@ module HakumiORM
     sig do
       type_parameters(:V)
         .params(
+          blk: T.proc.params(h: T::Hash[Symbol, T.type_parameter(:V)]).void
+        )
+        .returns(T::Hash[Symbol, T.type_parameter(:V)])
+    end
+    def build_symbol_hash(&blk)
+      h = T.let({}, T::Hash[Symbol, T.type_parameter(:V)])
+      blk.call(h)
+      h
+    end
+
+    sig do
+      type_parameters(:V)
+        .params(
+          blk: T.proc.params(h: T::Hash[String, T.type_parameter(:V)]).void
+        )
+        .returns(T::Hash[String, T.type_parameter(:V)])
+    end
+    def build_string_hash(&blk)
+      h = T.let({}, T::Hash[String, T.type_parameter(:V)])
+      blk.call(h)
+      h
+    end
+
+    sig do
+      type_parameters(:V)
+        .params(
+          symbol_hash: T::Hash[Symbol, T.type_parameter(:V)],
+          key: Symbol,
+          blk: T.proc.returns(T.type_parameter(:V))
+        ).void
+    end
+    def append_symbol_field!(symbol_hash, key:, &blk)
+      symbol_hash[key] = blk.call
+    end
+
+    sig do
+      type_parameters(:V)
+        .params(
           current: T::Hash[Symbol, T.all(T.type_parameter(:V), BasicObject)],
           other: T::Hash[Symbol, T.all(T.type_parameter(:V), BasicObject)]
         )
@@ -81,6 +119,37 @@ module HakumiORM
         diff[key] = [value, other_value] if value != other_value
       end
       diff
+    end
+
+    sig do
+      params(
+        field: Symbol,
+        only: T.nilable(T::Array[Symbol]),
+        except: T.nilable(T::Array[Symbol])
+      ).returns(T::Boolean)
+    end
+    def json_field_allowed?(field, only:, except:)
+      return false if only && !only.include?(field)
+      return false if except&.include?(field)
+
+      true
+    end
+
+    sig do
+      type_parameters(:V)
+        .params(
+          json_hash: T::Hash[String, T.type_parameter(:V)],
+          field: Symbol,
+          key: String,
+          only: T.nilable(T::Array[Symbol]),
+          except: T.nilable(T::Array[Symbol]),
+          blk: T.proc.returns(T.type_parameter(:V))
+        ).void
+    end
+    def append_json_field!(json_hash, field:, key:, only:, except:, &blk)
+      return unless json_field_allowed?(field, only: only, except: except)
+
+      json_hash[key] = blk.call
     end
 
     sig { overridable.params(_row: T::Array[::HakumiORM::Adapter::CellValue], _dialect: ::HakumiORM::Dialect::Base).void }

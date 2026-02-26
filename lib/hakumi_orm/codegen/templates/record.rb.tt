@@ -138,11 +138,11 @@ module <%= module_name %>
 
 <%= ind %>  sig { returns(T::Hash[Symbol, <%= to_h_value_type %>]) }
 <%= ind %>  def to_h
-<%= ind %>    {
+<%= ind %>    ::HakumiORM::RecordRuntime.build_symbol_hash do |h|
 <%- columns.each_with_index do |col, i| -%>
-<%= ind %>      <%= col[:name] %>: @<%= col[:name] %><%= i < columns.length - 1 ? "," : "" %>
+<%= ind %>      ::HakumiORM::RecordRuntime.append_symbol_field!(h, key: :<%= col[:name] %>) { @<%= col[:name] %> }
 <%- end -%>
-<%= ind %>    }
+<%= ind %>    end
 <%= ind %>  end
 
 <%= ind %>  sig { params(other: <%= record_class_name %>).returns(T::Boolean) }
@@ -157,11 +157,11 @@ module <%= module_name %>
 
 <%= ind %>  sig { params(only: T.nilable(T::Array[Symbol]), except: T.nilable(T::Array[Symbol])).returns(T::Hash[String, <%= as_json_value_type %>]) }
 <%= ind %>  def as_json(only: nil, except: nil)
-<%= ind %>    h = T.let({}, T::Hash[String, <%= as_json_value_type %>])
+<%= ind %>    ::HakumiORM::RecordRuntime.build_string_hash do |h|
 <%- columns.each do |col| -%>
-<%= ind %>    h["<%= col[:name] %>"] = <%= col[:json_expr] %> unless (only && !only.include?(:<%= col[:name] %>)) || (except&.include?(:<%= col[:name] %>))
+<%= ind %>    ::HakumiORM::RecordRuntime.append_json_field!(h, field: :<%= col[:name] %>, key: "<%= col[:name] %>", only: only, except: except) { <%= col[:json_expr] %> }
 <%- end -%>
-<%= ind %>    h
+<%= ind %>    end
 <%= ind %>  end
 <%- enum_predicates.each do |pred| -%>
 
