@@ -85,25 +85,25 @@ class TestRealDbRoundtrip < HakumiORM::TestCase
 
       assert_equal 1, result.row_count, "expected one row for #{db_case.name}"
 
-      assert(dialect.cast_boolean(result.fetch_value(0, 0)), "bool roundtrip failed for #{db_case.name}")
-      assert_equal 42, dialect.cast_integer(result.fetch_value(0, 1)), "int roundtrip failed for #{db_case.name}"
-      assert_equal 9_223_372_036_854_775_000, dialect.cast_integer(result.fetch_value(0, 2)), "bigint roundtrip failed for #{db_case.name}"
-      assert_equal expected_decimal, dialect.cast_decimal(result.fetch_value(0, 3)), "decimal roundtrip failed for #{db_case.name}"
-      assert_equal expected_date, dialect.cast_date(result.fetch_value(0, 4)), "date roundtrip failed for #{db_case.name}"
+      assert(dialect.cast_boolean(cell!(result, 0, 0)), "bool roundtrip failed for #{db_case.name}")
+      assert_equal 42, dialect.cast_integer(cell!(result, 0, 1)), "int roundtrip failed for #{db_case.name}"
+      assert_equal 9_223_372_036_854_775_000, dialect.cast_integer(cell!(result, 0, 2)), "bigint roundtrip failed for #{db_case.name}"
+      assert_equal expected_decimal, dialect.cast_decimal(cell!(result, 0, 3)), "decimal roundtrip failed for #{db_case.name}"
+      assert_equal expected_date, dialect.cast_date(cell!(result, 0, 4)), "date roundtrip failed for #{db_case.name}"
 
-      roundtrip_time = dialect.cast_time(result.fetch_value(0, 5))
+      roundtrip_time = dialect.cast_time(cell!(result, 0, 5))
 
       assert_predicate roundtrip_time, :utc?, "time must be UTC for #{db_case.name}"
       assert_equal [2026, 2, 26, 12, 34, 56], [roundtrip_time.year, roundtrip_time.month, roundtrip_time.day, roundtrip_time.hour, roundtrip_time.min, roundtrip_time.sec]
       assert_equal(db_case.time_keeps_usec ? 123_456 : 0, roundtrip_time.usec, "time precision mismatch for #{db_case.name}")
 
-      roundtrip_json = dialect.cast_json(result.fetch_value(0, 6))
+      roundtrip_json = dialect.cast_json(cell!(result, 0, 6))
 
       assert_equal "Hakumi", roundtrip_json["name"]&.as_s, "json roundtrip failed for #{db_case.name}"
       assert_equal 3, roundtrip_json["count"]&.as_i, "json roundtrip failed for #{db_case.name}"
       assert(roundtrip_json["active"]&.as_bool, "json roundtrip failed for #{db_case.name}")
 
-      assert_equal expected_uuid, dialect.cast_string(result.fetch_value(0, 7)), "uuid string roundtrip failed for #{db_case.name}"
+      assert_equal expected_uuid, dialect.cast_string(cell!(result, 0, 7)), "uuid string roundtrip failed for #{db_case.name}"
     ensure
       result&.close
     end
@@ -246,5 +246,12 @@ class TestRealDbRoundtrip < HakumiORM::TestCase
 
   def markers(dialect, count)
     (0...count).map { |i| dialect.bind_marker(i) }.join(", ")
+  end
+
+  def cell!(result, row, col)
+    value = result.get_value(row, col)
+    raise "Unexpected NULL at row #{row}, col #{col}" if value.nil?
+
+    value
   end
 end

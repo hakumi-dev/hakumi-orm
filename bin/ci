@@ -18,7 +18,13 @@ bundle exec srb tc
 
 echo ""
 echo "==> Tests"
-bundle exec rake test
+TEST_FILES="$(
+  find test -type f -name 'test_*.rb' \
+    | sort \
+    | grep -v '/test_real_db_roundtrip.rb$' \
+    | grep -v '/test_real_db_concurrency.rb$'
+)"
+bundle exec ruby -Itest -e 'ARGV.each { |f| require File.expand_path(f) }' ${TEST_FILES}
 
 echo ""
 echo "==> All checks passed"

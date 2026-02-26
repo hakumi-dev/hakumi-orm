@@ -282,3 +282,58 @@ lib/
     ├── validation_error.rb
     └── version.rb
 ```
+
+## Testing Notes (Credibility)
+
+The default project gate is "bin/ci". It covers unit tests, compiler behavior, codegen, migrations, typing, and linting.
+
+HakumiORM also includes two optional real DB suites for credibility work. They are run manually and are not part of "bin/ci", so the default project gate remains fast and deterministic.
+
+### Optional real DB roundtrip suite (manual)
+
+File: "test/hakumi_orm/test_real_db_roundtrip.rb"
+
+Purpose:
+
+- verify roundtrip integrity with real adapters and real databases
+- cover core types across PostgreSQL, MySQL, and SQLite
+
+Enable with environment variables:
+
+```bash
+HAKUMI_REAL_DB_ROUNDTRIP=1 \
+HAKUMI_REAL_DB_ADAPTERS=postgresql,mysql,sqlite \
+bundle exec ruby -Itest test/hakumi_orm/test_real_db_roundtrip.rb
+```
+
+Supported adapter env variables:
+
+- PostgreSQL: "HAKUMI_REAL_PG_DB", "HAKUMI_REAL_PG_USER", "HAKUMI_REAL_PG_PASSWORD", "HAKUMI_REAL_PG_HOST", "HAKUMI_REAL_PG_PORT"
+- MySQL: "HAKUMI_REAL_MYSQL_DB", "HAKUMI_REAL_MYSQL_USER", "HAKUMI_REAL_MYSQL_PASSWORD", "HAKUMI_REAL_MYSQL_HOST", "HAKUMI_REAL_MYSQL_PORT"
+- SQLite: "HAKUMI_REAL_SQLITE_PATH" (optional; defaults to a temp file)
+
+Important test integrity note:
+
+- use "Result#get_value" for native-type roundtrip assertions
+- do not use "fetch_value" for these checks because it stringifies values and can hide precision issues
+
+### Optional real DB concurrency suite (manual)
+
+File: "test/hakumi_orm/test_real_db_concurrency.rb"
+
+Purpose:
+
+- validate optimistic locking and lost-update protection with two real DB connections
+
+Current adapter scope:
+
+- PostgreSQL
+- MySQL
+
+Enable with environment variables:
+
+```bash
+HAKUMI_REAL_DB_CONCURRENCY=1 \
+HAKUMI_REAL_DB_CONCURRENCY_ADAPTERS=postgresql,mysql \
+bundle exec ruby -Itest test/hakumi_orm/test_real_db_concurrency.rb
+```
