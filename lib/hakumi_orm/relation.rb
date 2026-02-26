@@ -29,77 +29,90 @@ module HakumiORM
       @_preloaded_results = T.let(nil, T.nilable(T::Array[ModelType]))
       @_preload_nodes = T.let([], T::Array[PreloadNode])
       @defaults_pristine = T.let(true, T::Boolean)
+      @compiled_select_cache = T.let({}, T::Hash[Symbol, CompiledQuery])
     end
 
     sig { params(expr: Expr).returns(T.self_type) }
     def where(expr)
       @where_exprs << expr
+      invalidate_compiled_cache!
       self
     end
 
     sig { params(sql: String, binds: T::Array[Bind]).returns(T.self_type) }
     def where_raw(sql, binds = [])
       @where_exprs << RawExpr.new(sql, binds)
+      invalidate_compiled_cache!
       self
     end
 
     sig { params(clause: OrderClause).returns(T.self_type) }
     def order(clause)
       @order_clauses << clause
+      invalidate_compiled_cache!
       self
     end
 
     sig { params(field: FieldRef, direction: Symbol).returns(T.self_type) }
     def order_by(field, direction = :asc)
       @order_clauses << OrderClause.new(field, direction)
+      invalidate_compiled_cache!
       self
     end
 
     sig { params(n: Integer).returns(T.self_type) }
     def limit(n)
       @limit_value = n
+      invalidate_compiled_cache!
       self
     end
 
     sig { params(n: Integer).returns(T.self_type) }
     def offset(n)
       @offset_value = n
+      invalidate_compiled_cache!
       self
     end
 
     sig { params(fields: FieldRef).returns(T.self_type) }
     def select(*fields)
       @select_columns = T.let(fields, T.nilable(T::Array[FieldRef]))
+      invalidate_compiled_cache!
       self
     end
 
     sig { params(clause: JoinClause).returns(T.self_type) }
     def join(clause)
       @joins << clause
+      invalidate_compiled_cache!
       self
     end
 
     sig { returns(T.self_type) }
     def distinct
       @distinct_value = true
+      invalidate_compiled_cache!
       self
     end
 
     sig { params(fields: FieldRef).returns(T.self_type) }
     def group(*fields)
       @group_fields.concat(fields)
+      invalidate_compiled_cache!
       self
     end
 
     sig { params(expr: Expr).returns(T.self_type) }
     def having(expr)
       @having_exprs << expr
+      invalidate_compiled_cache!
       self
     end
 
     sig { params(clause: String).returns(T.self_type) }
     def lock(clause = "FOR UPDATE")
       @lock_value = clause
+      invalidate_compiled_cache!
       self
     end
 
@@ -112,12 +125,14 @@ module HakumiORM
       elsif right
         @where_exprs = [right]
       end
+      invalidate_compiled_cache!
       self
     end
 
     sig { params(expr: Expr).returns(T.self_type) }
     def where_not(expr)
       @where_exprs << NotExpr.new(expr)
+      invalidate_compiled_cache!
       self
     end
 
@@ -125,6 +140,7 @@ module HakumiORM
     def unscoped
       @default_exprs = []
       mark_defaults_dirty!
+      invalidate_compiled_cache!
       self
     end
 
@@ -133,12 +149,18 @@ module HakumiORM
 
     sig { params(adapter: Adapter::Base).returns(CompiledQuery) }
     def to_sql(adapter: HakumiORM.adapter)
-      build_select(adapter.dialect)
+      compile(adapter.dialect)
     end
 
     sig { params(dialect: Dialect::Base).returns(CompiledQuery) }
     def compile(dialect)
-      build_select(dialect)
+      key = dialect.name
+      cached = @compiled_select_cache[key]
+      return cached if cached
+
+      compiled = build_select(dialect)
+      @compiled_select_cache[key] = compiled
+      compiled
     end
 
     sig { params(batch_size: Integer, adapter: Adapter::Base, blk: T.proc.params(record: ModelType).void).void }
@@ -176,6 +198,11 @@ module HakumiORM
       @defaults_pristine = false
     end
 
+    sig { void }
+    def invalidate_compiled_cache!
+      @compiled_select_cache.clear
+    end
+
     sig { params(source: Relation[ModelType]).void }
     def initialize_copy(source)
       super
@@ -186,6 +213,7 @@ module HakumiORM
       @group_fields = @group_fields.dup
       @having_exprs = @having_exprs.dup
       @_preload_nodes = @_preload_nodes.dup
+      @compiled_select_cache = {}
     end
 
     sig { void }
