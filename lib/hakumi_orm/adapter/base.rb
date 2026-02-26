@@ -109,10 +109,24 @@ module HakumiORM
         log = HakumiORM.config.logger
         return unless log
 
-        elapsed = ((T.cast(Process.clock_gettime(Process::CLOCK_MONOTONIC), Float) - start) * 1000).round(2)
-        suffix = note ? " [#{note}]" : ""
+        elapsed = T.let(
+          T.cast(((T.cast(Process.clock_gettime(Process::CLOCK_MONOTONIC), Float) - start) * 1000).round(2), Float),
+          Float
+        )
+        config = HakumiORM.config
         log.debug do
-          params.empty? ? "[HakumiORM] (#{elapsed}ms) #{sql}#{suffix}" : "[HakumiORM] (#{elapsed}ms) #{sql} #{params.inspect}#{suffix}"
+          if config.pretty_sql_logs
+            SqlLogFormatter.format(
+              elapsed_ms: elapsed,
+              sql: sql,
+              params: params,
+              note: note,
+              colorize: config.colorize_sql_logs
+            )
+          else
+            suffix = note ? " [#{note}]" : ""
+            params.empty? ? "[HakumiORM] (#{elapsed}ms) #{sql}#{suffix}" : "[HakumiORM] (#{elapsed}ms) #{sql} #{params.inspect}#{suffix}"
+          end
         end
       end
 

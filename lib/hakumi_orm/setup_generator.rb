@@ -128,7 +128,7 @@ module HakumiORM
         # frozen_string_literal: true
 
         # Custom associations and user-defined enums for code generation.
-        # This file is loaded by `rake hakumi:generate`.
+        # This file is loaded by `rake db:generate`.
         #
         # Example:
         # HakumiORM.associate("users") do |a|

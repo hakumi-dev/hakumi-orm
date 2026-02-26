@@ -12,7 +12,7 @@ module HakumiORM
       suffix = count > 5 ? " (and #{count - 5} more)" : ""
       super(
         "#{count} pending migration(s): #{list}#{suffix}. " \
-        "Run 'rake hakumi:migrate' to apply."
+        "Run 'rake db:migrate' to apply."
       )
     end
   end

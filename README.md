@@ -236,7 +236,7 @@ Associations are generated automatically from foreign keys. "has_many" returns a
 | UUID | String column | "HakumiType::Uuid", "StrField", LIKE/ILIKE support |
 | Array columns | "serialize :tags, Array" | "IntArrayField", "StrArrayField", PG array literal format |
 | Custom types | "attribute :price, :money" | "TypeRegistry.register" with cast, field, and bind |
-| Rake task | "rails db:migrate" etc. | "rake hakumi:generate" |
+| Rake task | "rails db:migrate" etc. | "rake db:generate" |
 | Dirty tracking | Automatic (mutable) | "diff(other)" / "changed_from?(other)" (immutable snapshots) |
 | Timestamps | Automatic "created_at"/"updated_at" | Configurable via "created_at_column" / "updated_at_column" |
 | Migrations | Built-in | Built-in: dialect-aware DSL, timestamped files, advisory locks |
@@ -426,7 +426,7 @@ generator = HakumiORM::Codegen::Generator.new(tables, opts)
 
 | Action | Requires regeneration? |
 |---|---|
-| Run a migration (add/remove column, table, FK) | Yes (automatic if using "hakumi:migrate") |
+| Run a migration (add/remove column, table, FK) | Yes (automatic if using "db:migrate") |
 | Add/change a custom association or enum in "db/definitions.rb" | Yes |
 | Add a scope to a Relation | No |
 | Edit a Contract hook | No |
@@ -893,7 +893,7 @@ The "dependent" parameter is only generated when the record has "has_many" or "h
 
 ### Model Annotations
 
-"hakumi:generate" auto-updates a comment block at the top of each model file showing columns, types, and ALL associations (FK + custom + through). The user code below the annotation is never touched:
+"db:generate" auto-updates a comment block at the top of each model file showing columns, types, and ALL associations (FK + custom + through). The user code below the annotation is never touched:
 
 ```ruby
 # == Schema Information ==
@@ -925,8 +925,8 @@ end
 You can also list all associations from the command line:
 
 ```bash
-bundle exec rake hakumi:associations            # all models
-bundle exec rake hakumi:associations[users]     # single model
+bundle exec rake db:associations            # all models
+bundle exec rake db:associations[users]     # single model
 ```
 
 ## Contracts and Lifecycle Hooks
@@ -1327,7 +1327,7 @@ Array values are serialized as PG array literals ("{1,2,3}") and parsed back wit
 Scaffold a custom type with the rake task:
 
 ```bash
-bundle exec rake hakumi:type[money]
+bundle exec rake db:type[money]
 ```
 
 This generates two files that you edit to fit your domain:
@@ -1370,7 +1370,7 @@ end
 
 #### Step 3: Register for codegen (DB -> Ruby)
 
-"cast_expression" is a lambda that produces Ruby source code. It runs once during "rake hakumi:generate" and the string it returns is written directly into the generated file.
+"cast_expression" is a lambda that produces Ruby source code. It runs once during "rake db:generate" and the string it returns is written directly into the generated file.
 
 ```ruby
 HakumiORM::Codegen::TypeRegistry.register(
@@ -1404,7 +1404,7 @@ Network types ("inet", "cidr", "macaddr") and "hstore" are mapped to "String" by
 Create a migration:
 
 ```bash
-bundle exec rake hakumi:migration[create_users]
+bundle exec rake db:migration[create_users]
 ```
 
 This generates "db/migrate/20260222120000_create_users.rb":
@@ -1432,11 +1432,11 @@ end
 Run migrations:
 
 ```bash
-bundle exec rake hakumi:migrate           # run pending
-bundle exec rake hakumi:rollback          # rollback last
-bundle exec rake hakumi:rollback[3]       # rollback 3
-bundle exec rake hakumi:migrate:status    # show up/down status
-bundle exec rake hakumi:version           # current version
+bundle exec rake db:migrate           # run pending
+bundle exec rake db:rollback          # rollback last
+bundle exec rake db:rollback[3]       # rollback 3
+bundle exec rake db:migrate:status    # show up/down status
+bundle exec rake db:version           # current version
 ```
 
 Available DSL methods inside "up"/"down":
@@ -1537,29 +1537,29 @@ On first adapter access, HakumiORM performs two checks:
 
 ```
 HakumiORM::PendingMigrationError: 2 pending migration(s): 20260301000001, 20260301000002.
-  Run 'rake hakumi:migrate' to apply.
+  Run 'rake db:migrate' to apply.
 ```
 
 Environment variable bypass:
 
 - "HAKUMI_ALLOW_SCHEMA_DRIFT=1" -- skip fingerprint check (emergency only, logs warning instead of raising)
 
-**"hakumi:check" (CI and manual):**
+**"db:check" (CI and manual):**
 
 ```bash
-bundle exec rake hakumi:check
+bundle exec rake db:check
 ```
 
 Detects both pending migrations and schema drift with detailed output. Exit code 0 = clean, 1 = issues found. Ideal for CI pipelines:
 
 ```yaml
-- run: bundle exec rake hakumi:migrate
-- run: bundle exec rake hakumi:check
+- run: bundle exec rake db:migrate
+- run: bundle exec rake db:check
 ```
 
 **Auto-generate after migrate:**
 
-"hakumi:migrate" automatically runs "hakumi:generate" after applying migrations, keeping generated code in sync. Set "HAKUMI_SKIP_GENERATE=1" to skip.
+"db:migrate" automatically runs "db:generate" after applying migrations, keeping generated code in sync. Set "HAKUMI_SKIP_GENERATE=1" to skip.
 
 ## Connection Pooling
 
@@ -1703,18 +1703,18 @@ require "hakumi_orm/tasks"
 Available tasks:
 
 ```bash
-bundle exec rake hakumi:install            # create initial project structure (dirs, config)
-bundle exec rake hakumi:generate           # generate models from DB schema + update annotations
-bundle exec rake hakumi:migrate            # run pending migrations + auto-regenerate
-bundle exec rake hakumi:rollback[N]        # rollback N migrations
-bundle exec rake hakumi:migrate:status     # show migration status
-bundle exec rake hakumi:version            # show current schema version
-bundle exec rake hakumi:migration[name]    # scaffold new migration
-bundle exec rake hakumi:check              # detect schema drift + pending migrations (CI-friendly)
-bundle exec rake hakumi:scaffold[table]    # scaffold model + contract for a table
-bundle exec rake hakumi:type[name]         # scaffold custom type
-bundle exec rake hakumi:associations       # list all associations (FK + custom + through)
-bundle exec rake hakumi:associations[name] # list associations for one model
+bundle exec rake db:install                # create initial project structure (dirs, config)
+bundle exec rake db:generate           # generate models from DB schema + update annotations
+bundle exec rake db:migrate            # run pending migrations + auto-regenerate
+bundle exec rake db:rollback[N]        # rollback N migrations
+bundle exec rake db:migrate:status     # show migration status
+bundle exec rake db:version            # show current schema version
+bundle exec rake db:migration[name]    # scaffold new migration
+bundle exec rake db:check              # detect schema drift + pending migrations (CI-friendly)
+bundle exec rake db:scaffold[table]    # scaffold model + contract for a table
+bundle exec rake db:type[name]         # scaffold custom type
+bundle exec rake db:associations       # list all associations (FK + custom + through)
+bundle exec rake db:associations[name] # list associations for one model
 ```
 
 ## Low-Level Reference

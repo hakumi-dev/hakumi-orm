@@ -55,14 +55,14 @@ module HakumiORM
       lines = T.let(["#{pending.size} pending migration(s):"], T::Array[String])
       pending.each { |v| lines << "  - #{v}" }
       lines << ""
-      lines << "  Run 'rake hakumi:migrate' to apply."
+      lines << "  Run 'rake db:migrate' to apply."
       lines
     end
 
     sig { returns(T::Array[String]) }
     def check_schema_drift
       stored_fp = Migration::SchemaFingerprint.read_from_db(@adapter)
-      return ["No schema fingerprint stored. Run 'rake hakumi:generate' first."] unless stored_fp
+      return ["No schema fingerprint stored. Run 'rake db:generate' first."] unless stored_fp
 
       canonical, live_fp = compute_live
       return [] if live_fp == stored_fp
@@ -82,7 +82,7 @@ module HakumiORM
       end
 
       lines << ""
-      lines << "  Run 'rake hakumi:generate' to update generated code."
+      lines << "  Run 'rake db:generate' to update generated code."
       lines
     end
 

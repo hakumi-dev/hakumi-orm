@@ -51,6 +51,7 @@ require_relative "hakumi_orm/dialect/sqlite"
 require_relative "hakumi_orm/adapter"
 
 require_relative "hakumi_orm/sql_compiler"
+require_relative "hakumi_orm/sql_log_formatter"
 require_relative "hakumi_orm/preload_node"
 require_relative "hakumi_orm/record_runtime"
 

@@ -43,7 +43,7 @@ module HakumiORM
         start = log_query_start
         stmt_name, cache_hit = cached_exec_params_stmt_name(sql)
         result = PostgresqlResult.new(@pg_conn.exec_prepared(stmt_name, params))
-        log_query_done(sql, params, start, note: cache_hit ? "CACHED" : nil)
+        log_query_done(sql, params, start, note: cache_hit ? "PREPARED" : nil)
         result
       end
 

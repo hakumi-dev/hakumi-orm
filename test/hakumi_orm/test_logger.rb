@@ -10,12 +10,16 @@ class TestLogger < HakumiORM::TestCase
     @adapter = HakumiORM::Test::MockAdapter.new
     @prev_adapter = HakumiORM.config.adapter
     @prev_logger = HakumiORM.config.logger
+    @prev_pretty_sql_logs = HakumiORM.config.pretty_sql_logs
+    @prev_colorize_sql_logs = HakumiORM.config.colorize_sql_logs
     HakumiORM.adapter = @adapter
   end
 
   def teardown
     HakumiORM.config.adapter = @prev_adapter
     HakumiORM.config.logger = @prev_logger
+    HakumiORM.config.pretty_sql_logs = @prev_pretty_sql_logs
+    HakumiORM.config.colorize_sql_logs = @prev_colorize_sql_logs
   end
 
   test "logger is nil by default" do
@@ -121,6 +125,47 @@ class TestLogger < HakumiORM::TestCase
     UserRelation.new.to_a(adapter: @adapter)
 
     assert_includes custom.messages, :debug
+  end
+
+  test "pretty_sql_logs formats output without ANSI when colors are disabled" do
+    io = StringIO.new
+    HakumiORM.config.logger = Logger.new(io)
+    HakumiORM.config.pretty_sql_logs = true
+    HakumiORM.config.colorize_sql_logs = false
+
+    UserRelation.new.where(UserSchema::ACTIVE.eq(true)).to_a(adapter: @adapter)
+
+    output = io.string
+
+    assert_includes output, "HakumiORM SQL"
+    assert_includes output, "SELECT"
+    refute_includes output, "\e["
+  end
+
+  test "pretty sql formatter supports prepared note" do
+    formatted = HakumiORM::SqlLogFormatter.format(
+      elapsed_ms: 1.23,
+      sql: "select * from users",
+      params: [],
+      note: "PREPARED",
+      colorize: false
+    )
+
+    assert_includes formatted, "HakumiORM SQL"
+    assert_includes formatted, "select * from users"
+    assert_includes formatted, "[PREPARED]"
+  end
+
+  test "pretty sql formatter colorizes when enabled" do
+    formatted = HakumiORM::SqlLogFormatter.format(
+      elapsed_ms: 1.23,
+      sql: "select * from users where id = 1",
+      params: [],
+      note: nil,
+      colorize: true
+    )
+
+    assert_includes formatted, "\e["
   end
 end
 

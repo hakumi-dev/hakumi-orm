@@ -28,8 +28,9 @@ module HakumiORM
         @migrations_path = T.let(migrations_path, String)
       end
 
-      sig { void }
+      sig { returns(T::Array[FileInfo]) }
       def migrate!
+        applied_now = T.let([], T::Array[FileInfo])
         with_advisory_lock do
           ensure_table!
           applied = applied_versions
@@ -37,8 +38,10 @@ module HakumiORM
 
           pending_files.each do |file_info|
             run_up(file_info)
+            applied_now << file_info
           end
         end
+        applied_now
       end
 
       sig { params(count: Integer).void }

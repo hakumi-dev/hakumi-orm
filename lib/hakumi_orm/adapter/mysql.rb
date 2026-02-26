@@ -49,7 +49,7 @@ module HakumiORM
         result = T.unsafe(stmt).execute(*mysql_params(params), as: :array)
         rows = result_to_rows(result)
         r = MysqlResult.new(rows, stmt.affected_rows)
-        log_query_done(sql, params, start, note: cache_hit ? "CACHED" : nil)
+        log_query_done(sql, params, start, note: cache_hit ? "PREPARED" : nil)
         r
       end
 

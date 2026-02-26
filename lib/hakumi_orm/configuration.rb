@@ -48,6 +48,12 @@ module HakumiORM
     sig { returns(T.nilable(Loggable)) }
     attr_accessor :logger
 
+    sig { returns(T::Boolean) }
+    attr_accessor :pretty_sql_logs
+
+    sig { returns(T::Boolean) }
+    attr_accessor :colorize_sql_logs
+
     sig { returns(String) }
     attr_accessor :migrations_path
 
@@ -76,6 +82,8 @@ module HakumiORM
       @pool_size = T.let(5, Integer)
       @pool_timeout = T.let(5.0, Float)
       @logger = T.let(nil, T.nilable(Loggable))
+      @pretty_sql_logs = T.let(false, T::Boolean)
+      @colorize_sql_logs = T.let(true, T::Boolean)
       @migrations_path = T.let("db/migrate", String)
       @definitions_path = T.let("db/definitions.rb", String)
       @schema_fingerprint = T.let(nil, T.nilable(String))

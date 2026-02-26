@@ -3,12 +3,21 @@
 
 require "digest"
 require "rake"
+require_relative "tasks_compat"
 
 module HakumiORM
   module Tasks
     extend Rake::DSL
 
-    namespace :hakumi do
+    def self.safe_define_task(task_name)
+      return if Rake::Task.task_defined?(task_name)
+
+      yield
+    end
+
+    def self.task_prefix = "db:"
+
+    namespace :db do
       desc "Install HakumiORM (creates config and directory structure)"
       task :install do
         require "hakumi_orm"
@@ -35,13 +44,13 @@ module HakumiORM
         HakumiORM::Tasks.run_generate
       end
 
-      desc "Scaffold a custom type (usage: rake hakumi:type[money])"
+      desc "Scaffold a custom type (usage: rake #{HakumiORM::Tasks.task_prefix}type[money])"
       task :type, [:name] do |_t, args|
         require "hakumi_orm"
         require "hakumi_orm/codegen"
 
         name = args[:name]
-        raise ArgumentError, "Usage: rake hakumi:type[name]" unless name
+        raise ArgumentError, "Usage: rake #{HakumiORM::Tasks.task_prefix}type[name]" unless name
 
         output_dir = HakumiORM.config.output_dir || "lib/types"
         HakumiORM::Codegen::TypeScaffold.generate(name: name, output_dir: output_dir)
@@ -54,14 +63,20 @@ module HakumiORM
         require "hakumi_orm/migration"
 
         runner = HakumiORM::Tasks.build_runner
-        runner.migrate!
+        applied = runner.migrate!
         version = runner.current_version || "none"
-        puts "HakumiORM: Migrations complete (version: #{version})"
+        if applied.empty?
+          puts "HakumiORM: No pending migrations (version: #{version})"
+        else
+          puts "HakumiORM: Applied #{applied.length} migration(s):"
+          applied.each { |m| puts "  up  #{m.version}  #{m.name}" }
+          puts "HakumiORM: Migrations complete (version: #{version})"
+        end
 
         HakumiORM::Tasks.post_migrate_fingerprint!
       end
 
-      desc "Rollback the last migration (usage: rake hakumi:rollback or rake hakumi:rollback[N])"
+      desc "Rollback the last migration (usage: rake #{HakumiORM::Tasks.task_prefix}rollback or rake #{HakumiORM::Tasks.task_prefix}rollback[N])"
       task :rollback, [:count] do |_t, args|
         require "hakumi_orm"
         require "hakumi_orm/migration"
@@ -103,20 +118,20 @@ module HakumiORM
         puts "Current version: #{runner.current_version || "none"}"
       end
 
-      desc "Generate a new migration file (usage: rake hakumi:migration[create_users])"
+      desc "Generate a new migration file (usage: rake #{HakumiORM::Tasks.task_prefix}migration[create_users])"
       task :migration, [:name] do |_t, args|
         require "hakumi_orm"
         require "hakumi_orm/migration"
 
         name = args[:name]
-        raise ArgumentError, "Usage: rake hakumi:migration[name]" unless name
+        raise ArgumentError, "Usage: rake #{HakumiORM::Tasks.task_prefix}migration[name]" unless name
 
         path = HakumiORM.config.migrations_path
         filepath = HakumiORM::Migration::FileGenerator.generate(name: name, path: path)
         puts "HakumiORM: Created #{filepath}"
       end
 
-      desc "List all associations (usage: rake hakumi:associations or hakumi:associations[users])"
+      desc "List all associations (usage: rake #{HakumiORM::Tasks.task_prefix}associations or #{HakumiORM::Tasks.task_prefix}associations[users])"
       task :associations, [:table] do |_t, args|
         require "hakumi_orm"
         require "hakumi_orm/codegen"
@@ -124,12 +139,12 @@ module HakumiORM
         HakumiORM::Tasks.list_associations(args[:table])
       end
 
-      desc "Scaffold model + contract for a table (usage: rake hakumi:scaffold[users])"
+      desc "Scaffold model + contract for a table (usage: rake #{HakumiORM::Tasks.task_prefix}scaffold[users])"
       task :scaffold, [:table] do |_t, args|
         require "hakumi_orm"
 
         table = args[:table]
-        raise ArgumentError, "Usage: rake hakumi:scaffold[table_name]" unless table
+        raise ArgumentError, "Usage: rake #{HakumiORM::Tasks.task_prefix}scaffold[table_name]" unless table
 
         HakumiORM::Tasks.run_scaffold(table)
       end
@@ -214,7 +229,7 @@ module HakumiORM
 
         if ENV.key?("HAKUMI_SKIP_GENERATE")
           puts "HakumiORM: Fingerprint updated. Skipping auto-generate (HAKUMI_SKIP_GENERATE)."
-          puts "  Run 'rake hakumi:generate' to update generated code."
+          puts "  Run 'rake #{task_prefix}generate' to update generated code."
           return
         end
 
@@ -270,3 +285,5 @@ module HakumiORM
     end
   end
 end
+
+HakumiORM::TasksCompat.define!(HakumiORM::Tasks)
