@@ -712,4 +712,48 @@ class TestRelation < HakumiORM::TestCase
 
     assert_includes compiled.sql, "SELECT"
   end
+
+  test "compile caches compiled query per dialect on unchanged relation" do
+    rel = UserRecord.where(UserSchema::AGE.gt(18)).order(UserSchema::NAME.asc).limit(10)
+
+    pg_first = rel.compile(@adapter.dialect)
+    pg_second = rel.compile(@adapter.dialect)
+
+    assert_same pg_first, pg_second
+  end
+
+  test "compile cache is invalidated when relation mutates" do
+    rel = UserRecord.where(UserSchema::AGE.gt(18))
+
+    before = rel.compile(@adapter.dialect)
+    rel.limit(5)
+    after = rel.compile(@adapter.dialect)
+
+    refute_same before, after
+    refute_equal before.sql, after.sql
+    assert_includes after.sql, "LIMIT 5"
+  end
+
+  test "compiled query cache does not leak across dup" do
+    base = UserRecord.where(UserSchema::AGE.gt(18))
+    base_compiled = base.compile(@adapter.dialect)
+
+    copy = base.dup.limit(5)
+    copy_compiled = copy.compile(@adapter.dialect)
+    base_compiled_again = base.compile(@adapter.dialect)
+
+    refute_same base_compiled, copy_compiled
+    assert_same base_compiled, base_compiled_again
+    refute_equal base_compiled.sql, copy_compiled.sql
+  end
+
+  test "compile caches separately per dialect" do
+    rel = UserRecord.where(UserSchema::AGE.gt(18))
+    pg = rel.compile(HakumiORM::Dialect::Postgresql.new)
+    mysql = rel.compile(HakumiORM::Dialect::Mysql.new)
+
+    assert_includes pg.sql, "$1"
+    assert_includes mysql.sql, "?"
+    refute_equal pg.sql, mysql.sql
+  end
 end
