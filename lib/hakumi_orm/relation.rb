@@ -381,3 +381,4 @@ module HakumiORM
 end
 
 require_relative "relation_query"
+require_relative "relation_aggregates"
