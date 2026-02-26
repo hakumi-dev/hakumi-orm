@@ -2,6 +2,9 @@
 # frozen_string_literal: true
 
 require_relative "codegen/template_local"
+require_relative "codegen/column_info"
+require_relative "codegen/foreign_key_info"
+require_relative "codegen/table_info"
 require_relative "codegen/hakumi_type"
 require_relative "codegen/type_maps/postgresql"
 require_relative "codegen/type_maps/mysql"
@@ -9,12 +12,11 @@ require_relative "codegen/type_maps/sqlite"
 require_relative "codegen/type_map"
 require_relative "codegen/type_registry"
 require_relative "codegen/type_scaffold"
-require_relative "codegen/column_info"
-require_relative "codegen/foreign_key_info"
-require_relative "codegen/table_info"
+
 require_relative "codegen/schema_reader"
 require_relative "codegen/mysql_schema_reader"
 require_relative "codegen/sqlite_schema_reader"
+
 require_relative "codegen/custom_association"
 require_relative "codegen/association_builder"
 require_relative "codegen/association_loader"
@@ -22,10 +24,12 @@ require_relative "codegen/enum_definition"
 require_relative "codegen/enum_builder"
 require_relative "codegen/enum_loader"
 require_relative "codegen/definition_loader"
+
 require_relative "codegen/generator_options"
 require_relative "codegen/generation_plan"
 require_relative "codegen/template_renderer"
 require_relative "codegen/file_writer"
+
 require_relative "codegen/generator"
 require_relative "codegen/generator_validation"
 require_relative "codegen/generator_assoc"
