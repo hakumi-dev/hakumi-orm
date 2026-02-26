@@ -9,17 +9,15 @@ module HakumiORM
   class Error < StandardError; end
 end
 
+require_relative "hakumi_orm/loggable"
 require_relative "hakumi_orm/json"
-
-require_relative "hakumi_orm/bind"
-
+require_relative "hakumi_orm/byte_time"
 require_relative "hakumi_orm/field_ref"
 require_relative "hakumi_orm/order_clause"
 require_relative "hakumi_orm/join_clause"
-
-require_relative "hakumi_orm/compiled_query"
-
-require_relative "hakumi_orm/expr"
+require_relative "hakumi_orm/assignment"
+require_relative "hakumi_orm/bind"
+require_relative "hakumi_orm/cast"
 
 require_relative "hakumi_orm/field"
 require_relative "hakumi_orm/field/comparable_field"
@@ -39,34 +37,33 @@ require_relative "hakumi_orm/field/str_array_field"
 require_relative "hakumi_orm/field/float_array_field"
 require_relative "hakumi_orm/field/bool_array_field"
 
-require_relative "hakumi_orm/assignment"
-require_relative "hakumi_orm/byte_time"
-require_relative "hakumi_orm/cast"
+require_relative "hakumi_orm/expr"
+require_relative "hakumi_orm/compiled_query"
 
 require_relative "hakumi_orm/dialect"
 require_relative "hakumi_orm/dialect/postgresql"
 require_relative "hakumi_orm/dialect/mysql"
 require_relative "hakumi_orm/dialect/sqlite"
 
-require_relative "hakumi_orm/adapter"
-
 require_relative "hakumi_orm/sql_compiler"
 require_relative "hakumi_orm/sql_log_formatter"
+
+require_relative "hakumi_orm/adapter"
+require_relative "hakumi_orm/adapter/timeout_error"
+require_relative "hakumi_orm/adapter/connection_pool"
+
 require_relative "hakumi_orm/preload_node"
 require_relative "hakumi_orm/relation_preloader"
 require_relative "hakumi_orm/record_runtime"
 
 require_relative "hakumi_orm/errors"
 require_relative "hakumi_orm/stale_object_error"
+require_relative "hakumi_orm/validation_error"
 require_relative "hakumi_orm/schema_drift/error"
 require_relative "hakumi_orm/schema_drift/issues"
 require_relative "hakumi_orm/schema_drift/reporter"
 require_relative "hakumi_orm/pending_migration_error"
-require_relative "hakumi_orm/validation_error"
-require_relative "hakumi_orm/adapter/timeout_error"
-require_relative "hakumi_orm/adapter/connection_pool"
 
-require_relative "hakumi_orm/loggable"
 require_relative "hakumi_orm/adapter_registry"
 require_relative "hakumi_orm/database_config"
 require_relative "hakumi_orm/database_url_parser"
