@@ -58,6 +58,7 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "sql_compiler_expr.rb" | "SqlCompiler" (reopened) | Expression compilation methods extracted for ClassLength: "compile_expr", "compile_binary", "compile_predicate", "compile_simple_op", "compile_list_op", "compile_between", "compile_raw_expr" (SQL-aware "?" replacement via "RawExpr::SQL_QUOTED_OR_PLACEHOLDER"), "compile_subquery_expr", "rebase_binds" (SQL-aware "$N" rebasing via "SQL_QUOTED_OR_BIND_MARKER"). Both methods skip placeholders inside single-quoted strings, double-quoted identifiers, line comments, and block comments. |
 | "preload_node.rb" | "PreloadNode", "PreloadSpec" | Type-safe preload specification. "PreloadSpec = T.any(Symbol, T::Hash[Symbol, T.any(Symbol, T::Array[Symbol])])". "PreloadNode" normalizes specs into a tree for nested preloading: ".preload(:posts, comments: :author)". |
 | "relation_preloader.rb" | "RelationPreloader[ModelType]" | Runtime coordinator for preload traversal. Applies depth guard and delegates each node to "Relation#dispatch_preload_node". |
+| "relation_executor.rb" | "Relation" (extension methods) | Read-side terminal execution helpers for "Relation": "to_a", "first", "pluck_raw", "exists?", plus shared result-closing helper methods. |
 | "relation.rb" | "Relation[ModelType]" (abstract, generic) | Fluent query builder with mutable chaining: "where", "where_raw", "order", "order_by", "limit", "offset", "distinct", "group", "having", "lock", "join", "preload". Subclasses implement "hydrate" to materialize rows. Terminal methods: "to_a", "first", "count", "exists?", "pluck_raw", "delete_all", "update_all", "to_sql", "sum", "average", "minimum", "maximum", "pluck". "count" includes joins in its SQL and raises "HakumiORM::Error" when group/having/distinct are set (ambiguous aggregate semantics). Provides "compile(dialect)" for obtaining a "CompiledQuery" without an adapter. "overridable" "custom_preload(name, records, adapter)" (no-op by default) -- users override in their Relation to handle non-FK associations. Generated "run_preloads" dispatches known (FK-based) associations via "case" and delegates unknown names to "custom_preload". Depth guard: "MAX_PRELOAD_DEPTH = 8" prevents runaway recursion from circular preload nodes. "initialize_copy" deep-copies all internal arrays for safe "dup"/"clone" reuse. |
 | "relation_query.rb" | "Relation" (extension methods) | Query helper methods for "Relation": currently "combine_exprs" for composing WHERE/HAVING expressions. |
 | "relation_preloading.rb" | "Relation" (extension methods) | Preload declaration/runtime hooks for "Relation": "preload", "_set_preloaded", "run_preloads", "dispatch_preload_node", "custom_preload", and the preload depth guard constant. |
@@ -227,6 +228,7 @@ lib/
     ├── order_clause.rb
     ├── preload_node.rb
     ├── relation_preloader.rb
+    ├── relation_executor.rb
     ├── relation.rb
     ├── relation_preloading.rb
     ├── relation_batches.rb

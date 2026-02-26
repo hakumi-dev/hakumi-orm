@@ -131,28 +131,6 @@ module HakumiORM
     sig { abstract.params(result: Adapter::Result, dialect: Dialect::Base).returns(T::Array[ModelType]) }
     def hydrate(result, dialect); end
 
-    sig { params(adapter: Adapter::Base).returns(T::Array[ModelType]) }
-    def to_a(adapter: HakumiORM.adapter)
-      reject_partial_select!
-      preloaded = @_preloaded_results
-      return preloaded if preloaded
-
-      records = fetch_records(adapter)
-      run_preloads(records, @_preload_nodes, adapter) unless @_preload_nodes.empty?
-      records
-    end
-
-    sig { params(adapter: Adapter::Base).returns(T.nilable(ModelType)) }
-    def first(adapter: HakumiORM.adapter)
-      reject_partial_select!
-      preloaded = @_preloaded_results
-      return preloaded.first if preloaded
-
-      dialect = adapter.dialect
-      compiled = build_select(dialect, limit_override: 1)
-      use_result(adapter.exec_params(compiled.sql, compiled.params_for(dialect))) { |r| hydrate(r, dialect).first }
-    end
-
     sig { params(adapter: Adapter::Base).returns(Integer) }
     def count(adapter: HakumiORM.adapter)
       preloaded = @_preloaded_results
@@ -173,12 +151,6 @@ module HakumiORM
       )
       result = adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))
       use_result(result) { |r| r.fetch_value(0, 0).to_i }
-    end
-
-    sig { params(field: FieldRef, adapter: Adapter::Base).returns(T::Array[Adapter::CellValue]) }
-    def pluck_raw(field, adapter: HakumiORM.adapter)
-      compiled = build_select(adapter.dialect, columns_override: [field])
-      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))) { |r| r.column_values(0) }
     end
 
     sig { params(adapter: Adapter::Base).returns(Integer) }
@@ -207,19 +179,6 @@ module HakumiORM
         where_expr: combined_where
       )
       use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect)), &:affected_rows)
-    end
-
-    sig { params(adapter: Adapter::Base).returns(T::Boolean) }
-    def exists?(adapter: HakumiORM.adapter)
-      preloaded = @_preloaded_results
-      return !preloaded.empty? if preloaded
-
-      compiled = adapter.dialect.compiler.exists(
-        table: @table_name,
-        where_expr: combined_where,
-        joins: @joins
-      )
-      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))) { |r| r.row_count.positive? }
     end
 
     sig { params(adapter: Adapter::Base).returns(CompiledQuery) }
@@ -279,17 +238,6 @@ module HakumiORM
       @_preload_nodes = @_preload_nodes.dup
     end
 
-    sig do
-      type_parameters(:R)
-        .params(result: Adapter::Result, blk: T.proc.params(arg0: Adapter::Result).returns(T.type_parameter(:R)))
-        .returns(T.type_parameter(:R))
-    end
-    def use_result(result, &blk)
-      blk.call(result)
-    ensure
-      result.close
-    end
-
     sig { void }
     def reject_count_with_grouping!
       return if @group_fields.empty? && @having_exprs.empty? && !@distinct_value
@@ -312,13 +260,6 @@ module HakumiORM
 
       raise HakumiORM::Error,
             "Cannot hydrate records with a partial column set. Use pluck or pluck_raw for column subsets"
-    end
-
-    sig { params(adapter: Adapter::Base).returns(T::Array[ModelType]) }
-    def fetch_records(adapter)
-      dialect = adapter.dialect
-      compiled = build_select(dialect)
-      use_result(adapter.exec_params(compiled.sql, compiled.params_for(dialect))) { |r| hydrate(r, dialect) }
     end
 
     sig { returns(T.nilable(Expr)) }
@@ -359,6 +300,7 @@ module HakumiORM
 end
 
 require_relative "relation_query"
+require_relative "relation_executor"
 require_relative "relation_preloader"
 require_relative "relation_preloading"
 require_relative "relation_batches"
