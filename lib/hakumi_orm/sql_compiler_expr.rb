@@ -45,16 +45,16 @@ module HakumiORM
       qn = qualify(pred.field)
 
       case pred.op
-      when :eq       then compile_simple_op(qn, " = ", pred, buf, binds, idx)
-      when :neq      then compile_simple_op(qn, " <> ", pred, buf, binds, idx)
+      when :eq       then compile_eq_or_neq(qn, pred, equal_op: true, buf: buf, binds: binds, idx: idx)
+      when :neq      then compile_eq_or_neq(qn, pred, equal_op: false, buf: buf, binds: binds, idx: idx)
       when :gt       then compile_simple_op(qn, " > ", pred, buf, binds, idx)
       when :gte      then compile_simple_op(qn, " >= ", pred, buf, binds, idx)
       when :lt       then compile_simple_op(qn, " < ", pred, buf, binds, idx)
       when :lte      then compile_simple_op(qn, " <= ", pred, buf, binds, idx)
       when :like     then compile_simple_op(qn, " LIKE ", pred, buf, binds, idx)
       when :ilike    then compile_simple_op(qn, " ILIKE ", pred, buf, binds, idx)
-      when :in       then compile_list_op(qn, " IN (", pred, buf, binds, idx)
-      when :not_in   then compile_list_op(qn, " NOT IN (", pred, buf, binds, idx)
+      when :in       then compile_in_or_not_in(qn, pred, in_op: true, buf: buf, binds: binds, idx: idx)
+      when :not_in   then compile_in_or_not_in(qn, pred, in_op: false, buf: buf, binds: binds, idx: idx)
       when :between  then compile_between(qn, pred, buf, binds, idx)
       when :is_null
         buf << qn << " IS NULL"
@@ -64,6 +64,22 @@ module HakumiORM
         idx
       else
         raise ArgumentError, "Unknown predicate operator: #{pred.op}"
+      end
+    end
+
+    sig do
+      params(
+        qn: String, pred: Predicate, equal_op: T::Boolean,
+        buf: String, binds: T::Array[Bind], idx: Integer
+      ).returns(Integer)
+    end
+    def compile_eq_or_neq(qn, pred, equal_op:, buf:, binds:, idx:)
+      bind = pred.binds.fetch(0)
+      if null_bind?(bind)
+        buf << qn << (equal_op ? " IS NULL" : " IS NOT NULL")
+        idx
+      else
+        compile_simple_op(qn, equal_op ? " = " : " <> ", pred, buf, binds, idx)
       end
     end
 
@@ -81,19 +97,64 @@ module HakumiORM
 
     sig do
       params(
+        qn: String, pred: Predicate, in_op: T::Boolean,
+        buf: String, binds: T::Array[Bind], idx: Integer
+      ).returns(Integer)
+    end
+    def compile_in_or_not_in(qn, pred, in_op:, buf:, binds:, idx:)
+      non_null_binds = T.let([], T::Array[Bind])
+      saw_null = T.let(false, T::Boolean)
+
+      pred.binds.each do |bind|
+        if null_bind?(bind)
+          saw_null = true
+        else
+          non_null_binds << bind
+        end
+      end
+
+      if non_null_binds.empty?
+        buf << qn << (in_op ? " IS NULL" : " IS NOT NULL")
+        return idx
+      end
+
+      unless saw_null
+        return compile_bind_list_op(qn, in_op ? " IN (" : " NOT IN (", non_null_binds, buf, binds, idx)
+      end
+
+      buf << "("
+      idx = compile_bind_list_op(qn, in_op ? " IN (" : " NOT IN (", non_null_binds, buf, binds, idx)
+      buf << (in_op ? " OR " : " AND ")
+      buf << qn << (in_op ? " IS NULL" : " IS NOT NULL")
+      buf << ")"
+      idx
+    end
+
+    sig do
+      params(
         qn: String, prefix: String, pred: Predicate,
         buf: String, binds: T::Array[Bind], idx: Integer
       ).returns(Integer)
     end
     def compile_list_op(qn, prefix, pred, buf, binds, idx)
+      compile_bind_list_op(qn, prefix, pred.binds, buf, binds, idx)
+    end
+
+    sig do
+      params(
+        qn: String, prefix: String, list_binds: T::Array[Bind],
+        buf: String, binds: T::Array[Bind], idx: Integer
+      ).returns(Integer)
+    end
+    def compile_bind_list_op(qn, prefix, list_binds, buf, binds, idx)
       buf << qn << prefix
-      pred.binds.each_with_index do |b, i|
+      list_binds.each_with_index do |b, i|
         buf << ", " if i.positive?
         buf << @dialect.bind_marker(idx + i)
         binds << b
       end
       buf << ")"
-      idx + pred.binds.length
+      idx + list_binds.length
     end
 
     sig do
@@ -151,6 +212,11 @@ module HakumiORM
           match
         end
       end
+    end
+
+    sig { params(bind: Bind).returns(T::Boolean) }
+    def null_bind?(bind)
+      bind.pg_value.nil?
     end
   end
 end
