@@ -131,56 +131,6 @@ module HakumiORM
     sig { abstract.params(result: Adapter::Result, dialect: Dialect::Base).returns(T::Array[ModelType]) }
     def hydrate(result, dialect); end
 
-    sig { params(adapter: Adapter::Base).returns(Integer) }
-    def count(adapter: HakumiORM.adapter)
-      preloaded = @_preloaded_results
-      return preloaded.length if preloaded
-
-      reject_count_with_grouping!
-
-      if can_use_prepared_count_all?(adapter)
-        stmt = stmt_count_all
-        sql = sql_count_all
-        return use_result(adapter.prepare_exec(stmt, sql, [])) { |r| r.fetch_value(0, 0).to_i } if stmt && sql
-      end
-
-      compiled = adapter.dialect.compiler.count(
-        table: @table_name,
-        where_expr: combined_where,
-        joins: @joins
-      )
-      result = adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect))
-      use_result(result) { |r| r.fetch_value(0, 0).to_i }
-    end
-
-    sig { params(adapter: Adapter::Base).returns(Integer) }
-    def delete_all(adapter: HakumiORM.adapter)
-      compiled = adapter.dialect.compiler.delete(
-        table: @table_name,
-        where_expr: combined_where
-      )
-      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect)), &:affected_rows)
-    end
-
-    sig { params(adapter: Adapter::Base).returns(Integer) }
-    def really_delete_all(adapter: HakumiORM.adapter)
-      compiled = adapter.dialect.compiler.delete(
-        table: @table_name,
-        where_expr: combined_where
-      )
-      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect)), &:affected_rows)
-    end
-
-    sig { params(assignments: T::Array[Assignment], adapter: Adapter::Base).returns(Integer) }
-    def update_all(assignments, adapter: HakumiORM.adapter)
-      compiled = adapter.dialect.compiler.update(
-        table: @table_name,
-        assignments: assignments,
-        where_expr: combined_where
-      )
-      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect)), &:affected_rows)
-    end
-
     sig { params(adapter: Adapter::Base).returns(CompiledQuery) }
     def to_sql(adapter: HakumiORM.adapter)
       build_select(adapter.dialect)
@@ -236,22 +186,6 @@ module HakumiORM
       @group_fields = @group_fields.dup
       @having_exprs = @having_exprs.dup
       @_preload_nodes = @_preload_nodes.dup
-    end
-
-    sig { void }
-    def reject_count_with_grouping!
-      return if @group_fields.empty? && @having_exprs.empty? && !@distinct_value
-
-      raise HakumiORM::Error,
-            "count with group/having/distinct is ambiguous. " \
-            "Use to_a.length or a custom aggregate query instead"
-    end
-
-    sig { params(adapter: Adapter::Base).returns(T::Boolean) }
-    def can_use_prepared_count_all?(adapter)
-      return false unless adapter.dialect.is_a?(Dialect::Postgresql)
-
-      @where_exprs.empty? && @joins.empty? && @defaults_pristine
     end
 
     sig { void }
