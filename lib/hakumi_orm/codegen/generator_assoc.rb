@@ -11,17 +11,19 @@ module HakumiORM
 
       sig do
         params(
-          models_dir: String,
           has_many_map: AssocMap,
           has_one_map: AssocMap,
           through_map: AssocMap
         ).void
       end
-      def annotate_models!(models_dir, has_many_map, has_one_map, through_map)
-        model_root = namespaced_codegen_dir(models_dir)
+      def annotate_models!(has_many_map, has_one_map, through_map)
+        model_root = @generation_plan.models_root_dir
+        return unless model_root
+
         @tables.each_value do |table|
           singular = singularize(table.name)
-          model_path = File.join(model_root, "#{singular}.rb")
+          model_path = @generation_plan.model_stub_path(singular)
+          next unless model_path
           next unless File.exist?(model_path)
 
           ctx = ModelAnnotator::Context.new(
@@ -35,13 +37,14 @@ module HakumiORM
             enum_predicates: build_enum_predicates(table)
           )
           ModelAnnotator.annotate!(model_path, ctx)
-          annotate_variants!(model_root, singular, ctx)
+          annotate_variants!(singular, ctx)
         end
       end
 
-      sig { params(models_dir: String, singular: String, ctx: ModelAnnotator::Context).void }
-      def annotate_variants!(models_dir, singular, ctx)
-        variant_dir = File.join(models_dir, singular)
+      sig { params(singular: String, ctx: ModelAnnotator::Context).void }
+      def annotate_variants!(singular, ctx)
+        variant_dir = @generation_plan.model_variant_dir(singular)
+        return unless variant_dir
         return unless Dir.exist?(variant_dir)
 
         Dir.glob(File.join(variant_dir, "**", "*.rb")).each do |variant_path|

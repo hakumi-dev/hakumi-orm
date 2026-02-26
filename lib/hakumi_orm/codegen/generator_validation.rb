@@ -6,15 +6,18 @@ module HakumiORM
     class Generator
       private
 
-      sig { params(contracts_dir: String).void }
-      def generate_contracts!(contracts_dir)
-        root_dir = namespaced_codegen_dir(contracts_dir)
+      sig { void }
+      def generate_contracts!
+        root_dir = @generation_plan.contracts_root_dir
+        return unless root_dir
+
         FileUtils.mkdir_p(root_dir)
 
         @tables.each_value do |table|
           next if @internal_tables.include?(table.name)
 
-          contract_path = File.join(root_dir, "#{singularize(table.name)}_contract.rb")
+          contract_path = @generation_plan.contract_stub_path(singularize(table.name))
+          next unless contract_path
           next if File.exist?(contract_path)
 
           File.write(contract_path, build_contract(table))

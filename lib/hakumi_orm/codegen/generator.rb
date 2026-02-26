@@ -42,6 +42,15 @@ module HakumiORM
         @internal_tables = T.let(options.internal_tables.to_set, T::Set[String])
         @schema_fingerprint = T.let(options.schema_fingerprint, T.nilable(String))
         @integer_backed_enums = T.let(Set.new, T::Set[String])
+        @generation_plan = T.let(
+          GenerationPlan.new(
+            output_dir: @output_dir,
+            models_dir: @models_dir,
+            contracts_dir: @contracts_dir,
+            module_name: @module_name
+          ),
+          GenerationPlan
+        )
 
         inject_user_enums!
         normalize_column_order!
@@ -49,7 +58,7 @@ module HakumiORM
 
       sig { void }
       def generate!
-        FileUtils.mkdir_p(@output_dir)
+        FileUtils.mkdir_p(@generation_plan.output_dir)
 
         has_many_map = compute_has_many
         has_one_map = compute_has_one
@@ -62,43 +71,45 @@ module HakumiORM
         generate_enum_files!(enum_types) unless enum_types.empty?
 
         @tables.each_value do |table|
-          table_dir = File.join(@output_dir, singularize(table.name))
+          singular = singularize(table.name)
+          table_dir = @generation_plan.table_dir(singular)
           FileUtils.mkdir_p(table_dir)
 
-          File.write(File.join(table_dir, "schema.rb"), build_schema(table))
+          File.write(@generation_plan.table_file_path(singular, "schema.rb"), build_schema(table))
           next if @internal_tables.include?(table.name)
 
-          File.write(File.join(table_dir, "checkable.rb"), build_checkable(table))
-          File.write(File.join(table_dir, "record.rb"), build_record(table, has_many_map, has_one_map, through_map))
-          File.write(File.join(table_dir, "new_record.rb"), build_new_record(table))
-          File.write(File.join(table_dir, "validated_record.rb"), build_validated_record(table))
-          File.write(File.join(table_dir, "base_contract.rb"), build_base_contract(table))
-          File.write(File.join(table_dir, "variant_base.rb"), build_variant_base(table))
-          File.write(File.join(table_dir, "relation.rb"), build_relation(table, has_many_map, has_one_map))
+          File.write(@generation_plan.table_file_path(singular, "checkable.rb"), build_checkable(table))
+          File.write(@generation_plan.table_file_path(singular, "record.rb"), build_record(table, has_many_map, has_one_map, through_map))
+          File.write(@generation_plan.table_file_path(singular, "new_record.rb"), build_new_record(table))
+          File.write(@generation_plan.table_file_path(singular, "validated_record.rb"), build_validated_record(table))
+          File.write(@generation_plan.table_file_path(singular, "base_contract.rb"), build_base_contract(table))
+          File.write(@generation_plan.table_file_path(singular, "variant_base.rb"), build_variant_base(table))
+          File.write(@generation_plan.table_file_path(singular, "relation.rb"), build_relation(table, has_many_map, has_one_map))
         end
 
-        File.write(File.join(@output_dir, "manifest.rb"), build_manifest)
+        File.write(@generation_plan.manifest_path, build_manifest)
 
-        md = @models_dir
-        if md
-          generate_models!(md)
-          annotate_models!(md, has_many_map, has_one_map, through_map)
+        if @generation_plan.models_root_dir
+          generate_models!
+          annotate_models!(has_many_map, has_one_map, through_map)
         end
-        cd = @contracts_dir
-        generate_contracts!(cd) if cd
+        generate_contracts! if @generation_plan.contracts_root_dir
       end
 
       private
 
-      sig { params(models_dir: String).void }
-      def generate_models!(models_dir)
-        root_dir = namespaced_codegen_dir(models_dir)
+      sig { void }
+      def generate_models!
+        root_dir = @generation_plan.models_root_dir
+        return unless root_dir
+
         FileUtils.mkdir_p(root_dir)
 
         @tables.each_value do |table|
           next if @internal_tables.include?(table.name)
 
-          model_path = File.join(root_dir, "#{singularize(table.name)}.rb")
+          model_path = @generation_plan.model_stub_path(singularize(table.name))
+          next unless model_path
           next if File.exist?(model_path)
 
           File.write(model_path, build_model(table))
