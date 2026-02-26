@@ -133,6 +133,8 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "migration.rb" | "Migration" | Base class for user-defined migrations. Class method "disable_ddl_transaction!" opts out of transaction wrapping (needed for "CREATE INDEX CONCURRENTLY"). Instance DSL methods: "create_table", "drop_table", "rename_table", "add_column", "remove_column", "change_column", "rename_column", "add_index", "remove_index", "add_foreign_key", "remove_foreign_key", "execute". All DSL methods close the result handle after execution. Receives adapter in constructor, delegates to "SqlGenerator" for dialect-specific SQL. Migration registry uses "T.cast" (not "T.unsafe") in "inherited" to store subclass references. |
 | "migration/column_definition.rb" | "Migration::ColumnDefinition" | "T::Struct" with column metadata: "name", "type" (Symbol), "null", "default", "limit", "precision", "scale". |
 | "migration/table_definition.rb" | "Migration::TableDefinition" | Collects columns during "create_table" block. Type-specific sugar methods ("t.string", "t.integer", etc.), "t.timestamps", "t.references(table, column: nil)" with explicit column override for irregular plurals. "t.primary_key(cols)" for composite primary keys. Validates column types early against "VALID_TYPES" (raises with full list on unknown type). Tracks inline foreign keys. |
+| "migration/file_info.rb" | "Migration::FileInfo" | Typed metadata struct for discovered migration files: "version", "name", and "filename". Shared between "Migration::Loader" and "Migration::Runner". |
+| "migration/loader.rb" | "Migration::Loader" | Discovers migration files in the migrations directory and loads migration classes based on filename conventions. Validates filename/class-name alignment and raises clear load/inheritance errors. |
 | "migration/lock.rb" | "Migration::Lock" | Encapsulates advisory lock lifecycle for migration runs. Acquires and verifies dialect-specific advisory locks when supported, yields to the migration operation, and guarantees unlock in "ensure". |
 | "migration/sql_generator.rb" | "Migration::SqlGenerator" | Converts DSL operations to dialect-specific SQL. Type maps for PG, MySQL, SQLite. Handles PK types (":bigserial", ":uuid", ":serial"), column constraints, indexes, foreign keys with ON DELETE. Validates auto-generated identifier names against dialect-specific limits ("IDENTIFIER_LIMITS": PG 63, MySQL 64). Appends "PRIMARY KEY (col1, col2)" for composite primary keys. |
 | "migration/version_store.rb" | "Migration::VersionStore" | Manages the internal `hakumi_migrations` table. Ensures the table exists, reads applied versions, returns current version, and inserts/deletes version rows during migrate/rollback. Used by `Migration::Runner` so version bookkeeping is isolated from orchestration logic. |
@@ -255,6 +257,8 @@ lib/
     ├── migration/
     │   ├── column_definition.rb
     │   ├── file_generator.rb
+    │   ├── file_info.rb
+    │   ├── loader.rb
     │   ├── lock.rb
     │   ├── runner.rb
     │   ├── schema_fingerprint.rb

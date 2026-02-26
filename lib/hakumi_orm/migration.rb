@@ -4,6 +4,8 @@
 require_relative "migration/column_definition"
 require_relative "migration/table_definition"
 require_relative "migration/sql_generator"
+require_relative "migration/file_info"
+require_relative "migration/loader"
 require_relative "migration/lock"
 require_relative "migration/version_store"
 require_relative "migration/runner"
