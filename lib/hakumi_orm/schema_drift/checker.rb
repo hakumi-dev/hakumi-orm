@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "digest"
+require_relative "reporter"
 
 module HakumiORM
   class SchemaDriftChecker
@@ -52,38 +53,20 @@ module HakumiORM
       pending = Migration::SchemaFingerprint.pending_migrations(@adapter, config.migrations_path)
       return [] if pending.empty?
 
-      lines = T.let(["#{pending.size} pending migration(s):"], T::Array[String])
-      pending.each { |v| lines << "  - #{v}" }
-      lines << ""
-      lines << "  Run 'rake db:migrate' to apply."
-      lines
+      SchemaDrift::Reporter.pending_migrations(pending)
     end
 
     sig { returns(T::Array[String]) }
     def check_schema_drift
       stored_fp = Migration::SchemaFingerprint.read_from_db(@adapter)
-      return ["No schema fingerprint stored. Run 'rake db:generate' first."] unless stored_fp
+      return SchemaDrift::Reporter.no_schema_fingerprint unless stored_fp
 
       canonical, live_fp = compute_live
       return [] if live_fp == stored_fp
 
-      lines = T.let(["Schema drift detected!"], T::Array[String])
-      lines << ""
-      lines << "  Expected: #{stored_fp[0..15]}..."
-      lines << "  Actual:   #{live_fp[0..15]}..."
-
       stored_canonical = Migration::SchemaFingerprint.read_canonical_from_db(@adapter)
-      if stored_canonical
-        diff = Migration::SchemaFingerprint.diff_canonical(stored_canonical, canonical)
-        unless diff.empty?
-          lines << ""
-          diff.each { |l| lines << "  #{l}" }
-        end
-      end
-
-      lines << ""
-      lines << "  Run 'rake db:generate' to update generated code."
-      lines
+      diff = stored_canonical ? Migration::SchemaFingerprint.diff_canonical(stored_canonical, canonical) : []
+      SchemaDrift::Reporter.schema_drift(expected: stored_fp, actual: live_fp, diff_lines: diff)
     end
 
     sig { returns([String, String]) }
