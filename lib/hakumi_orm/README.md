@@ -22,6 +22,7 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "setup_generator.rb" | "SetupGenerator" | Creates initial project structure. "new(root:, framework:)" accepts ":rails", ":sinatra", or ":standalone". "run!" creates directories ("db/migrate", "db/schema"), writes "db/definitions.rb", and creates config initializer. Rails adds "app/models", "app/contracts", writes to "config/initializers/hakumi/orm.rb". Standalone/Sinatra writes to "config/hakumi/orm.rb" with "require" and Rakefile instructions. Namespaced under "hakumi/" to coexist with other Hakumi packages. Idempotent: skips existing files/dirs. Returns "{ created:, skipped: }". |
 | "tasks.rb" | "Tasks" | Rake task DSL and wiring for HakumiORM. "require "hakumi_orm/tasks"" adds: "db:install" (setup generator), "db:generate" (generate + annotate), "db:migrate", "db:rollback[N]", "db:migrate:status", "db:version", "db:migration[name]", "db:type[name]", "db:associations" (list all associations), "db:scaffold[table]", and "db:check". Delegates command logic to "TaskCommands". |
 | "task_commands.rb" | "TaskCommands" | Task command/orchestration helpers used by Rake tasks: build migration runner, generate code + fingerprint, post-migrate fingerprint/update flow, schema drift check, association listing, and scaffold generation. Keeps business logic out of the Rake DSL file. |
+| "task_output.rb" | "TaskOutput" | CLI output and formatting helpers used by tasks and task commands. Centralizes install/migrate/rollback/status/check/scaffold messages so command logic is not mixed with printing details. |
 | "framework.rb" | "Framework" | Framework detection and integration registry. "register(name, &detector)" adds a framework, "detect" returns first matching name (or ":standalone"), "current" / "current=" tracks active framework. Query methods: "rails?", "sinatra?", "standalone?". "registered" lists names, "reset!" clears state. |
 | "framework/rails_config.rb" | "Framework::RailsConfig" | Testable Rails defaults. "apply_defaults(config, logger:)" sets "models_dir", "contracts_dir", logger without requiring Rails. |
 | "framework/rails.rb" | "Framework::Rails < Rails::Railtie" | Rails Railtie ("typed: false", Sorbet-ignored). Initializers: "hakumi_orm.configure" (sets current, applies defaults), "hakumi_orm.load_generated" (loads manifest, then models/contracts sorted by path depth; skipped for "hakumi:*" rake tasks and when manifest is missing). Loads rake tasks. |
@@ -276,6 +277,7 @@ lib/
     ├── setup_generator.rb
     ├── stale_object_error.rb
     ├── task_commands.rb
+    ├── task_output.rb
     ├── tasks.rb
     ├── validation_error.rb
     └── version.rb

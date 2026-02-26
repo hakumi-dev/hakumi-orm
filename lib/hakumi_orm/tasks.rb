@@ -3,6 +3,7 @@
 
 require "rake"
 require_relative "task_commands"
+require_relative "task_output"
 require_relative "tasks_compat"
 
 module HakumiORM
@@ -25,14 +26,7 @@ module HakumiORM
         framework = HakumiORM::Framework.current || HakumiORM::Framework.detect
         generator = HakumiORM::SetupGenerator.new(root: Dir.pwd, framework: framework)
         result = generator.run!
-
-        if result[:created].empty?
-          puts "HakumiORM: Already installed (all files exist)"
-        else
-          result[:created].each { |f| puts "  create  #{f}" }
-          result[:skipped].each { |f| puts "  exist   #{f}" }
-          puts "\nHakumiORM: Installed successfully"
-        end
+        HakumiORM::TaskOutput.install_result(result)
       end
 
       desc "Generate HakumiORM models from the database schema"
@@ -54,7 +48,7 @@ module HakumiORM
 
         output_dir = HakumiORM.config.output_dir || "lib/types"
         HakumiORM::Codegen::TypeScaffold.generate(name: name, output_dir: output_dir)
-        puts "HakumiORM: Scaffolded custom type '#{name}' in #{output_dir}"
+        HakumiORM::TaskOutput.custom_type_scaffolded(name: name, output_dir: output_dir)
       end
 
       desc "Run pending migrations (set HAKUMI_SKIP_GENERATE=1 to skip auto-generate)"
@@ -65,13 +59,7 @@ module HakumiORM
         runner = HakumiORM::TaskCommands.build_runner
         applied = runner.migrate!
         version = runner.current_version || "none"
-        if applied.empty?
-          puts "HakumiORM: No pending migrations (version: #{version})"
-        else
-          puts "HakumiORM: Applied #{applied.length} migration(s):"
-          applied.each { |m| puts "  up  #{m.version}  #{m.name}" }
-          puts "HakumiORM: Migrations complete (version: #{version})"
-        end
+        HakumiORM::TaskOutput.migrate_result(applied: applied, version: version)
 
         HakumiORM::TaskCommands.post_migrate_fingerprint!(task_prefix: HakumiORM::Tasks.task_prefix)
       end
@@ -84,7 +72,7 @@ module HakumiORM
         count = (args[:count] || 1).to_i
         runner = HakumiORM::TaskCommands.build_runner
         runner.rollback!(count: count)
-        puts "HakumiORM: Rolled back #{count} migration(s) (version: #{runner.current_version || "none"})"
+        HakumiORM::TaskOutput.rollback_result(count: count, version: runner.current_version || "none")
 
         HakumiORM::TaskCommands.post_migrate_fingerprint!(task_prefix: HakumiORM::Tasks.task_prefix)
       end
@@ -97,15 +85,7 @@ module HakumiORM
 
           runner = HakumiORM::TaskCommands.build_runner
           statuses = runner.status
-          if statuses.empty?
-            puts "No migrations found."
-          else
-            puts "Status  Version         Name"
-            puts "-" * 50
-            statuses.each do |entry|
-              puts "  #{entry[:status].ljust(6)}#{entry[:version]}  #{entry[:name]}"
-            end
-          end
+          HakumiORM::TaskOutput.migration_status(statuses)
         end
       end
 
@@ -115,7 +95,7 @@ module HakumiORM
         require "hakumi_orm/migration"
 
         runner = HakumiORM::TaskCommands.build_runner
-        puts "Current version: #{runner.current_version || "none"}"
+        HakumiORM::TaskOutput.current_version(runner.current_version || "none")
       end
 
       desc "Generate a new migration file (usage: rake #{HakumiORM::Tasks.task_prefix}migration[create_users])"
@@ -128,7 +108,7 @@ module HakumiORM
 
         path = HakumiORM.config.migrations_path
         filepath = HakumiORM::Migration::FileGenerator.generate(name: name, path: path)
-        puts "HakumiORM: Created #{filepath}"
+        HakumiORM::TaskOutput.migration_file_created(filepath)
       end
 
       desc "List all associations (usage: rake #{HakumiORM::Tasks.task_prefix}associations or #{HakumiORM::Tasks.task_prefix}associations[users])"

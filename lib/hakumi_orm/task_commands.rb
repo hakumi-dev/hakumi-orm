@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "digest"
+require_relative "task_output"
 
 module HakumiORM
   module TaskCommands
@@ -47,7 +48,7 @@ module HakumiORM
 
       HakumiORM::Migration::SchemaFingerprint.store!(adapter, fingerprint, canonical)
 
-      puts "HakumiORM: Generated #{tables.size} table(s) into #{config.output_dir}"
+      HakumiORM::TaskOutput.generated_tables(count: tables.size, output_dir: config.output_dir)
     end
 
     def run_scaffold(table_name)
@@ -55,15 +56,12 @@ module HakumiORM
       generator = HakumiORM::ScaffoldGenerator.new(table_name, config)
       created = generator.run!
 
-      if created.empty?
-        if config.models_dir.nil? && config.contracts_dir.nil?
-          puts "HakumiORM: Set config.models_dir and/or config.contracts_dir to scaffold files."
-        else
-          puts "HakumiORM: All files already exist for '#{table_name}'."
-        end
-      else
-        created.each { |f| puts "  create  #{f}" }
-      end
+      HakumiORM::TaskOutput.scaffold_result(
+        table_name: table_name,
+        created: created,
+        models_dir: config.models_dir,
+        contracts_dir: config.contracts_dir
+      )
     end
 
     def post_migrate_fingerprint!(task_prefix:)
@@ -77,8 +75,7 @@ module HakumiORM
       checker.update_fingerprint!
 
       if ENV.key?("HAKUMI_SKIP_GENERATE")
-        puts "HakumiORM: Fingerprint updated. Skipping auto-generate (HAKUMI_SKIP_GENERATE)."
-        puts "  Run 'rake #{task_prefix}generate' to update generated code."
+        HakumiORM::TaskOutput.fingerprint_skip_generate(task_prefix: task_prefix)
         return
       end
 
@@ -95,11 +92,11 @@ module HakumiORM
       messages = checker.check
 
       if messages.empty?
-        puts "HakumiORM: Schema is in sync. No drift detected."
+        HakumiORM::TaskOutput.schema_check_ok
         return
       end
 
-      messages.each { |line| warn "HakumiORM: #{line}" }
+      HakumiORM::TaskOutput.schema_check_errors(messages)
       exit 1
     end
 
@@ -121,8 +118,7 @@ module HakumiORM
         lines = HakumiORM::Codegen::ModelAnnotator.send(:build_assoc_lines_for_cli, ctx)
         next if lines.empty?
 
-        puts "\n#{table.name}"
-        lines.each { |line| puts line }
+        HakumiORM::TaskOutput.associations_for_table(table.name, lines)
       end
     end
 
