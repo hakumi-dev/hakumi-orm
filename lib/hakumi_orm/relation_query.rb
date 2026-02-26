@@ -4,7 +4,6 @@
 module HakumiORM
   # Reopens Relation with query support helpers (batching + expr composition).
   class Relation
-
     private
 
     sig { params(exprs: T::Array[Expr]).returns(T.nilable(Expr)) }

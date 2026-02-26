@@ -79,12 +79,6 @@ module HakumiORM
       self
     end
 
-    sig { params(specs: PreloadSpec).returns(T.self_type) }
-    def preload(*specs)
-      @_preload_nodes.concat(PreloadNode.from_specs(specs))
-      self
-    end
-
     sig { returns(T.self_type) }
     def distinct
       @distinct_value = true
@@ -131,12 +125,6 @@ module HakumiORM
     def unscoped
       @default_exprs = []
       mark_defaults_dirty!
-      self
-    end
-
-    sig { params(results: T::Array[ModelType]).returns(T.self_type) }
-    def _set_preloaded(results)
-      @_preloaded_results = results
       self
     end
 
@@ -267,16 +255,6 @@ module HakumiORM
     sig { overridable.returns(T.nilable(String)) }
     def sql_count_all = nil
 
-    MAX_PRELOAD_DEPTH = 8
-
-    sig { overridable.params(_records: T::Array[ModelType], _nodes: T::Array[PreloadNode], _adapter: Adapter::Base, depth: Integer).void }
-    def run_preloads(_records, _nodes, _adapter, depth: 0)
-      raise HakumiORM::Error, "Preload depth limit (#{MAX_PRELOAD_DEPTH}) exceeded — possible circular preload" if depth > MAX_PRELOAD_DEPTH
-    end
-
-    sig { overridable.params(name: Symbol, records: T::Array[ModelType], adapter: Adapter::Base).void }
-    def custom_preload(name, records, adapter); end
-
     protected
 
     sig { returns(T.nilable(Expr)) }
@@ -381,5 +359,6 @@ module HakumiORM
 end
 
 require_relative "relation_query"
+require_relative "relation_preloading"
 require_relative "relation_batches"
 require_relative "relation_aggregates"

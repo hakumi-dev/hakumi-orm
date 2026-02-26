@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 module HakumiORM
+  # Raised when generated code fingerprint does not match the live database schema.
   class SchemaDriftError < Error
     extend T::Sig
 

@@ -59,6 +59,7 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "preload_node.rb" | "PreloadNode", "PreloadSpec" | Type-safe preload specification. "PreloadSpec = T.any(Symbol, T::Hash[Symbol, T.any(Symbol, T::Array[Symbol])])". "PreloadNode" normalizes specs into a tree for nested preloading: ".preload(:posts, comments: :author)". |
 | "relation.rb" | "Relation[ModelType]" (abstract, generic) | Fluent query builder with mutable chaining: "where", "where_raw", "order", "order_by", "limit", "offset", "distinct", "group", "having", "lock", "join", "preload". Subclasses implement "hydrate" to materialize rows. Terminal methods: "to_a", "first", "count", "exists?", "pluck_raw", "delete_all", "update_all", "to_sql", "sum", "average", "minimum", "maximum", "pluck". "count" includes joins in its SQL and raises "HakumiORM::Error" when group/having/distinct are set (ambiguous aggregate semantics). Provides "compile(dialect)" for obtaining a "CompiledQuery" without an adapter. "overridable" "custom_preload(name, records, adapter)" (no-op by default) -- users override in their Relation to handle non-FK associations. Generated "run_preloads" dispatches known (FK-based) associations via "case" and delegates unknown names to "custom_preload". Depth guard: "MAX_PRELOAD_DEPTH = 8" prevents runaway recursion from circular preload nodes. "initialize_copy" deep-copies all internal arrays for safe "dup"/"clone" reuse. |
 | "relation_query.rb" | "Relation" (reopened) | Query helper methods extracted from "Relation": currently "combine_exprs" for composing WHERE/HAVING expressions. |
+| "relation_preloading.rb" | "Relation" (reopened) | Preload declaration/runtime hooks extracted from "Relation": "preload", "_set_preloaded", "run_preloads", "custom_preload", and the preload depth guard constant. |
 | "relation_batches.rb" | "Relation" (reopened) | Batch iteration strategies extracted from "Relation": cursor-based and limit/offset-based batching used by "find_in_batches". |
 | "relation_aggregates.rb" | "Relation" (reopened) | Aggregate and pluck helpers extracted from "Relation": "sum", "average", "minimum", "maximum", "pluck", plus private helpers "run_aggregate" and "build_pluck_rows". |
 
@@ -225,6 +226,7 @@ lib/
     ├── order_clause.rb
     ├── preload_node.rb
     ├── relation.rb
+    ├── relation_preloading.rb
     ├── relation_batches.rb
     ├── relation_aggregates.rb
     ├── relation_query.rb

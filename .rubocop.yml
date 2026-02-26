@@ -103,6 +103,7 @@ Style/Documentation:
   Include:
     - "lib/hakumi_orm/schema_drift/**/*.rb"
     - "lib/hakumi_orm/relation_query.rb"
+    - "lib/hakumi_orm/relation_preloading.rb"
     - "lib/hakumi_orm/relation_aggregates.rb"
     - "lib/hakumi_orm/relation_batches.rb"
 
