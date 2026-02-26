@@ -10,7 +10,6 @@ module HakumiORM
       extend T::Sig
 
       AUTO_READ_STMT_CACHE_MAX = 64
-
       sig { override.returns(Dialect::Sqlite) }
       attr_reader :dialect
 
@@ -39,7 +38,7 @@ module HakumiORM
           if cacheable_read_sql?(sql)
             read_rows_via_cached_stmt(sql, params)
           else
-            @db.execute(sql, params).map { |r| r.map { |v| coerce_cell(v) } }
+            coerce_raw_rows(@db.execute(sql, params))
           end
         r = SqliteResult.new(rows, @db.changes)
         log_query_done(sql, params, start)
@@ -53,7 +52,7 @@ module HakumiORM
           if cacheable_read_sql?(sql)
             read_rows_via_cached_stmt(sql, [].freeze)
           else
-            @db.execute(sql).map { |r| r.map { |v| coerce_cell(v) } }
+            coerce_raw_rows(@db.execute(sql))
           end
         r = SqliteResult.new(rows, @db.changes)
         log_query_done(sql, [], start)
@@ -75,7 +74,7 @@ module HakumiORM
 
         stmt.reset!
         stmt.bind_params(params) unless params.empty?
-        rows = stmt.to_a.map { |r| r.map { |v| coerce_cell(v) } }
+        rows = coerce_raw_rows(stmt.to_a)
         r = SqliteResult.new(rows, @db.changes)
         log_query_done(name, params, start)
         r
@@ -106,7 +105,7 @@ module HakumiORM
       def collect_rows(stmt)
         rows = T.let([], T::Array[T::Array[CellValue]])
         while (row = stmt.step)
-          rows << row.map { |v| coerce_cell(v) }
+          rows << coerce_raw_row(row)
         end
         rows
       end
@@ -121,15 +120,48 @@ module HakumiORM
       def read_rows_via_cached_stmt(sql, params)
         stmt = @auto_read_prepared[sql]
         unless stmt
-          stmt = @db.prepare(sql)
+          stmt = prepare_auto_read_stmt(sql)
           @auto_read_prepared[sql] = stmt
           @auto_read_order << sql
           evict_auto_read_stmt_if_needed!
         end
 
         stmt.reset!
-        stmt.bind_params(params) unless params.empty?
-        stmt.to_a.map { |r| r.map { |v| coerce_cell(v) } }
+        bind_stmt_params(stmt, params)
+        raw_rows =
+          if params.empty?
+            fetch_stmt_rows_step(stmt)
+          else
+            fetch_stmt_rows(stmt)
+          end
+
+        coerce_or_reuse_rows(raw_rows)
+      end
+
+      sig { params(sql: String).returns(SQLite3::Statement) }
+      def prepare_auto_read_stmt(sql)
+        @db.prepare(sql)
+      end
+
+      sig { params(stmt: SQLite3::Statement, params: T::Array[PGValue]).void }
+      def bind_stmt_params(stmt, params)
+        return if params.empty?
+
+        stmt.bind_params(params)
+      end
+
+      sig { params(stmt: SQLite3::Statement).returns(T::Array[T::Array[Object]]) }
+      def fetch_stmt_rows(stmt)
+        stmt.to_a
+      end
+
+      sig { params(stmt: SQLite3::Statement).returns(T::Array[T::Array[Object]]) }
+      def fetch_stmt_rows_step(stmt)
+        raw_rows = T.let([], T::Array[T::Array[Object]])
+        while (row = stmt.step)
+          raw_rows << row
+        end
+        raw_rows
       end
 
       sig { void }
@@ -151,6 +183,63 @@ module HakumiORM
         else
           value.to_s
         end
+      end
+
+      sig { params(raw_rows: T::Array[T::Array[Object]]).returns(T::Array[T::Array[CellValue]]) }
+      def coerce_raw_rows(raw_rows)
+        rows = T.let(::Array.new(raw_rows.length), T::Array[T::Array[CellValue]])
+        i = 0
+        while i < raw_rows.length
+          rows[i] = coerce_raw_row(raw_rows.fetch(i))
+          i += 1
+        end
+        rows
+      end
+
+      sig { params(raw_rows: T::Array[T::Array[Object]]).returns(T::Array[T::Array[CellValue]]) }
+      def coerce_or_reuse_rows(raw_rows)
+        return T.cast(raw_rows, T::Array[T::Array[CellValue]]) if rows_already_cell_values?(raw_rows)
+
+        coerce_raw_rows(raw_rows)
+      end
+
+      sig { params(raw_rows: T::Array[T::Array[Object]]).returns(T::Boolean) }
+      def rows_already_cell_values?(raw_rows)
+        i = 0
+        while i < raw_rows.length
+          row = raw_rows.fetch(i)
+          j = 0
+          while j < row.length
+            value = row.fetch(j)
+            case value
+            when NilClass, String, Integer, Float, TrueClass, FalseClass, Time, Date, BigDecimal
+              nil
+            else
+              return false
+            end
+            j += 1
+          end
+          i += 1
+        end
+        true
+      end
+
+      sig { params(raw_row: T::Array[Object]).returns(T::Array[CellValue]) }
+      def coerce_raw_row(raw_row)
+        row = T.let(::Array.new(raw_row.length), T::Array[CellValue])
+        j = 0
+        while j < raw_row.length
+          value = raw_row.fetch(j)
+          row[j] =
+            case value
+            when NilClass then nil
+            when String, Integer, Float, TrueClass, FalseClass, Time, Date, BigDecimal then value
+            else
+              value.to_s
+            end
+          j += 1
+        end
+        row
       end
     end
   end
