@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 module HakumiORM
+  # Reopens Relation with aggregate and pluck helpers.
   class Relation
     sig { params(field: FieldRef, adapter: Adapter::Base).returns(T.nilable(String)) }
     def sum(field, adapter: HakumiORM.adapter)

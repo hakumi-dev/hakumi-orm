@@ -5,6 +5,7 @@ require_relative "issues"
 
 module HakumiORM
   module SchemaDrift
+    # Converts structured schema drift issues into human-readable message lines.
     class Reporter
       extend T::Sig
 

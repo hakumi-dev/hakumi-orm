@@ -6,6 +6,7 @@ require_relative "issues"
 require_relative "reporter"
 
 module HakumiORM
+  # Checks database schema state and produces drift findings for tooling/CLI.
   class SchemaDriftChecker
     extend T::Sig
 

@@ -98,9 +98,13 @@ Naming/PredicateMethod:
 Lint/MissingSuper:
   Enabled: false
 
-# Not every class needs a docstring in a typed codebase
 Style/Documentation:
-  Enabled: false
+  Enabled: true
+  Include:
+    - "lib/hakumi_orm/schema_drift/**/*.rb"
+    - "lib/hakumi_orm/relation_query.rb"
+    - "lib/hakumi_orm/relation_aggregates.rb"
+    - "lib/hakumi_orm/relation_batches.rb"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
