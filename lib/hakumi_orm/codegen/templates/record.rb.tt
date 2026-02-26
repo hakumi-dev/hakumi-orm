@@ -147,16 +147,12 @@ module <%= module_name %>
 
 <%= ind %>  sig { params(other: <%= record_class_name %>).returns(T::Boolean) }
 <%= ind %>  def changed_from?(other)
-<%= ind %>    <%= columns.map { |c| "@#{c[:name]} != other.#{c[:name]}" }.join(" || ") %>
+<%= ind %>    ::HakumiORM::RecordRuntime.changed_hash?(to_h, other.to_h)
 <%= ind %>  end
 
 <%= ind %>  sig { params(other: <%= record_class_name %>).returns(T::Hash[Symbol, T::Array[<%= to_h_value_type %>]]) }
 <%= ind %>  def diff(other)
-<%= ind %>    h = T.let({}, T::Hash[Symbol, T::Array[<%= to_h_value_type %>]])
-<%- columns.each do |col| -%>
-<%= ind %>    h[:<%= col[:name] %>] = [@<%= col[:name] %>, other.<%= col[:name] %>] if @<%= col[:name] %> != other.<%= col[:name] %>
-<%- end -%>
-<%= ind %>    h
+<%= ind %>    ::HakumiORM::RecordRuntime.diff_hash(to_h, other.to_h)
 <%= ind %>  end
 
 <%= ind %>  sig { params(only: T.nilable(T::Array[Symbol]), except: T.nilable(T::Array[Symbol])).returns(T::Hash[String, <%= as_json_value_type %>]) }

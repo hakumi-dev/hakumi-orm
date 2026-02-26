@@ -50,6 +50,39 @@ module HakumiORM
       blk.call(row, dialect)
     end
 
+    sig do
+      type_parameters(:V)
+        .params(
+          current: T::Hash[Symbol, T.all(T.type_parameter(:V), BasicObject)],
+          other: T::Hash[Symbol, T.all(T.type_parameter(:V), BasicObject)]
+        )
+        .returns(T::Boolean)
+    end
+    def changed_hash?(current, other)
+      current.each do |key, value|
+        return true if value != other.fetch(key)
+      end
+
+      false
+    end
+
+    sig do
+      type_parameters(:V)
+        .params(
+          current: T::Hash[Symbol, T.all(T.type_parameter(:V), BasicObject)],
+          other: T::Hash[Symbol, T.all(T.type_parameter(:V), BasicObject)]
+        )
+        .returns(T::Hash[Symbol, T::Array[T.type_parameter(:V)]])
+    end
+    def diff_hash(current, other)
+      diff = T.let({}, T::Hash[Symbol, T::Array[T.type_parameter(:V)]])
+      current.each do |key, value|
+        other_value = other.fetch(key)
+        diff[key] = [value, other_value] if value != other_value
+      end
+      diff
+    end
+
     sig { overridable.params(_row: T::Array[::HakumiORM::Adapter::CellValue], _dialect: ::HakumiORM::Dialect::Base).void }
     def _hydrate_row_values!(_row, _dialect)
       Kernel.raise NotImplementedError, "generated record must implement _hydrate_row_values!"

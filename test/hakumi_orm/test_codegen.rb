@@ -1060,7 +1060,8 @@ class TestCodegen < HakumiORM::TestCase
 
       assert_includes record, "def changed_from?(other)"
       assert_includes record, "def diff(other)"
-      assert_includes record, "@name != other.name"
+      assert_includes record, "::HakumiORM::RecordRuntime.changed_hash?(to_h, other.to_h)"
+      assert_includes record, "::HakumiORM::RecordRuntime.diff_hash(to_h, other.to_h)"
     end
   end
 
