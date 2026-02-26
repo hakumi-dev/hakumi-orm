@@ -4,7 +4,7 @@
 require "test_helper"
 
 class TestSqlGolden < HakumiORM::TestCase
-  DialectCase = Struct.new(:dialect, :compiler, :quote, :m1, :m2, :m3, keyword_init: true)
+  DialectCase = Struct.new(:dialect, :compiler, :quote, :m1, :m2, :m3, :m4, keyword_init: true)
 
   def setup
     @dialects = {
@@ -65,6 +65,29 @@ class TestSqlGolden < HakumiORM::TestCase
       refute_equal sql_a, sql_b
       assert_equal expected_precedence_sql_a(dialect_case), sql_a
       assert_equal expected_precedence_sql_b(dialect_case), sql_b
+    end
+  end
+
+  test "golden distinct join query compiles exactly per dialect" do
+    joins = [
+      HakumiORM::JoinClause.new(:left, "teams", @users_team_id, @teams_id)
+    ]
+    where_expr = @teams_name.ilike("%forge%").or(@users_active.eq(true))
+
+    @dialects.each_value do |dialect_case|
+      q = dialect_case.compiler.select(
+        table: "users",
+        columns: [@users_name],
+        distinct: true,
+        joins: joins,
+        where_expr: where_expr,
+        orders: [@users_name.asc],
+        limit_val: 10,
+        offset_val: 5
+      )
+
+      assert_equal expected_distinct_join_sql(dialect_case), q.sql
+      assert_equal 2, q.binds.length
     end
   end
 
@@ -131,6 +154,27 @@ class TestSqlGolden < HakumiORM::TestCase
     assert_includes q_qm.sql, 'COALESCE(?, "fallback?", \'?\') = ?'
   end
 
+  test "golden subquery IN and NOT IN SQL rebases bind markers correctly" do
+    @dialects.each_value do |dialect_case|
+      subquery = dialect_case.compiler.select(
+        table: "teams",
+        columns: [@teams_id],
+        where_expr: @teams_name.eq("Core").or(@teams_name.eq("Platform"))
+      )
+      combined = @users_active.eq(true).and(HakumiORM::SubqueryExpr.new(@users_team_id, :in, subquery))
+      q = dialect_case.compiler.select(table: "users", columns: [@users_id], where_expr: combined)
+
+      assert_equal expected_subquery_in_sql(dialect_case), q.sql
+      assert_equal 3, q.binds.length
+
+      not_in_expr = HakumiORM::SubqueryExpr.new(@users_team_id, :not_in, subquery)
+      q_not = dialect_case.compiler.select(table: "users", columns: [@users_id], where_expr: not_in_expr)
+
+      assert_equal expected_subquery_not_in_sql(dialect_case), q_not.sql
+      assert_equal 2, q_not.binds.length
+    end
+  end
+
   private
 
   def build_case(dialect)
@@ -141,7 +185,8 @@ class TestSqlGolden < HakumiORM::TestCase
         quote: quote_char(dialect),
         m1: dialect.bind_marker(0),
         m2: dialect.bind_marker(1),
-        m3: dialect.bind_marker(2)
+        m3: dialect.bind_marker(2),
+        m4: dialect.bind_marker(3)
       )
     end
   end
@@ -187,5 +232,26 @@ class TestSqlGolden < HakumiORM::TestCase
     "SELECT #{q(dialect_case, USERS, ID)} FROM #{dialect_case.quote}users#{dialect_case.quote} " \
       "WHERE ((#{q(dialect_case, USERS, AGE)} > #{dialect_case.m1} AND #{q(dialect_case, USERS, NAME)} = #{dialect_case.m2}) " \
       "OR #{q(dialect_case, USERS, NAME)} = #{dialect_case.m3})"
+  end
+
+  def expected_distinct_join_sql(dialect_case)
+    "SELECT DISTINCT #{q(dialect_case, USERS, NAME)} " \
+      "FROM #{dialect_case.quote}users#{dialect_case.quote} LEFT JOIN #{dialect_case.quote}teams#{dialect_case.quote} " \
+      "ON #{q(dialect_case, USERS, TEAM_ID)} = #{q(dialect_case, TEAMS, ID)} " \
+      "WHERE (#{q(dialect_case, TEAMS, NAME)} ILIKE #{dialect_case.m1} OR #{q(dialect_case, USERS, ACTIVE)} = #{dialect_case.m2}) " \
+      "ORDER BY #{q(dialect_case, USERS, NAME)} ASC LIMIT 10 OFFSET 5"
+  end
+
+  def expected_subquery_in_sql(dialect_case)
+    "SELECT #{q(dialect_case, USERS, ID)} FROM #{dialect_case.quote}users#{dialect_case.quote} " \
+      "WHERE (#{q(dialect_case, USERS, ACTIVE)} = #{dialect_case.m1} AND " \
+      "#{q(dialect_case, USERS, TEAM_ID)} IN (SELECT #{q(dialect_case, TEAMS, ID)} FROM #{dialect_case.quote}teams#{dialect_case.quote} " \
+      "WHERE (#{q(dialect_case, TEAMS, NAME)} = #{dialect_case.m2} OR #{q(dialect_case, TEAMS, NAME)} = #{dialect_case.m3})))"
+  end
+
+  def expected_subquery_not_in_sql(dialect_case)
+    "SELECT #{q(dialect_case, USERS, ID)} FROM #{dialect_case.quote}users#{dialect_case.quote} " \
+      "WHERE #{q(dialect_case, USERS, TEAM_ID)} NOT IN (SELECT #{q(dialect_case, TEAMS, ID)} FROM #{dialect_case.quote}teams#{dialect_case.quote} " \
+      "WHERE (#{q(dialect_case, TEAMS, NAME)} = #{dialect_case.m1} OR #{q(dialect_case, TEAMS, NAME)} = #{dialect_case.m2}))"
   end
 end
