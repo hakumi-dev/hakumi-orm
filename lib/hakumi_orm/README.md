@@ -136,6 +136,7 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "migration/file_info.rb" | "Migration::FileInfo" | Typed metadata struct for discovered migration files: "version", "name", and "filename". Shared between "Migration::Loader" and "Migration::Runner". |
 | "migration/loader.rb" | "Migration::Loader" | Discovers migration files in the migrations directory and loads migration classes based on filename conventions. Validates filename/class-name alignment and raises clear load/inheritance errors. |
 | "migration/lock.rb" | "Migration::Lock" | Encapsulates advisory lock lifecycle for migration runs. Acquires and verifies dialect-specific advisory locks when supported, yields to the migration operation, and guarantees unlock in "ensure". |
+| "migration/executor.rb" | "Migration::Executor" | Executes migration "up" and "down" operations. Applies transaction policy per migration/dialect, emits the non-transactional DDL warning when needed, and delegates version row inserts/deletes to "Migration::VersionStore". |
 | "migration/sql_generator.rb" | "Migration::SqlGenerator" | Converts DSL operations to dialect-specific SQL. Type maps for PG, MySQL, SQLite. Handles PK types (":bigserial", ":uuid", ":serial"), column constraints, indexes, foreign keys with ON DELETE. Validates auto-generated identifier names against dialect-specific limits ("IDENTIFIER_LIMITS": PG 63, MySQL 64). Appends "PRIMARY KEY (col1, col2)" for composite primary keys. |
 | "migration/version_store.rb" | "Migration::VersionStore" | Manages the internal `hakumi_migrations` table. Ensures the table exists, reads applied versions, returns current version, and inserts/deletes version rows during migrate/rollback. Used by `Migration::Runner` so version bookkeeping is isolated from orchestration logic. |
 | "migration/runner.rb" | "Migration::Runner" | Loads migration files from "migrations_path", tracks applied versions in "hakumi_migrations" table. "migrate!" runs pending, "rollback!(count:)" reverses N migrations, "status" reports up/down state, "current_version" returns latest. Wraps each migration AND its version bookkeeping (INSERT/DELETE into "hakumi_migrations") in the same transaction when dialect supports DDL transactions; logs warning otherwise. Respects "disable_ddl_transaction!". Acquires dialect-specific advisory lock before migrate!/rollback! to prevent concurrent execution (released in ensure block); "acquire_advisory_lock!" delegates to "Dialect#verify_advisory_lock!" so MySQL verifies GET_LOCK returned 1 (PG blocks until acquired, no verification needed). Advisory lock and DDL results are closed immediately after use. Filename pattern restricted to "\w+" for safety. Clear error messages for class name mismatches, syntax errors, and invalid inheritance. Inner "FileInfo < T::Struct" (version, name, filename) provides typed access to migration file metadata -- zero "T.must" on hash lookups. |
@@ -257,6 +258,7 @@ lib/
     ├── migration/
     │   ├── column_definition.rb
     │   ├── file_generator.rb
+    │   ├── executor.rb
     │   ├── file_info.rb
     │   ├── loader.rb
     │   ├── lock.rb

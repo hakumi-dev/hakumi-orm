@@ -13,6 +13,10 @@ module HakumiORM
         @migration_loader = T.let(Loader.new(migrations_path), Loader)
         @migration_lock = T.let(Lock.new(adapter), Lock)
         @version_store = T.let(VersionStore.new(adapter), VersionStore)
+        @migration_executor = T.let(
+          Executor.new(adapter: adapter, loader: @migration_loader, version_store: @version_store),
+          Executor
+        )
       end
 
       sig { returns(T::Array[Migration::FileInfo]) }
@@ -89,67 +93,17 @@ module HakumiORM
 
       sig { params(file_info: Migration::FileInfo).void }
       def run_up(file_info)
-        klass = load_migration(file_info)
-        migration = klass.new(@adapter)
-        if transactional_migration?(klass)
-          @adapter.transaction do |_adapter|
-            migration.up
-            record_version(file_info.version, file_info.name)
-          end
-        else
-          log_ddl_warning unless klass.ddl_transaction_disabled?
-          migration.up
-          record_version(file_info.version, file_info.name)
-        end
+        @migration_executor.run_up(file_info)
       end
 
       sig { params(file_info: Migration::FileInfo).void }
       def run_down(file_info)
-        klass = load_migration(file_info)
-        migration = klass.new(@adapter)
-        if transactional_migration?(klass)
-          @adapter.transaction do |_adapter|
-            migration.down
-            remove_version(file_info.version)
-          end
-        else
-          log_ddl_warning unless klass.ddl_transaction_disabled?
-          migration.down
-          remove_version(file_info.version)
-        end
-      end
-
-      sig { params(klass: T.class_of(Migration)).returns(T::Boolean) }
-      def transactional_migration?(klass)
-        !klass.ddl_transaction_disabled? && @adapter.dialect.supports_ddl_transactions?
+        @migration_executor.run_down(file_info)
       end
 
       sig { params(blk: T.proc.void).void }
       def with_advisory_lock(&blk)
         @migration_lock.with_advisory_lock(&blk)
-      end
-
-      sig { void }
-      def log_ddl_warning
-        logger = HakumiORM.config.logger
-        return unless logger
-
-        logger.warn("HakumiORM: DDL transactions not supported by #{@adapter.dialect.name}. Partial rollback is not guaranteed.")
-      end
-
-      sig { params(file_info: Migration::FileInfo).returns(T.class_of(Migration)) }
-      def load_migration(file_info)
-        @migration_loader.load_migration(file_info)
-      end
-
-      sig { params(version: String, name: String).void }
-      def record_version(version, name)
-        @version_store.record_version(version, name)
-      end
-
-      sig { params(version: String).void }
-      def remove_version(version)
-        @version_store.remove_version(version)
       end
     end
   end
