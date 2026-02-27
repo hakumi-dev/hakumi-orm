@@ -240,23 +240,34 @@ class UserRecord
   class BaseContract
     extend T::Sig
     extend T::Helpers
+    extend HakumiORM::Validation::ContractDSL
 
     abstract!
 
-    sig { overridable.params(_record: UserRecord::Checkable, _e: HakumiORM::Errors).void }
-    def self.on_all(_record, _e); end
+    sig { overridable.params(record: UserRecord::Checkable, errors: HakumiORM::Errors).void }
+    def self.on_all(record, errors)
+      run_validations_for_all(record, errors)
+    end
 
-    sig { overridable.params(_record: UserRecord::New, _e: HakumiORM::Errors).void }
-    def self.on_create(_record, _e); end
+    sig { overridable.params(record: UserRecord::New, errors: HakumiORM::Errors).void }
+    def self.on_create(record, errors)
+      run_validations_for_create(record, errors)
+    end
 
-    sig { overridable.params(_record: UserRecord::Checkable, _e: HakumiORM::Errors).void }
-    def self.on_update(_record, _e); end
+    sig { overridable.params(record: UserRecord::Checkable, errors: HakumiORM::Errors).void }
+    def self.on_update(record, errors)
+      run_validations_for_update(record, errors)
+    end
 
-    sig { overridable.params(_record: UserRecord::Checkable, _adapter: HakumiORM::Adapter::Base, _e: HakumiORM::Errors).void }
-    def self.on_persist(_record, _adapter, _e); end
+    sig { overridable.params(record: UserRecord::Checkable, _adapter: HakumiORM::Adapter::Base, errors: HakumiORM::Errors).void }
+    def self.on_persist(record, _adapter, errors)
+      run_validations_for_persist(record, errors)
+    end
 
-    sig { overridable.params(_record: UserRecord, _e: HakumiORM::Errors).void }
-    def self.on_destroy(_record, _e); end
+    sig { overridable.params(record: UserRecord, errors: HakumiORM::Errors).void }
+    def self.on_destroy(record, errors)
+      run_validations_for_destroy(record, errors)
+    end
 
     sig { overridable.params(_record: UserRecord, _adapter: HakumiORM::Adapter::Base).void }
     def self.after_create(_record, _adapter); end

@@ -405,11 +405,12 @@ class TestCodegen < HakumiORM::TestCase
       code = File.read(File.join(dir, "user/base_contract.rb"))
 
       assert_includes code, "class UserRecord::BaseContract"
+      assert_includes code, "extend ::HakumiORM::Validation::ContractDSL"
       assert_includes code, "abstract!"
       assert_includes code, "overridable"
-      assert_includes code, "def self.on_all(_record, _e)"
-      assert_includes code, "def self.on_create(_record, _e)"
-      assert_includes code, "def self.on_persist(_record, _adapter, _e)"
+      assert_includes code, "def self.on_all(record, errors)"
+      assert_includes code, "def self.on_create(record, errors)"
+      assert_includes code, "def self.on_persist(record, _adapter, errors)"
       assert_includes code, "UserRecord::Checkable"
       assert_includes code, "UserRecord::New"
     end

@@ -8,23 +8,34 @@ module <%= module_name %>
 <%= ind %>class <%= record_class_name %>::BaseContract
 <%= ind %>  extend T::Sig
 <%= ind %>  extend T::Helpers
+<%= ind %>  extend ::HakumiORM::Validation::ContractDSL
 
 <%= ind %>  abstract!
 
-<%= ind %>  sig { overridable.params(_record: <%= record_class_name %>::Checkable, _e: ::HakumiORM::Errors).void }
-<%= ind %>  def self.on_all(_record, _e); end
+<%= ind %>  sig { overridable.params(record: <%= record_class_name %>::Checkable, errors: ::HakumiORM::Errors).void }
+<%= ind %>  def self.on_all(record, errors)
+<%= ind %>    run_validations_for_all(record, errors)
+<%= ind %>  end
 
-<%= ind %>  sig { overridable.params(_record: <%= record_class_name %>::New, _e: ::HakumiORM::Errors).void }
-<%= ind %>  def self.on_create(_record, _e); end
+<%= ind %>  sig { overridable.params(record: <%= record_class_name %>::New, errors: ::HakumiORM::Errors).void }
+<%= ind %>  def self.on_create(record, errors)
+<%= ind %>    run_validations_for_create(record, errors)
+<%= ind %>  end
 
-<%= ind %>  sig { overridable.params(_record: <%= record_class_name %>::Checkable, _e: ::HakumiORM::Errors).void }
-<%= ind %>  def self.on_update(_record, _e); end
+<%= ind %>  sig { overridable.params(record: <%= record_class_name %>::Checkable, errors: ::HakumiORM::Errors).void }
+<%= ind %>  def self.on_update(record, errors)
+<%= ind %>    run_validations_for_update(record, errors)
+<%= ind %>  end
 
-<%= ind %>  sig { overridable.params(_record: <%= record_class_name %>::Checkable, _adapter: ::HakumiORM::Adapter::Base, _e: ::HakumiORM::Errors).void }
-<%= ind %>  def self.on_persist(_record, _adapter, _e); end
+<%= ind %>  sig { overridable.params(record: <%= record_class_name %>::Checkable, _adapter: ::HakumiORM::Adapter::Base, errors: ::HakumiORM::Errors).void }
+<%= ind %>  def self.on_persist(record, _adapter, errors)
+<%= ind %>    run_validations_for_persist(record, errors)
+<%= ind %>  end
 
-<%= ind %>  sig { overridable.params(_record: <%= record_class_name %>, _e: ::HakumiORM::Errors).void }
-<%= ind %>  def self.on_destroy(_record, _e); end
+<%= ind %>  sig { overridable.params(record: <%= record_class_name %>, errors: ::HakumiORM::Errors).void }
+<%= ind %>  def self.on_destroy(record, errors)
+<%= ind %>    run_validations_for_destroy(record, errors)
+<%= ind %>  end
 
 <%= ind %>  sig { overridable.params(_record: <%= record_class_name %>, _adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def self.after_create(_record, _adapter); end
