@@ -175,17 +175,33 @@ module HakumiORM
       only = raw_only ? raw_only.split(",").map(&:strip).reject(&:empty?) : nil
       tables = read_schema(config, adapter)
       verify_fks = config.verify_foreign_keys_for_fixtures || ENV["HAKUMI_VERIFY_FIXTURE_FKS"] == "1"
+      dry_run = ENV["HAKUMI_FIXTURES_DRY_RUN"] == "1"
       loader = HakumiORM::Fixtures::Loader.new(
         adapter: adapter,
         tables: tables,
         verify_foreign_keys: verify_fks
       )
+      absolute = File.expand_path(fixtures_path, Dir.pwd)
+      if dry_run
+        plan = loader.plan_load!(
+          base_path: fixtures_path,
+          fixtures_dir: fixtures_dir,
+          only_names: only
+        )
+        HakumiORM::TaskOutput.fixtures_dry_run(
+          path: absolute,
+          table_count: plan[:table_count],
+          row_count: plan[:row_count],
+          table_rows: plan[:table_rows]
+        )
+        return
+      end
+
       loaded_count = loader.load!(
         base_path: fixtures_path,
         fixtures_dir: fixtures_dir,
         only_names: only
       )
-      absolute = File.expand_path(fixtures_path, Dir.pwd)
       HakumiORM::TaskOutput.fixtures_loaded(path: absolute, table_count: loaded_count)
     end
 

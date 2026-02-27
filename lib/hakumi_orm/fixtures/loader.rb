@@ -31,6 +31,13 @@ module HakumiORM
       FixtureRow = T.type_alias { T::Hash[String, FixtureValue] }
       FixtureRowSet = T.type_alias { T::Hash[String, FixtureRow] }
       LoadedFixtures = T.type_alias { T::Hash[String, FixtureRowSet] }
+      LoadPlan = T.type_alias do
+        {
+          table_count: Integer,
+          row_count: Integer,
+          table_rows: T::Hash[String, Integer]
+        }
+      end
 
       sig do
         params(
@@ -74,6 +81,29 @@ module HakumiORM
         rows_by_table = collect_fixture_rows(base_path: base_path, fixtures_dir: fixtures_dir, only_names: only_names)
         insert_fixture_tables!(rows_by_table)
         rows_by_table
+      end
+
+      sig do
+        params(
+          base_path: String,
+          fixtures_dir: T.nilable(String),
+          only_names: T.nilable(T::Array[String])
+        ).returns(LoadPlan)
+      end
+      def plan_load!(base_path:, fixtures_dir: nil, only_names: nil)
+        rows_by_table = collect_fixture_rows(base_path: base_path, fixtures_dir: fixtures_dir, only_names: only_names)
+        expanded = expanded_rows_by_table(rows_by_table)
+        table_rows = T.let({}, T::Hash[String, Integer])
+        total_rows = T.let(0, Integer)
+        expanded.each do |table_name, rows|
+          table_rows[table_name] = rows.length
+          total_rows += rows.length
+        end
+        {
+          table_count: expanded.keys.size,
+          row_count: total_rows,
+          table_rows: table_rows
+        }
       end
 
       private
@@ -192,6 +222,18 @@ module HakumiORM
 
       sig { params(rows_by_table: LoadedFixtures).void }
       def insert_fixture_tables!(rows_by_table)
+        expanded_rows_by_table(rows_by_table).each do |table_name, rows|
+          table = @tables[table_name]
+          next unless table
+
+          replace_table_rows!(table, rows)
+        end
+        @integrity_verifier.verify!(rows_by_table.keys) if @verify_foreign_keys
+      end
+
+      sig { params(rows_by_table: LoadedFixtures).returns(T::Hash[String, T::Array[FixtureRow]]) }
+      def expanded_rows_by_table(rows_by_table)
+        expanded = T.let({}, T::Hash[String, T::Array[FixtureRow]])
         @resolver.insertion_order(rows_by_table.keys).each do |table_name|
           table = @tables[table_name]
           next unless table
@@ -205,9 +247,9 @@ module HakumiORM
               rows_by_table: rows_by_table
             )
           end
-          replace_table_rows!(table, rows)
+          expanded[table_name] = rows
         end
-        @integrity_verifier.verify!(rows_by_table.keys) if @verify_foreign_keys
+        expanded
       end
 
       sig { params(column: Codegen::ColumnInfo).returns(T::Boolean) }

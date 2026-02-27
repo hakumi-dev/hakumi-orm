@@ -1773,7 +1773,7 @@ bundle exec rake db:version            # show current schema version
 bundle exec rake db:migration[name]    # scaffold new migration
 bundle exec rake db:check              # detect schema drift + pending migrations (CI-friendly)
 bundle exec rake db:seed               # run seed file (default: db/seeds.rb)
-bundle exec rake db:fixtures:load      # load YAML fixtures (supports FIXTURES_PATH/FIXTURES_DIR/FIXTURES, optional FK verify)
+bundle exec rake db:fixtures:load      # load YAML fixtures (supports FIXTURES_PATH/FIXTURES_DIR/FIXTURES, optional FK verify, HAKUMI_FIXTURES_DRY_RUN=1)
 bundle exec rake db:scaffold[table]    # scaffold model + contract for a table
 bundle exec rake db:type[name]         # scaffold custom type
 bundle exec rake db:associations       # list all associations (FK + custom + through)
@@ -1797,6 +1797,7 @@ end
 "use_transactional_tests" defaults to true. You can access rows with "users(:alice)" or "fixture(:users, :alice)".
 When a fixture row omits an integer primary key, HakumiORM assigns a deterministic id from the fixture label.
 Foreign key labels are supported (`user: alice` / `user_id: alice`) and join rows can expand labels (`user: alice,bob` or YAML array).
+Set "HAKUMI_FIXTURES_DRY_RUN=1" to analyze table/row counts without writing fixture rows.
 
 ## Low-Level Reference
 

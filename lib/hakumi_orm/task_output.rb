@@ -99,6 +99,13 @@ module HakumiORM
       puts "HakumiORM: Loaded fixtures from #{path} (#{table_count} table(s))"
     end
 
+    def fixtures_dry_run(path:, table_count:, row_count:, table_rows:)
+      puts "HakumiORM: Fixtures dry-run from #{path} (#{table_count} table(s), #{row_count} row(s))"
+      table_rows.sort.each do |table_name, count|
+        puts "  - #{table_name}: #{count} row(s)"
+      end
+    end
+
     def associations_for_table(table_name, lines)
       puts "\n#{table_name}"
       lines.each { |line| puts line }

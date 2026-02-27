@@ -19,6 +19,7 @@ class TestTaskCommands < HakumiORM::TestCase
     @original_env_fixtures_dir = ENV.fetch("FIXTURES_DIR", nil)
     @original_env_fixtures_path = ENV.fetch("FIXTURES_PATH", nil)
     @original_env_verify_fixture_fks = ENV.fetch("HAKUMI_VERIFY_FIXTURE_FKS", nil)
+    @original_env_fixtures_dry_run = ENV.fetch("HAKUMI_FIXTURES_DRY_RUN", nil)
   end
 
   def teardown
@@ -32,6 +33,7 @@ class TestTaskCommands < HakumiORM::TestCase
     ENV["FIXTURES_DIR"] = @original_env_fixtures_dir
     ENV["FIXTURES_PATH"] = @original_env_fixtures_path
     ENV["HAKUMI_VERIFY_FIXTURE_FKS"] = @original_env_verify_fixture_fks
+    ENV["HAKUMI_FIXTURES_DRY_RUN"] = @original_env_fixtures_dry_run
   end
 
   test "run_seed warns when seed file is missing" do
@@ -345,6 +347,42 @@ class TestTaskCommands < HakumiORM::TestCase
 
       assert_equal 4, count
       assert_equal %w[Alice Alice Bob Bob], user_names.sort
+    ensure
+      adapter.close
+    end
+  end
+
+  test "run_fixtures_load supports dry-run without writing rows" do
+    require "hakumi_orm/adapter/sqlite_result"
+    require "hakumi_orm/adapter/sqlite"
+
+    Dir.mktmpdir do |dir|
+      db_path = File.join(dir, "fixtures_dry_run.sqlite3")
+      adapter = HakumiORM::Adapter::Sqlite.connect(db_path)
+      adapter.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)").close
+      adapter.exec("CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, title TEXT NOT NULL)").close
+
+      fixtures_dir = File.join(dir, "test", "fixtures")
+      FileUtils.mkdir_p(fixtures_dir)
+      File.write(File.join(fixtures_dir, "users.yml"), "alice:\n  name: Alice\n")
+      File.write(File.join(fixtures_dir, "posts.yml"), "welcome:\n  user_id: alice\n  title: Hello\n")
+
+      HakumiORM.config.adapter = adapter
+      HakumiORM.config.adapter_name = :sqlite
+      HakumiORM.config.database = db_path
+      HakumiORM.config.fixtures_path = fixtures_dir
+      ENV["HAKUMI_FIXTURES_DRY_RUN"] = "1"
+
+      out, = capture_io { HakumiORM::TaskCommands.run_fixtures_load }
+
+      users_count = adapter.exec('SELECT COUNT(*) FROM "users"').get_value(0, 0)
+      posts_count = adapter.exec('SELECT COUNT(*) FROM "posts"').get_value(0, 0)
+
+      assert_equal 0, users_count
+      assert_equal 0, posts_count
+      assert_includes out, "Fixtures dry-run"
+      assert_includes out, "users: 1 row(s)"
+      assert_includes out, "posts: 1 row(s)"
     ensure
       adapter.close
     end
