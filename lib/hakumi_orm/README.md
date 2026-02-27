@@ -7,7 +7,11 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | File | Module / Class | Description |
 |---|---|---|
 | "hakumi_orm.rb" | "HakumiORM" | Entry point. Provides "configure(&blk)", "config", "adapter(name = nil)", "adapter=", "using(name, &blk)", "reset_config!", "define_enums(table, &blk)", "associate(table, &blk)". "adapter" checks thread-local override first (set by "using"), then falls back to primary. All generated code defaults to "HakumiORM.adapter". |
-| "errors.rb" | "Errors" | Collects validation messages grouped by field. Methods: "add(field, message)", "valid?", "messages", "full_messages", "count". |
+| "errors.rb" | "Validation::Errors" ("Errors" alias) | Collects validation messages grouped by field. Methods: "add(field, message, type:)", "[]", "valid?", "invalid?", "messages", "details", "full_messages", "count", "clear". |
+| "form_model_adapter.rb" | "FormModelAdapter" | Interface for form adapters. Requires "apply_to(base)". Used by "Configuration#form_model_adapter". |
+| "form_model/name.rb" | "FormModel::Name" | Minimal model-name object used by form builders ("param_key", "route_key", "i18n_key", "human"). |
+| "form_model/noop_adapter.rb" | "FormModel::NoopAdapter" | Default non-nil form adapter. Prepends itself and delegates "to_model" to super when present. |
+| "form_model.rb" | "FormModel::Default" | Core form behavior mixed into generated records. Exposes "errors", "valid?", "invalid?", "to_key", "to_param", "persisted?", and class helpers ("model_name", "human_attribute_name"). |
 | "validation_error.rb" | "ValidationError < Error" | Wraps "Errors" for the type-state flow. Raised when contract validation fails. |
 | "stale_object_error.rb" | "StaleObjectError < Error" | Raised by optimistic locking when "lock_version" doesn't match. |
 | "database_config.rb" | "DatabaseConfig < T::Struct" | Connection parameters for a single database: "adapter_name", "database", "host", "port", "username", "password", "pool_size", "pool_timeout", "connection_options". |
@@ -15,7 +19,7 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "database_config_builder.rb" | "DatabaseConfigBuilder" | Mutable builder for "DatabaseConfig". Used inside "Configuration#database_config" blocks. Supports "database_url=" (delegates to "DatabaseUrlParser") or individual field setters. Validates adapter_name and requires database. |
 | "loggable.rb" | "Loggable" | Sorbet "interface!" for loggers. Defines five abstract methods: "debug", "info", "warn", "error", "fatal" (each accepts optional message string + block). "::Logger" includes "Loggable" at boot via runtime mixin, so it satisfies the contract out of the box. RBI shim ("sorbet/rbi/shims/logger.rbi") declares the inclusion for Sorbet static analysis. Any custom logger can "include HakumiORM::Loggable" to be accepted by "Configuration#logger=". |
 | "adapter_registry.rb" | "AdapterRegistry" | Stores named database configs and named adapters for multi-DB setups. Lazily builds adapters on first use via injected connector proc, returns the primary adapter for `:primary`, caches named adapters, and closes cached adapters on shutdown/reset. |
-| "configuration.rb" | "Configuration" | Global config object. Primary attributes: "adapter_name", "database", "host", "port", "username", "password", "output_dir", "models_dir", "contracts_dir", "module_name", "adapter", "pool_size", "pool_timeout", "logger" ("T.nilable(Loggable)"), "migrations_path", "definitions_path", "connection_options", "database_url=". "log_level=" creates an internal "Logger" to "$stdout" with the given level (":debug", ":info", ":warn", ":error", ":fatal"). Multi-DB: "database_config(name, &blk)" registers named databases, "adapter_for(name)" lazily builds adapters, "named_database(name)" returns config, "database_names" lists names, "register_adapter(name, adapter)" for manual injection, "close_named_adapters!" cleanup. "connection_options" stores extra driver params (sslmode, connect_timeout, etc.) extracted from URL query params. Runtime adapter creation and boot checks are split into extension files to keep the core config object focused. |
+| "configuration.rb" | "Configuration" | Global config object. Primary attributes: "adapter_name", "database", "host", "port", "username", "password", "output_dir", "models_dir", "contracts_dir", "module_name", "adapter", "pool_size", "pool_timeout", "logger" ("T.nilable(Loggable)"), "migrations_path", "definitions_path", "connection_options", "form_model_adapter" ("FormModelAdapter"), "database_url=". "log_level=" creates an internal "Logger" to "$stdout" with the given level (":debug", ":info", ":warn", ":error", ":fatal"). Multi-DB: "database_config(name, &blk)" registers named databases, "adapter_for(name)" lazily builds adapters, "named_database(name)" returns config, "database_names" lists names, "register_adapter(name, adapter)" for manual injection, "close_named_adapters!" cleanup. "connection_options" stores extra driver params (sslmode, connect_timeout, etc.) extracted from URL query params. Runtime adapter creation and boot checks are split into extension files to keep the core config object focused. |
 | "configuration_schema_guards.rb" | "Configuration" (extension methods) | Boot safety checks used during adapter initialization. Verifies manifest fingerprint against the live DB and raises when pending migrations exist. |
 | "configuration_adapter_factory.rb" | "Configuration" (extension methods) | Adapter construction helpers. Validates supported adapter names, builds driver connection params, connects PostgreSQL/MySQL/SQLite adapters, and runs boot checks before caching the primary adapter. |
 | "json.rb" | "Json", "JsonScalar" | Opaque JSON wrapper storing raw JSON string. "Json.parse(raw)" from PG, "Json.from_hash(h)" / "Json.from_array(a)" from Ruby. Navigation: "[](key)" and "at(index)" return "T.nilable(Json)". Typed extractors: "as_s", "as_i", "as_f", "as_bool", "scalar". Zero "Object", zero "T.untyped". |
@@ -25,7 +29,8 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "task_output.rb" | "TaskOutput" | CLI output and formatting helpers used by tasks and task commands. Centralizes install/migrate/rollback/status/check/scaffold messages so command logic is not mixed with printing details. |
 | "framework.rb" | "Framework" | Framework detection and integration registry. "register(name, &detector)" adds a framework, "detect" returns first matching name (or ":standalone"), "current" / "current=" tracks active framework. Query methods: "rails?", "sinatra?", "standalone?". "registered" lists names, "reset!" clears state. |
 | "framework/rails_config.rb" | "Framework::RailsConfig" | Testable Rails defaults. "apply_defaults(config, logger:)" sets "models_dir", "contracts_dir", logger without requiring Rails. |
-| "framework/rails.rb" | "Framework::Rails < Rails::Railtie" | Rails Railtie ("typed: false", Sorbet-ignored). Initializers: "hakumi_orm.configure" (sets current, applies defaults), "hakumi_orm.load_generated" (loads manifest, then models/contracts sorted by path depth; skipped for "hakumi:*" rake tasks and when manifest is missing). Loads rake tasks. |
+| "framework/rails.rb" | "Framework::Rails < Rails::Railtie" | Rails Railtie ("typed: false", Sorbet-ignored). Initializers: "hakumi_orm.configure" (sets current, applies defaults, sets Rails form adapter when default noop is active), "hakumi_orm.load_generated" (loads manifest, then models/contracts sorted by path depth; skipped for "hakumi:*" rake tasks and when manifest is missing). Loads rake tasks. |
+| "framework/rails/form_model.rb" | "Framework::Rails::FormModel" | Rails form adapter that implements "FormModelAdapter" and class helpers used by form builders. |
 | "railtie.rb" | - | Rails autoload entry that requires "framework/rails" when Rails looks for "hakumi_orm/railtie". |
 | "framework/sinatra_config.rb" | "Framework::SinatraConfig" | Testable Sinatra defaults. "apply_defaults(config, root:, logger:)" sets path defaults relative to root. |
 | "framework/sinatra.rb" | "Framework::Sinatra" | Sinatra extension ("typed: false", Sorbet-ignored). "registered(app)" callback reads "root" and "logger" from settings, applies defaults. User registers via "register HakumiORM::Framework::Sinatra". |
@@ -218,9 +223,16 @@ lib/
     │   └── sqlite.rb
     ├── errors.rb
     ├── expr.rb
+    ├── form_model_adapter.rb
+    ├── form_model.rb
+    ├── form_model/
+    │   ├── name.rb
+    │   └── noop_adapter.rb
     ├── field.rb
     ├── framework.rb
     ├── framework/
+    │   ├── rails/
+    │   │   └── form_model.rb
     │   ├── rails.rb
     │   ├── rails_config.rb
     │   ├── sinatra.rb

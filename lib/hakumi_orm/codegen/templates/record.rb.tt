@@ -9,6 +9,7 @@ module <%= module_name %>
 <%- end -%>
 <%= ind %>class <%= record_class_name %>
 <%= ind %>  include ::HakumiORM::RecordRuntime
+<%= ind %>  include ::HakumiORM::FormModel::Default
 <%= ind %>  extend T::Sig
 
 <%- columns.each do |col| -%>

@@ -41,6 +41,37 @@ class TestValidation < HakumiORM::TestCase
     assert_equal ["name cannot be blank", "email is invalid"], e.full_messages
   end
 
+  test "Errors tracks details and supports [] lookup" do
+    e = HakumiORM::Errors.new
+    e.add(:name, "cannot be blank", type: :blank)
+    e.add(:name, "is too short", type: :too_short)
+
+    assert_equal ["cannot be blank", "is too short"], e[:name]
+    assert_equal [{ error: "blank" }, { error: "too_short" }], e.details[:name]
+  end
+
+  test "Errors#clear empties messages and details" do
+    e = HakumiORM::Errors.new
+    e.add(:base, "cannot proceed", type: :invalid)
+
+    refute_predicate e, :empty?
+    assert_predicate e, :invalid?
+
+    e.clear
+
+    assert_predicate e, :empty?
+    assert_predicate e, :valid?
+    assert_empty e.messages
+    assert_empty e.details
+  end
+
+  test "Errors#full_messages keeps base messages unprefixed" do
+    e = HakumiORM::Errors.new
+    e.add(:base, "cannot be deleted")
+
+    assert_equal ["cannot be deleted"], e.full_messages
+  end
+
   test "ValidationError wraps Errors and produces a readable message" do
     e = HakumiORM::Errors.new
     e.add(:name, "cannot be blank")

@@ -66,6 +66,9 @@ module HakumiORM
     sig { returns(T::Hash[String, String]) }
     attr_accessor :connection_options
 
+    sig { returns(FormModelAdapter) }
+    attr_reader :form_model_adapter
+
     sig { void }
     def initialize
       @adapter = T.let(nil, T.nilable(Adapter::Base))
@@ -88,6 +91,7 @@ module HakumiORM
       @definitions_path = T.let("db/definitions.rb", String)
       @schema_fingerprint = T.let(nil, T.nilable(String))
       @connection_options = T.let({}, T::Hash[String, String])
+      @form_model_adapter = T.let(HakumiORM::FormModel::NoopAdapter, FormModelAdapter)
       connect_adapter = T.let(
         ->(db_config) { connect_from_config(db_config) },
         T.proc.params(db_config: DatabaseConfig).returns(Adapter::Base)
@@ -131,6 +135,14 @@ module HakumiORM
       @username = parsed.username
       @password = parsed.password
       @connection_options = parsed.connection_options
+    end
+
+    sig { params(adapter: FormModelAdapter).void }
+    def form_model_adapter=(adapter)
+      adapter_module = T.cast(adapter, Module)
+      raise ArgumentError, "form_model_adapter must define instance method 'to_model'" unless adapter_module.method_defined?(:to_model)
+
+      @form_model_adapter = adapter
     end
 
     sig { params(adapter: T.nilable(Adapter::Base)).void }

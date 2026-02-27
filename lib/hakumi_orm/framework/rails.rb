@@ -3,6 +3,7 @@
 
 require "rails/railtie"
 require_relative "rails_config"
+require_relative "rails/form_model"
 
 module HakumiORM
   module Framework
@@ -23,6 +24,9 @@ module HakumiORM
           log_level: ::Rails.configuration.log_level || :info
         )
         apply_rails_logger_defaults!(HakumiORM.config)
+        if HakumiORM.config.form_model_adapter == HakumiORM::FormModel::NoopAdapter
+          HakumiORM.config.form_model_adapter = HakumiORM::Framework::Rails::FormModel
+        end
       end
 
       initializer "hakumi_orm.load_generated" do

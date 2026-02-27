@@ -390,10 +390,13 @@ end
 | "models_dir" | "nil" | Directory for model stubs. "nil" = skip. |
 | "contracts_dir" | "nil" | Directory for contract stubs. "nil" = skip. |
 | "module_name" | "nil" | Namespace wrapping for generated code. |
+| "form_model_adapter" | "HakumiORM::FormModel::NoopAdapter" | Adapter object for form integration. Must implement "HakumiORM::FormModelAdapter". Rails sets "HakumiORM::Framework::Rails::FormModel" by default. |
 | "migrations_path" | ""db/migrate"" | Directory for migration files. |
 | "definitions_path" | ""db/definitions.rb"" | Ruby file (or directory) loaded before codegen for custom associations and user-defined enums. |
 
 All generated methods ("find", "where", "save!", associations, etc.) default to "HakumiORM.adapter", so you never pass the adapter manually.
+
+Generated records include "HakumiORM::FormModel::Default", so "to_model", "model_name", "to_key", and "errors" are available for form builders out of the box.
 
 ## Code Generation
 
