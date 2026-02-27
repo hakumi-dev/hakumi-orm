@@ -95,6 +95,10 @@ module HakumiORM
       puts "HakumiORM: Seed completed from #{path}"
     end
 
+    def fixtures_loaded(path:, table_count:)
+      puts "HakumiORM: Loaded fixtures from #{path} (#{table_count} table(s))"
+    end
+
     def associations_for_table(table_name, lines)
       puts "\n#{table_name}"
       lines.each { |line| puts line }

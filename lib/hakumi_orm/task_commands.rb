@@ -3,6 +3,7 @@
 
 require "digest"
 require_relative "task_output"
+require_relative "fixtures/loader"
 
 module HakumiORM
   # Implements the behavior behind rake tasks and CLI task entrypoints.
@@ -157,6 +158,26 @@ module HakumiORM
 
       load absolute
       HakumiORM::TaskOutput.seed_loaded(absolute)
+    end
+
+    def run_fixtures_load
+      config = HakumiORM.config
+      adapter = config.adapter
+      raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
+
+      fixtures_path = ENV.fetch("FIXTURES_PATH", config.fixtures_path)
+      fixtures_dir = ENV.fetch("FIXTURES_DIR", nil)
+      raw_only = ENV.fetch("FIXTURES", nil)
+      only = raw_only ? raw_only.split(",").map(&:strip).reject(&:empty?) : nil
+      tables = read_schema(config, adapter)
+      loader = HakumiORM::Fixtures::Loader.new(adapter: adapter, tables: tables)
+      loaded_count = loader.load!(
+        base_path: fixtures_path,
+        fixtures_dir: fixtures_dir,
+        only_names: only
+      )
+      absolute = File.expand_path(fixtures_path, Dir.pwd)
+      HakumiORM::TaskOutput.fixtures_loaded(path: absolute, table_count: loaded_count)
     end
 
     def ensure_generated_loaded_for_seed!(config)

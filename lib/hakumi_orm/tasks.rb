@@ -127,6 +127,18 @@ module HakumiORM
           HakumiORM::TaskCommands.run_seed
         end
       end
+
+      namespace :fixtures do
+        safe_define_task("db:fixtures:load") do
+          desc "Load fixtures into the current environment database (FIXTURES_PATH/FIXTURES_DIR/FIXTURES supported)"
+          task :load do
+            require "hakumi_orm"
+            require "hakumi_orm/codegen"
+
+            HakumiORM::TaskCommands.run_fixtures_load
+          end
+        end
+      end
     end
   end
 end
