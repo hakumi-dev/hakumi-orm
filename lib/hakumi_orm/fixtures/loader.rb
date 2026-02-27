@@ -26,6 +26,9 @@ module HakumiORM
           T::Hash[Symbol, FixtureScalar]
         )
       end
+      FixtureRow = T.type_alias { T::Hash[String, FixtureValue] }
+      FixtureRowSet = T.type_alias { T::Hash[String, FixtureRow] }
+      LoadedFixtures = T.type_alias { T::Hash[String, FixtureRowSet] }
 
       sig { params(adapter: Adapter::Base, tables: T::Hash[String, Codegen::TableInfo]).void }
       def initialize(adapter:, tables:)
@@ -48,11 +51,33 @@ module HakumiORM
           table = @tables[table_name]
           next unless table
 
-          rows = parse_fixture_rows(file)
+          rows = parse_fixture_rows(parse_labeled_rows(file))
           replace_table_rows!(table, rows)
           loaded_tables[table_name] = true
         end
         loaded_tables.keys.size
+      end
+
+      sig do
+        params(
+          base_path: String,
+          fixtures_dir: T.nilable(String),
+          only_names: T.nilable(T::Array[String])
+        ).returns(LoadedFixtures)
+      end
+      def load_with_data!(base_path:, fixtures_dir: nil, only_names: nil)
+        files = fixture_files(base_path: base_path, fixtures_dir: fixtures_dir, only_names: only_names)
+        loaded = T.let({}, LoadedFixtures)
+        files.each do |file|
+          table_name = table_name_for_file(base_path, file, fixtures_dir: fixtures_dir)
+          table = @tables[table_name]
+          next unless table
+
+          labeled_rows = parse_labeled_rows(file)
+          replace_table_rows!(table, parse_fixture_rows(labeled_rows))
+          loaded[table_name] = labeled_rows
+        end
+        loaded
       end
 
       private
@@ -94,8 +119,8 @@ module HakumiORM
         relative.tr("/", "_")
       end
 
-      sig { params(path: String).returns(T::Array[T::Hash[String, FixtureValue]]) }
-      def parse_fixture_rows(path)
+      sig { params(path: String).returns(FixtureRowSet) }
+      def parse_labeled_rows(path)
         src = File.read(path)
         rendered = ERB.new(src).result
         parsed = YAML.safe_load(
@@ -103,23 +128,32 @@ module HakumiORM
           permitted_classes: [Date, Time, BigDecimal, Symbol],
           aliases: true
         )
-        return [] unless parsed.is_a?(Hash)
+        return {} unless parsed.is_a?(Hash)
 
-        parsed.each_with_object([]) do |(_label, attrs), acc|
+        rows = T.let({}, FixtureRowSet)
+        parsed.each do |label, attrs|
+          next unless label.is_a?(String) || label.is_a?(Symbol)
+          next if label.to_s.start_with?("_")
           next unless attrs.is_a?(Hash)
 
-          acc << normalize_row(attrs)
+          rows[label.to_s] = normalize_row(attrs)
         end
+        rows
       end
 
-      sig { params(attrs: T::Hash[T.any(String, Symbol), FixtureValue]).returns(T::Hash[String, FixtureValue]) }
+      sig { params(labeled_rows: FixtureRowSet).returns(T::Array[FixtureRow]) }
+      def parse_fixture_rows(labeled_rows)
+        labeled_rows.values
+      end
+
+      sig { params(attrs: T::Hash[T.any(String, Symbol), FixtureValue]).returns(FixtureRow) }
       def normalize_row(attrs)
-        row = T.let({}, T::Hash[String, FixtureValue])
+        row = T.let({}, FixtureRow)
         attrs.each { |k, v| row[k.to_s] = v }
         row
       end
 
-      sig { params(table: Codegen::TableInfo, rows: T::Array[T::Hash[String, FixtureValue]]).void }
+      sig { params(table: Codegen::TableInfo, rows: T::Array[FixtureRow]).void }
       def replace_table_rows!(table, rows)
         delete_all_sql = "DELETE FROM #{@adapter.dialect.quote_id(table.name)}"
         @adapter.exec(delete_all_sql).close
@@ -128,7 +162,7 @@ module HakumiORM
         rows.each { |row| insert_row!(table, row) }
       end
 
-      sig { params(table: Codegen::TableInfo, row: T::Hash[String, FixtureValue]).void }
+      sig { params(table: Codegen::TableInfo, row: FixtureRow).void }
       def insert_row!(table, row)
         columns, values = row_columns_and_values(table, row)
 
@@ -139,7 +173,7 @@ module HakumiORM
         @adapter.exec_params(sql, values).close
       end
 
-      sig { params(table: Codegen::TableInfo, row: T::Hash[String, FixtureValue]).returns([T::Array[String], T::Array[PGValue]]) }
+      sig { params(table: Codegen::TableInfo, row: FixtureRow).returns([T::Array[String], T::Array[PGValue]]) }
       def row_columns_and_values(table, row)
         columns = T.let([], T::Array[String])
         values = T.let([], T::Array[PGValue])

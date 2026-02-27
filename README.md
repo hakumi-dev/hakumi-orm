@@ -1778,6 +1778,22 @@ bundle exec rake db:associations       # list all associations (FK + custom + th
 bundle exec rake db:associations[name] # list associations for one model
 ```
 
+### Minitest Fixtures
+
+For transactional test fixtures similar to Active Record:
+
+```ruby
+require "hakumi_orm/test_fixtures"
+
+class ActiveSupport::TestCase
+  include HakumiORM::TestFixtures
+  self.fixture_paths = ["test/fixtures"]
+  fixtures :all
+end
+```
+
+"use_transactional_tests" defaults to true. You can access rows with "users(:alice)" or "fixture(:users, :alice)".
+
 ## Low-Level Reference
 
 ### Type Casting
