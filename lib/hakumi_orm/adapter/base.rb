@@ -48,6 +48,11 @@ module HakumiORM
         raise HakumiORM::Error, "#{self.class.name} does not support last_insert_id (use RETURNING instead)"
       end
 
+      sig { overridable.returns(T.nilable(Integer)) }
+      def max_bind_params
+        nil
+      end
+
       sig { params(requires_new: T::Boolean, blk: T.proc.params(adapter: Base).void).void }
       def transaction(requires_new: false, &blk)
         @txn_depth = T.let(@txn_depth, T.nilable(Integer))

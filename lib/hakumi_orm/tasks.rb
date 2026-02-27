@@ -117,6 +117,15 @@ module HakumiORM
 
         HakumiORM::TaskCommands.run_check
       end
+
+      safe_define_task("db:seed") do
+        desc "Seed the database using HakumiORM (default: db/seeds.rb)"
+        task :seed do
+          require "hakumi_orm"
+
+          HakumiORM::TaskCommands.run_seed
+        end
+      end
     end
   end
 end

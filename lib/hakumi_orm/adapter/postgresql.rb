@@ -10,6 +10,7 @@ module HakumiORM
       extend T::Sig
 
       EXEC_PARAMS_STMT_CACHE_MAX = 64
+      MAX_BIND_PARAMS = 65_535
 
       sig { override.returns(Dialect::Postgresql) }
       attr_reader :dialect
@@ -69,6 +70,11 @@ module HakumiORM
         result = PostgresqlResult.new(@pg_conn.exec_prepared(name, params))
         log_query_done(name, params, start)
         result
+      end
+
+      sig { override.returns(Integer) }
+      def max_bind_params
+        MAX_BIND_PARAMS
       end
 
       sig { override.returns(T::Boolean) }

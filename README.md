@@ -1714,6 +1714,7 @@ bundle exec rake db:migrate:status     # show migration status
 bundle exec rake db:version            # show current schema version
 bundle exec rake db:migration[name]    # scaffold new migration
 bundle exec rake db:check              # detect schema drift + pending migrations (CI-friendly)
+bundle exec rake db:seed               # run seed file (default: db/seeds.rb)
 bundle exec rake db:scaffold[table]    # scaffold model + contract for a table
 bundle exec rake db:type[name]         # scaffold custom type
 bundle exec rake db:associations       # list all associations (FK + custom + through)

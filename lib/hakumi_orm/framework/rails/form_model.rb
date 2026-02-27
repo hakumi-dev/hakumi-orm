@@ -3,7 +3,7 @@
 
 module HakumiORM
   module Framework
-    class Rails
+    module Rails
       # Rails-specific form behavior layered on top of the core form model.
       module FormModel
         extend T::Sig

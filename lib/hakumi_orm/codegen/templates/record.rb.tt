@@ -412,6 +412,17 @@ module <%= module_name %>
 <%= ind %>  def self.insert_all(records, adapter: ::HakumiORM.adapter)
 <%= ind %>    return [] if records.empty?
 <%= ind %>
+<%= ind %>    max_binds = adapter.max_bind_params
+<%= ind %>    if max_binds
+<%= ind %>      per_row_binds = <%= insert_all_columns.length %>
+<%= ind %>      batch_size = [max_binds / per_row_binds, 1].max
+<%= ind %>      if records.length > batch_size
+<%= ind %>        out = T.let([], T::Array[<%= record_class_name %>])
+<%= ind %>        records.each_slice(batch_size) { |slice| out.concat(insert_all(slice, adapter: adapter)) }
+<%= ind %>        return out
+<%= ind %>      end
+<%= ind %>    end
+<%= ind %>
 <%= ind %>    dialect = adapter.dialect
 <%= ind %>    binds = T.let(::Array.new(records.length * <%= insert_all_columns.length %>), T::Array[::HakumiORM::PGValue])
 <%= ind %>    idx = 0

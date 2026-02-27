@@ -144,6 +144,32 @@ module HakumiORM
       exit 1
     end
 
+    def run_seed
+      config = HakumiORM.config
+      ensure_generated_loaded_for_seed!(config)
+      seed_path = config.seeds_path
+      absolute = File.expand_path(seed_path, Dir.pwd)
+      unless File.file?(absolute)
+        HakumiORM::TaskOutput.seed_missing(absolute)
+        return
+      end
+
+      load absolute
+      HakumiORM::TaskOutput.seed_loaded(absolute)
+    end
+
+    def ensure_generated_loaded_for_seed!(config)
+      manifest = File.expand_path(File.join(config.output_dir, "manifest.rb"), Dir.pwd)
+      require manifest if File.file?(manifest)
+
+      [config.models_dir, config.contracts_dir].compact.each do |dir|
+        root = File.expand_path(dir, Dir.pwd)
+        next unless Dir.exist?(root)
+
+        Dir[File.join(root, "**", "*.rb")].each { |file| require file }
+      end
+    end
+
     def list_associations(filter_table = nil)
       config = HakumiORM.config
       adapter = config.adapter

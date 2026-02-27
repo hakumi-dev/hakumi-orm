@@ -60,6 +60,9 @@ module HakumiORM
     sig { returns(String) }
     attr_accessor :definitions_path
 
+    sig { returns(String) }
+    attr_accessor :seeds_path
+
     sig { returns(T.nilable(String)) }
     attr_accessor :schema_fingerprint
 
@@ -89,6 +92,7 @@ module HakumiORM
       @colorize_sql_logs = T.let(true, T::Boolean)
       @migrations_path = T.let("db/migrate", String)
       @definitions_path = T.let("db/definitions.rb", String)
+      @seeds_path = T.let("db/seeds.rb", String)
       @schema_fingerprint = T.let(nil, T.nilable(String))
       @connection_options = T.let({}, T::Hash[String, String])
       @form_model_adapter = T.let(HakumiORM::FormModel::NoopAdapter, FormModelAdapter)

@@ -86,6 +86,14 @@ module HakumiORM
       messages.each { |line| warn "HakumiORM: #{line}" }
     end
 
+    def seed_missing(path)
+      warn "HakumiORM: Seed file not found at #{path}"
+    end
+
+    def seed_loaded(path)
+      puts "HakumiORM: Seed completed from #{path}"
+    end
+
     def associations_for_table(table_name, lines)
       puts "\n#{table_name}"
       lines.each { |line| puts line }
