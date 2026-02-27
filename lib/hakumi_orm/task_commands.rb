@@ -174,7 +174,12 @@ module HakumiORM
       raw_only = ENV.fetch("FIXTURES", nil)
       only = raw_only ? raw_only.split(",").map(&:strip).reject(&:empty?) : nil
       tables = read_schema(config, adapter)
-      loader = HakumiORM::Fixtures::Loader.new(adapter: adapter, tables: tables)
+      verify_fks = config.verify_foreign_keys_for_fixtures || ENV["HAKUMI_VERIFY_FIXTURE_FKS"] == "1"
+      loader = HakumiORM::Fixtures::Loader.new(
+        adapter: adapter,
+        tables: tables,
+        verify_foreign_keys: verify_fks
+      )
       loaded_count = loader.load!(
         base_path: fixtures_path,
         fixtures_dir: fixtures_dir,

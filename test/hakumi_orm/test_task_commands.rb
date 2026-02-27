@@ -14,9 +14,11 @@ class TestTaskCommands < HakumiORM::TestCase
     @original_adapter = HakumiORM.config.adapter
     @original_adapter_name = HakumiORM.config.adapter_name
     @original_database = HakumiORM.config.database
+    @original_verify_foreign_keys_for_fixtures = HakumiORM.config.verify_foreign_keys_for_fixtures
     @original_env_fixtures = ENV.fetch("FIXTURES", nil)
     @original_env_fixtures_dir = ENV.fetch("FIXTURES_DIR", nil)
     @original_env_fixtures_path = ENV.fetch("FIXTURES_PATH", nil)
+    @original_env_verify_fixture_fks = ENV.fetch("HAKUMI_VERIFY_FIXTURE_FKS", nil)
   end
 
   def teardown
@@ -25,9 +27,11 @@ class TestTaskCommands < HakumiORM::TestCase
     HakumiORM.config.adapter = @original_adapter
     HakumiORM.config.adapter_name = @original_adapter_name
     HakumiORM.config.database = @original_database
+    HakumiORM.config.verify_foreign_keys_for_fixtures = @original_verify_foreign_keys_for_fixtures
     ENV["FIXTURES"] = @original_env_fixtures
     ENV["FIXTURES_DIR"] = @original_env_fixtures_dir
     ENV["FIXTURES_PATH"] = @original_env_fixtures_path
+    ENV["HAKUMI_VERIFY_FIXTURE_FKS"] = @original_env_verify_fixture_fks
   end
 
   test "run_seed warns when seed file is missing" do
@@ -208,6 +212,36 @@ class TestTaskCommands < HakumiORM::TestCase
       post_user_id = adapter.exec('SELECT user_id FROM "posts" WHERE title = "Hello"').get_value(0, 0)
 
       assert_equal user_id, post_user_id
+    ensure
+      adapter.close
+    end
+  end
+
+  test "run_fixtures_load raises on orphan fk when verification enabled" do
+    require "hakumi_orm/adapter/sqlite_result"
+    require "hakumi_orm/adapter/sqlite"
+
+    Dir.mktmpdir do |dir|
+      db_path = File.join(dir, "fixtures_fk_verify.sqlite3")
+      adapter = HakumiORM::Adapter::Sqlite.connect(db_path)
+      adapter.exec("PRAGMA foreign_keys = OFF").close
+      adapter.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)").close
+      adapter.exec("CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, title TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id))").close
+
+      fixtures_dir = File.join(dir, "test", "fixtures")
+      FileUtils.mkdir_p(fixtures_dir)
+      File.write(File.join(fixtures_dir, "posts.yml"), "broken:\n  user_id: ghost\n  title: Broken\n")
+      File.write(File.join(fixtures_dir, "users.yml"), "alice:\n  name: Alice\n")
+
+      HakumiORM.config.adapter = adapter
+      HakumiORM.config.adapter_name = :sqlite
+      HakumiORM.config.database = db_path
+      HakumiORM.config.fixtures_path = fixtures_dir
+      HakumiORM.config.verify_foreign_keys_for_fixtures = true
+
+      error = assert_raises(HakumiORM::Error) { HakumiORM::TaskCommands.run_fixtures_load }
+      assert_includes error.message, "Fixture foreign key check failed"
+      assert_includes error.message, "posts.user_id"
     ensure
       adapter.close
     end

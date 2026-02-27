@@ -399,6 +399,7 @@ end
 | "definitions_path" | ""db/definitions.rb"" | Ruby file (or directory) loaded before codegen for custom associations and user-defined enums. |
 | "seeds_path" | ""db/seeds.rb"" | Seed file executed by "rake db:seed". |
 | "fixtures_path" | ""test/fixtures"" | Base directory used by "rake db:fixtures:load". Supports "FIXTURES_PATH", "FIXTURES_DIR", and "FIXTURES" filters. |
+| "verify_foreign_keys_for_fixtures" | "false" | When true, verifies loaded fixtures do not leave orphan FK rows; also enabled by "HAKUMI_VERIFY_FIXTURE_FKS=1". |
 
 All generated methods ("find", "where", "save!", associations, etc.) default to "HakumiORM.adapter", so you never pass the adapter manually.
 
@@ -1772,7 +1773,7 @@ bundle exec rake db:version            # show current schema version
 bundle exec rake db:migration[name]    # scaffold new migration
 bundle exec rake db:check              # detect schema drift + pending migrations (CI-friendly)
 bundle exec rake db:seed               # run seed file (default: db/seeds.rb)
-bundle exec rake db:fixtures:load      # load YAML fixtures (supports FIXTURES_PATH/FIXTURES_DIR/FIXTURES)
+bundle exec rake db:fixtures:load      # load YAML fixtures (supports FIXTURES_PATH/FIXTURES_DIR/FIXTURES, optional FK verify)
 bundle exec rake db:scaffold[table]    # scaffold model + contract for a table
 bundle exec rake db:type[name]         # scaffold custom type
 bundle exec rake db:associations       # list all associations (FK + custom + through)

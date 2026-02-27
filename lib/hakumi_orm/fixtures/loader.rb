@@ -7,7 +7,6 @@ require "date"
 require "bigdecimal"
 require "json"
 require "zlib"
-
 module HakumiORM
   module Fixtures
     # Loads YAML fixtures into the configured database.
@@ -31,10 +30,17 @@ module HakumiORM
       FixtureRowSet = T.type_alias { T::Hash[String, FixtureRow] }
       LoadedFixtures = T.type_alias { T::Hash[String, FixtureRowSet] }
 
-      sig { params(adapter: Adapter::Base, tables: T::Hash[String, Codegen::TableInfo]).void }
-      def initialize(adapter:, tables:)
+      sig do
+        params(
+          adapter: Adapter::Base,
+          tables: T::Hash[String, Codegen::TableInfo],
+          verify_foreign_keys: T::Boolean
+        ).void
+      end
+      def initialize(adapter:, tables:, verify_foreign_keys: false)
         @adapter = T.let(adapter, Adapter::Base)
         @tables = T.let(tables, T::Hash[String, Codegen::TableInfo])
+        @verify_foreign_keys = T.let(verify_foreign_keys, T::Boolean)
       end
 
       sig do
@@ -196,6 +202,49 @@ module HakumiORM
           end
           replace_table_rows!(table, rows)
         end
+        verify_foreign_keys!(rows_by_table.keys) if @verify_foreign_keys
+      end
+
+      sig { params(table_names: T::Array[String]).void }
+      def verify_foreign_keys!(table_names)
+        table_names.each do |table_name|
+          table = @tables[table_name]
+          next unless table
+
+          table.foreign_keys.each do |fk|
+            next unless table_names.include?(fk.foreign_table)
+
+            orphans = orphan_count(table, fk)
+            next if orphans.zero?
+
+            raise HakumiORM::Error,
+                  "Fixture foreign key check failed: #{table.name}.#{fk.column_name} -> " \
+                  "#{fk.foreign_table}.#{fk.foreign_column} (#{orphans} orphan row(s))"
+          end
+        end
+      end
+
+      sig { params(table: Codegen::TableInfo, fk: Codegen::ForeignKeyInfo).returns(Integer) }
+      def orphan_count(table, fk)
+        child = @adapter.dialect.quote_id(table.name)
+        parent = @adapter.dialect.quote_id(fk.foreign_table)
+        child_col = @adapter.dialect.quote_id(fk.column_name)
+        parent_col = @adapter.dialect.quote_id(fk.foreign_column)
+        sql = <<~SQL.strip
+          SELECT COUNT(*)
+          FROM #{child} c
+          LEFT JOIN #{parent} p ON c.#{child_col} = p.#{parent_col}
+          WHERE c.#{child_col} IS NOT NULL AND p.#{parent_col} IS NULL
+        SQL
+        result = @adapter.exec(sql)
+        count_value = result.get_value(0, 0)
+        case count_value
+        when Integer then count_value
+        when String then count_value.to_i
+        else 0
+        end
+      ensure
+        result&.close
       end
 
       sig { params(table: Codegen::TableInfo, row: FixtureRow, rows_by_table: LoadedFixtures).returns(FixtureRow) }
@@ -403,8 +452,7 @@ module HakumiORM
 
       sig { params(value: FixtureValue).returns(T::Boolean) }
       def boolean_value(value)
-        return true if value == true
-        return false if value == false
+        return value == true if [true, false].include?(value)
         return true if [1, "1", "true"].include?(value)
         return false if [0, "0", "false"].include?(value)
 
