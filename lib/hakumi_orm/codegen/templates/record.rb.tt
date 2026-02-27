@@ -186,7 +186,7 @@ module <%= module_name %>
 <%- end -%>
 <%- if has_many.any? || has_one.any? -%>
 <%= ind %>  sig { params(dependent: Symbol, adapter: ::HakumiORM::Adapter::Base).void }
-<%= ind %>  def delete!(dependent: :none, adapter: ::HakumiORM.adapter)
+<%= ind %>  def destroy!(dependent: :none, adapter: ::HakumiORM.adapter)
 <%= ind %>    errors = ::HakumiORM::Errors.new
 <%= ind %>    <%= record_class_name %>::Contract.on_destroy(self, errors)
 <%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
@@ -199,14 +199,14 @@ module <%= module_name %>
 <%= ind %>    when :destroy
 <%- has_many.each do |assoc| -%>
 <%- if assoc[:target_has_pk] -%>
-<%= ind %>      <%= assoc[:method_name] %>.to_a(adapter: adapter).each { |r| r.delete!(adapter: adapter) }
+<%= ind %>      <%= assoc[:method_name] %>.to_a(adapter: adapter).each { |r| r.destroy!(adapter: adapter) }
 <%- else -%>
 <%= ind %>      adapter.exec_params(SQL_DELETE_<%= assoc[:method_name].upcase %>, [@<%= assoc[:pk_attr] %>]).close
 <%- end -%>
 <%- end -%>
 <%- has_one.each do |assoc| -%>
 <%- if assoc[:target_has_pk] -%>
-<%= ind %>      <%= assoc[:method_name] %>(adapter: adapter)&.delete!(adapter: adapter)
+<%= ind %>      <%= assoc[:method_name] %>(adapter: adapter)&.destroy!(adapter: adapter)
 <%- else -%>
 <%= ind %>      adapter.exec_params(SQL_DELETE_<%= assoc[:method_name].upcase %>, [@<%= assoc[:pk_attr] %>]).close
 <%- end -%>
@@ -223,47 +223,25 @@ module <%= module_name %>
 <%= ind %>  ensure
 <%= ind %>    result&.close
 <%= ind %>  end
-<%- if soft_delete -%>
 
-<%= ind %>  sig { params(dependent: Symbol, adapter: ::HakumiORM::Adapter::Base).void }
-<%= ind %>  def really_delete!(dependent: :none, adapter: ::HakumiORM.adapter)
-<%= ind %>    errors = ::HakumiORM::Errors.new
-<%= ind %>    <%= record_class_name %>::Contract.on_destroy(self, errors)
-<%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
-<%= ind %>
-<%= ind %>    case dependent
-<%= ind %>    when :delete_all
-<%- (has_many + has_one).each do |assoc| -%>
-<%= ind %>      adapter.exec_params(SQL_DELETE_<%= assoc[:method_name].upcase %>, [@<%= assoc[:pk_attr] %>]).close
-<%- end -%>
-<%= ind %>    when :destroy
-<%- has_many.each do |assoc| -%>
-<%- if assoc[:target_has_pk] -%>
-<%= ind %>      <%= assoc[:method_name] %>.to_a(adapter: adapter).each { |r| r.delete!(adapter: adapter) }
-<%- else -%>
-<%= ind %>      adapter.exec_params(SQL_DELETE_<%= assoc[:method_name].upcase %>, [@<%= assoc[:pk_attr] %>]).close
-<%- end -%>
-<%- end -%>
-<%- has_one.each do |assoc| -%>
-<%- if assoc[:target_has_pk] -%>
-<%= ind %>      <%= assoc[:method_name] %>(adapter: adapter)&.delete!(adapter: adapter)
-<%- else -%>
-<%= ind %>      adapter.exec_params(SQL_DELETE_<%= assoc[:method_name].upcase %>, [@<%= assoc[:pk_attr] %>]).close
-<%- end -%>
-<%- end -%>
-<%= ind %>    end
+<%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def delete!(adapter: ::HakumiORM.adapter)
 <%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
-<%= ind %>
-<%= ind %>    <%= record_class_name %>::Contract.after_destroy(self, adapter)
 <%= ind %>  ensure
 <%= ind %>    result&.close
+<%= ind %>  end
+
+<%- if soft_delete -%>
+<%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def really_delete!(adapter: ::HakumiORM.adapter)
+<%= ind %>    delete!(adapter: adapter)
 <%= ind %>  end
 <%- end -%>
 <%- else -%>
 <%- if soft_delete -%>
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
-<%= ind %>  def delete!(adapter: ::HakumiORM.adapter)
+<%= ind %>  def destroy!(adapter: ::HakumiORM.adapter)
 <%= ind %>    errors = ::HakumiORM::Errors.new
 <%= ind %>    <%= record_class_name %>::Contract.on_destroy(self, errors)
 <%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
@@ -272,12 +250,25 @@ module <%= module_name %>
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
 <%= ind %>
 <%= ind %>    <%= record_class_name %>::Contract.after_destroy(self, adapter)
+<%= ind %>  ensure
+<%= ind %>    result&.close
+<%= ind %>  end
+
+<%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def delete!(adapter: ::HakumiORM.adapter)
+<%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
+<%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
 <%= ind %>  ensure
 <%= ind %>    result&.close
 <%= ind %>  end
 
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def really_delete!(adapter: ::HakumiORM.adapter)
+<%= ind %>    delete!(adapter: adapter)
+<%= ind %>  end
+<%- else -%>
+<%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
+<%= ind %>  def destroy!(adapter: ::HakumiORM.adapter)
 <%= ind %>    errors = ::HakumiORM::Errors.new
 <%= ind %>    <%= record_class_name %>::Contract.on_destroy(self, errors)
 <%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
@@ -289,17 +280,11 @@ module <%= module_name %>
 <%= ind %>  ensure
 <%= ind %>    result&.close
 <%= ind %>  end
-<%- else -%>
+
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def delete!(adapter: ::HakumiORM.adapter)
-<%= ind %>    errors = ::HakumiORM::Errors.new
-<%= ind %>    <%= record_class_name %>::Contract.on_destroy(self, errors)
-<%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
-<%= ind %>
 <%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
-<%= ind %>
-<%= ind %>    <%= record_class_name %>::Contract.after_destroy(self, adapter)
 <%= ind %>  ensure
 <%= ind %>    result&.close
 <%= ind %>  end

@@ -226,9 +226,9 @@ Associations are generated automatically from foreign keys. "has_many" returns a
 | "belongs_to" | "belongs_to :user" (DSL) | Generated from FK |
 | Eager loading | "includes" / "preload" / "eager_load" | ".preload(:assoc)" with nested: ".preload(posts: :comments)" |
 | Custom associations | Manual "has_many" with lambda/scope | Declarative via config, fully generated and preloadable |
-| Dependent destroy | "dependent: :destroy" | "delete!(dependent: :destroy)" or ":delete_all" |
+| Dependent destroy | "dependent: :destroy" | "destroy!(dependent: :destroy)" or ":delete_all" |
 | Single-record update | "user.update!(name: "Bob")" | "user.update!(name: "Bob")" -- typed kwargs, validated |
-| Single-record delete | "user.destroy!" | "user.delete!" |
+| Single-record delete | "user.delete!" | "user.delete!" (direct) or "user.destroy!" (lifecycle) |
 | Callbacks | Before/after hooks | Contract hooks: "on_all", "on_create", "on_update", "on_persist", "on_destroy", "after_create", "after_update", "after_destroy" |
 | Connection pool | Built-in pool | "ConnectionPool" (thread-safe, reentrant, configurable) |
 | Transactions | "transaction { }" + nested | "transaction(requires_new: true)" + savepoints |
@@ -743,7 +743,8 @@ If the table has an "updated_at" timestamp column, it is automatically set to "T
 ### Deleting Records
 
 ```ruby
-user.delete!             # => void (raises if record doesn't exist)
+user.destroy!            # => lifecycle delete (validations/callbacks)
+user.delete!             # => direct physical DELETE (no destroy hooks)
 
 User.where(UserSchema::ACTIVE.eq(false)).delete_all  # => Integer (rows deleted)
 ```
@@ -891,16 +892,17 @@ The generated "run_preloads" delegates any association name it does not recogniz
 
 ### Dependent destroy semantics
 
-Current record-level API is lifecycle-oriented: "delete!" behaves like AR "destroy" (runs contract hooks and supports dependent strategies). Use "really_delete!" to force physical DELETE on soft-delete models.
+Lifecycle deletion is "destroy!" and supports dependent strategies. Direct "delete!" performs physical DELETE without destroy hooks.
 
 ```ruby
-user.delete!(dependent: :delete_all)   # delete children in batch SQL
-user.delete!(dependent: :destroy)      # load children and call delete! recursively
-user.delete!                           # :none (default), still runs on_destroy and after_destroy
-user.really_delete!                    # force physical DELETE in soft-delete models
+user.destroy!(dependent: :delete_all)  # delete children in batch SQL
+user.destroy!(dependent: :destroy)     # load children and call destroy! recursively
+user.destroy!                          # :none (default), still runs on_destroy and after_destroy
+user.delete!                           # direct physical DELETE, no destroy hooks
+user.really_delete!                    # alias for physical delete on soft-delete models
 ```
 
-The "dependent" parameter is only generated when the record has "has_many" or "has_one" associations.
+The "dependent" parameter is only generated on "destroy!" when the record has "has_many" or "has_one" associations.
 
 ### Model Annotations
 
@@ -987,13 +989,20 @@ Post-write hooks:
 7. return Record
 ```
 
-**"delete!" (Record -> void, executes DELETE or soft-delete UPDATE):**
+**"destroy!" (Record -> void, lifecycle delete):**
 
 ```
 1. run rules with "on: :destroy"
 2. raise ValidationError if errors       -- STOPS here, no DELETE
-3. DELETE FROM ... WHERE pk = $1         -- executes SQL
+3. DELETE FROM ... WHERE pk = $1         -- or soft-delete UPDATE when configured
 4. Contract.after_destroy(record, adapter) -- side effects (record is deleted)
+```
+
+**"delete!" (Record -> void, direct physical delete):**
+
+```
+1. DELETE FROM ... WHERE pk = $1         -- executes SQL directly
+2. raises Error if affected_rows is 0
 ```
 
 ### Contract example
@@ -1046,7 +1055,8 @@ Execution timing by operation:
 - "validate!": runs ":all", then ":create"
 - "save!": runs ":all", then ":persist", then INSERT; then "after_create"
 - "update!": runs ":all", then ":update", then ":persist", then UPDATE; then "after_update"
-- "delete!": runs ":destroy", then DELETE; then "after_destroy"
+- "destroy!": runs ":destroy", then DELETE/soft-delete UPDATE; then "after_destroy"
+- "delete!": direct physical DELETE with no destroy hooks
 
 Important behavior:
 
@@ -1215,8 +1225,9 @@ opts = HakumiORM::Codegen::GeneratorOptions.new(
 
 When enabled for a table:
 
-- **delete!** executes UPDATE SET column = NOW() instead of DELETE
-- **really_delete!** executes a hard DELETE FROM (bypasses soft delete)
+- **destroy!** executes UPDATE SET column = NOW() instead of DELETE
+- **delete!** executes a hard DELETE FROM (bypasses soft delete)
+- **really_delete!** is an alias for hard delete on soft-delete models
 - **deleted?** returns true when the column is non-nil
 - **Default scope** filters out soft-deleted records (WHERE column IS NULL) on all queries
 - **with_deleted** removes the default scope to include soft-deleted records
@@ -1230,8 +1241,9 @@ Article.all.only_deleted.to_a # only deleted articles
 
 article = Article.find(1)
 article.deleted?              # => false
-article.delete!               # UPDATE SET deleted_at = NOW()
-article.really_delete!        # DELETE FROM articles WHERE id = 1
+article.destroy!              # UPDATE SET deleted_at = NOW()
+article.delete!               # DELETE FROM articles WHERE id = 1
+article.really_delete!        # same physical delete (alias)
 ```
 
 Each table can use a different column name -- there is no hardcoded default.

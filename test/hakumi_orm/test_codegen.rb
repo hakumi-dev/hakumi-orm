@@ -100,7 +100,7 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
-  test "record has delete! with SQL_DELETE_BY_PK" do
+  test "record has delete!/destroy! with SQL_DELETE_BY_PK" do
     Dir.mktmpdir do |dir|
       gen = HakumiORM::Codegen::Generator.new(@tables, opts(dir))
       gen.generate!
@@ -110,6 +110,7 @@ class TestCodegen < HakumiORM::TestCase
       assert_includes code, "SQL_DELETE_BY_PK"
       assert_includes code, 'DELETE FROM "users"'
       assert_includes code, "def delete!"
+      assert_includes code, "def destroy!"
       assert_includes code, "affected_rows"
     end
   end
@@ -692,7 +693,7 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
-  test "delete! with dependent generates delete_all and destroy branches" do
+  test "destroy! with dependent generates delete_all and destroy branches" do
     tables = build_users_and_posts_tables
     Dir.mktmpdir do |dir|
       gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
@@ -701,7 +702,7 @@ class TestCodegen < HakumiORM::TestCase
       user_code = File.read(File.join(dir, "user/record.rb"))
 
       assert_includes user_code, "SQL_DELETE_POSTS"
-      assert_includes user_code, "dependent: :none"
+      assert_includes user_code, "def destroy!(dependent: :none"
       assert_includes user_code, "when :delete_all"
       assert_includes user_code, "when :destroy"
       assert_includes user_code, "posts.to_a(adapter: adapter).each"
@@ -716,11 +717,12 @@ class TestCodegen < HakumiORM::TestCase
       user_code = File.read(File.join(dir, "user/record.rb"))
 
       assert_includes user_code, "def delete!(adapter:"
+      assert_includes user_code, "def destroy!(adapter:"
       refute_includes user_code, "dependent:"
     end
   end
 
-  test "delete! with has_one generates destroy with safe navigation" do
+  test "destroy! with has_one generates destroy with safe navigation" do
     tables = build_users_and_profile_tables
     Dir.mktmpdir do |dir|
       gen = HakumiORM::Codegen::Generator.new(tables, opts(dir))
@@ -729,7 +731,7 @@ class TestCodegen < HakumiORM::TestCase
       user_code = File.read(File.join(dir, "user/record.rb"))
 
       assert_includes user_code, "SQL_DELETE_PROFILE"
-      assert_includes user_code, "profile(adapter: adapter)&.delete!"
+      assert_includes user_code, "profile(adapter: adapter)&.destroy!"
     end
   end
 
@@ -1078,7 +1080,7 @@ class TestCodegen < HakumiORM::TestCase
     end
   end
 
-  test "soft delete generates delete! as UPDATE and really_delete! as DELETE" do
+  test "soft delete generates destroy! as UPDATE and delete! as physical DELETE" do
     tables = build_table_with_soft_delete
     Dir.mktmpdir do |dir|
       gen = HakumiORM::Codegen::Generator.new(tables, opts(dir, soft_delete_tables: { "articles" => "deleted_at" }))
@@ -1087,6 +1089,7 @@ class TestCodegen < HakumiORM::TestCase
       record = File.read(File.join(dir, "article/record.rb"))
 
       assert_includes record, "SQL_SOFT_DELETE_BY_PK"
+      assert_includes record, "def destroy!"
       assert_includes record, "def delete!"
       assert_includes record, "def really_delete!"
       assert_includes record, "def deleted?"

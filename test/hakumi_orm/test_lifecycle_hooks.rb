@@ -48,9 +48,9 @@ class TestLifecycleHooks < HakumiORM::TestCase
     end
   end
 
-  test "on_destroy is called before delete!" do
+  test "on_destroy is called before destroy!" do
     user = UserRecord.new(id: 1, name: "Alice", email: "alice@test.com", age: nil, active: true)
-    user.delete!(adapter: @adapter)
+    user.destroy!(adapter: @adapter)
 
     assert_includes HookTracker.calls, [:on_destroy, 1]
   end
@@ -58,7 +58,7 @@ class TestLifecycleHooks < HakumiORM::TestCase
   test "on_destroy can prevent deletion by adding errors" do
     user = UserRecord.new(id: 1, name: "Alice", email: "undeletable@test.com", age: nil, active: true)
 
-    err = assert_raises(HakumiORM::ValidationError) { user.delete!(adapter: @adapter) }
+    err = assert_raises(HakumiORM::ValidationError) { user.destroy!(adapter: @adapter) }
 
     assert_includes err.errors.messages[:base], "cannot be deleted"
     refute(@adapter.executed_queries.any? { |q| q[:sql].include?("DELETE") })
@@ -66,14 +66,14 @@ class TestLifecycleHooks < HakumiORM::TestCase
 
   test "on_destroy receives the record" do
     user = UserRecord.new(id: 42, name: "Bob", email: "bob@test.com", age: 30, active: false)
-    user.delete!(adapter: @adapter)
+    user.destroy!(adapter: @adapter)
 
     assert_includes HookTracker.calls, [:on_destroy, 42]
   end
 
-  test "after_destroy is called after successful delete!" do
+  test "after_destroy is called after successful destroy!" do
     user = UserRecord.new(id: 1, name: "Alice", email: "alice@test.com", age: nil, active: true)
-    user.delete!(adapter: @adapter)
+    user.destroy!(adapter: @adapter)
 
     assert_includes HookTracker.calls, [:after_destroy, 1]
   end
@@ -81,7 +81,7 @@ class TestLifecycleHooks < HakumiORM::TestCase
   test "after_destroy is not called when on_destroy prevents deletion" do
     user = UserRecord.new(id: 1, name: "Alice", email: "undeletable@test.com", age: nil, active: true)
 
-    assert_raises(HakumiORM::ValidationError) { user.delete!(adapter: @adapter) }
+    assert_raises(HakumiORM::ValidationError) { user.destroy!(adapter: @adapter) }
 
     refute(HookTracker.calls.any? { |c| c[0] == :after_destroy })
   end
@@ -90,14 +90,14 @@ class TestLifecycleHooks < HakumiORM::TestCase
     @adapter.stub_result("DELETE", [], affected: 0)
     user = UserRecord.new(id: 999, name: "Ghost", email: "ghost@test.com", age: nil, active: true)
 
-    assert_raises(HakumiORM::Error) { user.delete!(adapter: @adapter) }
+    assert_raises(HakumiORM::Error) { user.destroy!(adapter: @adapter) }
 
     refute(HookTracker.calls.any? { |c| c[0] == :after_destroy })
   end
 
   test "on_destroy fires before after_destroy" do
     user = UserRecord.new(id: 1, name: "Alice", email: "alice@test.com", age: nil, active: true)
-    user.delete!(adapter: @adapter)
+    user.destroy!(adapter: @adapter)
 
     on_idx = HookTracker.calls.index { |c| c[0] == :on_destroy }
     after_idx = HookTracker.calls.index { |c| c[0] == :after_destroy }

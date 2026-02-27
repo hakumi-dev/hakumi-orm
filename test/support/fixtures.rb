@@ -87,7 +87,7 @@ class UserRecord
   SQL_DELETE_BY_PK = T.let('DELETE FROM "users" WHERE "users"."id" = $1', String)
 
   sig { params(adapter: HakumiORM::Adapter::Base).void }
-  def delete!(adapter: HakumiORM.adapter)
+  def destroy!(adapter: HakumiORM.adapter)
     errors = HakumiORM::Errors.new
     UserRecord::Contract.on_destroy(self, errors)
     raise HakumiORM::ValidationError, errors unless errors.valid?
@@ -96,6 +96,14 @@ class UserRecord
     raise HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
 
     UserRecord::Contract.after_destroy(self, adapter)
+  ensure
+    result&.close
+  end
+
+  sig { params(adapter: HakumiORM::Adapter::Base).void }
+  def delete!(adapter: HakumiORM.adapter)
+    result = adapter.exec_params(SQL_DELETE_BY_PK, [@id])
+    raise HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
   ensure
     result&.close
   end
