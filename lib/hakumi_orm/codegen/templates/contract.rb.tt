@@ -7,21 +7,12 @@ module <%= module_name %>
 <%= ind %>class <%= record_class_name %>::Contract < <%= record_class_name %>::BaseContract
 <%= ind %>  extend T::Sig
 
-<%= ind %>  # sig { override.params(record: <%= record_class_name %>::Checkable, e: ::HakumiORM::Errors).void }
-<%= ind %>  # def self.on_all(record, e)
-<%= ind %>  #   e.add(:name, "cannot be blank") if record.name.strip.empty?
-<%= ind %>  # end
-
-<%= ind %>  # sig { override.params(record: <%= record_class_name %>::New, e: ::HakumiORM::Errors).void }
-<%= ind %>  # def self.on_create(record, e)
-<%= ind %>  # end
-
-<%= ind %>  # sig { override.params(record: <%= record_class_name %>::Checkable, e: ::HakumiORM::Errors).void }
-<%= ind %>  # def self.on_update(record, e)
-<%= ind %>  # end
-
-<%= ind %>  # sig { override.params(record: <%= record_class_name %>::Checkable, adapter: ::HakumiORM::Adapter::Base, e: ::HakumiORM::Errors).void }
-<%= ind %>  # def self.on_persist(record, adapter, e)
+<%= ind %>  # validates :name, presence: true
+<%= ind %>  # validate :name_has_word, on: :create
+<%= ind %>  #
+<%= ind %>  # sig { params(record: <%= record_class_name %>::Checkable, e: ::HakumiORM::Errors).void }
+<%= ind %>  # def self.name_has_word(record, e)
+<%= ind %>  #   e.add(:name, "must include a space") unless record.name.include?(" ")
 <%= ind %>  # end
 <%= ind %>end
 <%- if module_name -%>

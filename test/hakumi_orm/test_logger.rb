@@ -12,6 +12,8 @@ class TestLogger < HakumiORM::TestCase
     @prev_logger = HakumiORM.config.logger
     @prev_pretty_sql_logs = HakumiORM.config.pretty_sql_logs
     @prev_colorize_sql_logs = HakumiORM.config.colorize_sql_logs
+    @prev_log_filter_parameters = HakumiORM.config.log_filter_parameters
+    @prev_log_filter_mask = HakumiORM.config.log_filter_mask
     HakumiORM.adapter = @adapter
   end
 
@@ -20,6 +22,8 @@ class TestLogger < HakumiORM::TestCase
     HakumiORM.config.logger = @prev_logger
     HakumiORM.config.pretty_sql_logs = @prev_pretty_sql_logs
     HakumiORM.config.colorize_sql_logs = @prev_colorize_sql_logs
+    HakumiORM.config.log_filter_parameters = @prev_log_filter_parameters
+    HakumiORM.config.log_filter_mask = @prev_log_filter_mask
   end
 
   test "logger is nil by default" do
@@ -166,6 +170,49 @@ class TestLogger < HakumiORM::TestCase
     )
 
     assert_includes formatted, "\e["
+  end
+
+  test "logger filters sensitive bind params based on configured patterns" do
+    io = StringIO.new
+    HakumiORM.config.logger = Logger.new(io)
+    HakumiORM.config.log_filter_parameters = ["email"]
+
+    UserRelation.new.where(UserSchema::EMAIL.eq("secret@example.com")).to_a(adapter: @adapter)
+
+    output = io.string
+
+    refute_includes output, "secret@example.com"
+    assert_includes output, "[FILTERED]"
+  end
+
+  test "logger uses configurable filter mask" do
+    io = StringIO.new
+    HakumiORM.config.logger = Logger.new(io)
+    HakumiORM.config.log_filter_parameters = ["email"]
+    HakumiORM.config.log_filter_mask = "[HIDDEN]"
+
+    UserRelation.new.where(UserSchema::EMAIL.eq("secret@example.com")).to_a(adapter: @adapter)
+
+    output = io.string
+
+    refute_includes output, "secret@example.com"
+    assert_includes output, "[HIDDEN]"
+  end
+
+  test "transaction control statements are tagged in logs" do
+    io = StringIO.new
+    HakumiORM.config.logger = Logger.new(io)
+    HakumiORM.config.pretty_sql_logs = false
+
+    @adapter.transaction do
+      @adapter.exec("SELECT 1")
+    end
+
+    output = io.string
+
+    assert_includes output, "BEGIN"
+    assert_includes output, "COMMIT"
+    assert_includes output, "[TRANSACTION]"
   end
 end
 

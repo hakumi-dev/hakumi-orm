@@ -386,6 +386,10 @@ end
 | "adapter" | auto | Set directly to skip lazy building. Takes precedence over connection params. |
 | "log_level" | -- | Symbol (":debug", ":info", ":warn", ":error", ":fatal"). Creates an internal logger to "$stdout". |
 | "logger" | "nil" | Any "HakumiORM::Loggable" implementor ("::Logger", Rails.logger, custom). "nil" = no logging, zero overhead. |
+| "pretty_sql_logs" | "false" | Pretty SQL formatter (keywords + optional color). |
+| "colorize_sql_logs" | "true" | ANSI colors when pretty logging is enabled. |
+| "log_filter_parameters" | "["passw", "email", ...]" | Case-insensitive substrings used to mask sensitive bind values in logs. |
+| "log_filter_mask" | ""[FILTERED]"" | Replacement text used for masked bind values. |
 | "output_dir" | ""db/schema"" | Directory for generated schemas, records, and relations. |
 | "models_dir" | "nil" | Directory for model stubs. "nil" = skip. |
 | "contracts_dir" | "nil" | Directory for contract stubs. "nil" = skip. |
@@ -393,6 +397,7 @@ end
 | "form_model_adapter" | "HakumiORM::FormModel::NoopAdapter" | Adapter object for form integration. Must implement "HakumiORM::FormModelAdapter". Rails sets "HakumiORM::Framework::Rails::FormModel" by default. |
 | "migrations_path" | ""db/migrate"" | Directory for migration files. |
 | "definitions_path" | ""db/definitions.rb"" | Ruby file (or directory) loaded before codegen for custom associations and user-defined enums. |
+| "seeds_path" | ""db/seeds.rb"" | Seed file executed by "rake db:seed". |
 
 All generated methods ("find", "where", "save!", associations, etc.) default to "HakumiORM.adapter", so you never pass the adapter manually.
 
@@ -934,20 +939,24 @@ bundle exec rake db:associations[users]     # single model
 
 ## Contracts and Lifecycle Hooks
 
-Each model has a Contract that controls its entire lifecycle. Contracts are generated once in "contracts_dir" and never overwritten -- they are yours to edit.
+Each model has a Contract that controls validation and post-write side effects. Contracts are generated once in "contracts_dir" and never overwritten.
 
-Two kinds of hooks:
+Public validation API:
 
-- **"on_*" hooks** run **before** the operation. They receive an "Errors" object and can **prevent** the operation by adding errors (raises "ValidationError").
-- **"after_*" hooks** run **after** the operation succeeds. They receive the persisted "Record" + "Adapter" for side effects. They **cannot** prevent the operation.
+- "validates" for standard validators (presence, blank/absence, length, format, numericality, inclusion, exclusion, comparison)
+- "validate" for custom validation methods
+
+Post-write hooks:
+
+- "after_create", "after_update", "after_destroy"
 
 ### Execution order per operation
 
 **"validate!" (New -> Validated):**
 
 ```
-1. Contract.on_all(record, errors)       -- shared validation
-2. Contract.on_create(record, errors)    -- create-specific validation
+1. run rules with "on: :all"
+2. run rules with "on: :create"
 3. raise ValidationError if errors       -- STOPS here on failure
 4. return Validated
 ```
@@ -955,8 +964,8 @@ Two kinds of hooks:
 **"save!" (Validated -> Record, executes INSERT):**
 
 ```
-1. Contract.on_all(record, errors)       -- shared validation
-2. Contract.on_persist(record, adapter, errors)  -- DB-dependent validation
+1. run rules with "on: :all"
+2. run rules with "on: :persist"
 3. raise ValidationError if errors       -- STOPS here, no INSERT
 4. INSERT ... RETURNING *                -- executes SQL
 5. Contract.after_create(record, adapter) -- side effects (record is persisted)
@@ -966,9 +975,9 @@ Two kinds of hooks:
 **"update!" (Record -> Record, executes UPDATE):**
 
 ```
-1. Contract.on_all(record, errors)       -- shared validation
-2. Contract.on_update(record, errors)    -- update-specific validation
-3. Contract.on_persist(record, adapter, errors)  -- DB-dependent validation
+1. run rules with "on: :all"
+2. run rules with "on: :update"
+3. run rules with "on: :persist"
 4. raise ValidationError if errors       -- STOPS here, no UPDATE
 5. UPDATE ... RETURNING *                -- executes SQL
 6. Contract.after_update(record, adapter) -- side effects (record is updated)
@@ -978,7 +987,7 @@ Two kinds of hooks:
 **"delete!" (Record -> void, executes DELETE or soft-delete UPDATE):**
 
 ```
-1. Contract.on_destroy(record, errors)   -- can prevent deletion
+1. run rules with "on: :destroy"
 2. raise ValidationError if errors       -- STOPS here, no DELETE
 3. DELETE FROM ... WHERE pk = $1         -- executes SQL
 4. Contract.after_destroy(record, adapter) -- side effects (record is deleted)
@@ -991,25 +1000,14 @@ Two kinds of hooks:
 class UserRecord::Contract < UserRecord::BaseContract
   extend T::Sig
 
-  sig { override.params(record: UserRecord::Checkable, e: ::HakumiORM::Errors).void }
-  def self.on_all(record, e)
-    e.add(:name, "cannot be blank") if record.name.strip.empty?
-    e.add(:email, "must contain @") unless record.email.include?("@")
-  end
+  validates :name, presence: true
+  validates :email, format: { with: /\A[^@\s]+@[^@\s]+\z/ }
+  validates :login_count, numericality: { only_integer: true, greater_than_or_equal_to: 0 }, on: :create
+  validate :email_not_reserved, on: :create
 
-  sig { override.params(record: UserRecord::New, e: ::HakumiORM::Errors).void }
-  def self.on_create(record, e)
+  sig { params(record: UserRecord::New, e: ::HakumiORM::Errors).void }
+  def self.email_not_reserved(record, e)
     e.add(:email, "is reserved") if record.email.end_with?("@system.internal")
-  end
-
-  sig { override.params(record: UserRecord::Checkable, adapter: ::HakumiORM::Adapter::Base, e: ::HakumiORM::Errors).void }
-  def self.on_persist(record, adapter, e)
-    # check uniqueness, FK existence, etc.
-  end
-
-  sig { override.params(record: UserRecord, e: ::HakumiORM::Errors).void }
-  def self.on_destroy(record, e)
-    e.add(:base, "admins cannot be deleted") if record.admin?
   end
 
   sig { override.params(record: UserRecord, adapter: ::HakumiORM::Adapter::Base).void }
@@ -1019,7 +1017,9 @@ class UserRecord::Contract < UserRecord::BaseContract
 end
 ```
 
-When any "on_*" hook adds errors, a "ValidationError" is raised:
+Custom validation methods receive "(record, errors)" and should add messages through "e.add(...)".
+
+When any rule adds errors, a "ValidationError" is raised:
 
 ```ruby
 begin
@@ -1030,18 +1030,25 @@ rescue HakumiORM::ValidationError => e
 end
 ```
 
-### Hook reference
+Validation contexts for "validates" and "validate":
 
-| Hook | Operation | Timing | Can prevent? | Receives |
-|---|---|---|---|---|
-| "on_all" | "validate!", "save!", "update!" | Before SQL | Yes | "Checkable", "Errors" |
-| "on_create" | "validate!" | Before SQL | Yes | "New", "Errors" |
-| "on_update" | "update!" | Before SQL | Yes | "Checkable", "Errors" |
-| "on_persist" | "save!", "update!" | Before SQL | Yes | "Checkable", "Adapter", "Errors" |
-| "on_destroy" | "delete!" | Before SQL | Yes | "Record", "Errors" |
-| "after_create" | "save!" | After INSERT | No | "Record", "Adapter" |
-| "after_update" | "update!" | After UPDATE | No | "Record", "Adapter" |
-| "after_destroy" | "delete!" | After DELETE | No | "Record", "Adapter" |
+- "on: :all" (default)
+- "on: :create"
+- "on: :update"
+- "on: :persist"
+- "on: :destroy"
+
+Execution timing by operation:
+
+- "validate!": runs ":all", then ":create"
+- "save!": runs ":all", then ":persist", then INSERT; then "after_create"
+- "update!": runs ":all", then ":update", then ":persist", then UPDATE; then "after_update"
+- "delete!": runs ":destroy", then DELETE; then "after_destroy"
+
+Important behavior:
+
+- Any error added during validation stops the SQL write and raises "ValidationError".
+- "after_*" hooks run only after successful SQL.
 
 ## Record Variants
 
@@ -1681,6 +1688,14 @@ Output:
 D, [2026-02-22] DEBUG -- : [HakumiORM] (0.42ms) SELECT "users".* FROM "users" WHERE "users"."active" = $1 ["t"]
 ```
 
+When "pretty_sql_logs" is enabled, output is formatted and transaction statements are tagged:
+
+```
+HakumiORM SQL (0.10ms) BEGIN [TRANSACTION]
+HakumiORM SQL (1.22ms) INSERT INTO ...
+HakumiORM SQL (0.08ms) COMMIT [TRANSACTION]
+```
+
 Set to "nil" (default) to disable logging entirely with zero overhead.
 
 For production or advanced use cases, inject any logger that implements "HakumiORM::Loggable" (defines "debug", "info", "warn", "error", "fatal"). Ruby's "::Logger" satisfies this interface out of the box:
@@ -1694,6 +1709,17 @@ end
 ```
 
 Available log levels for "log_level=": ":debug", ":info", ":warn", ":error", ":fatal".
+
+Sensitive bind values can be filtered:
+
+```ruby
+HakumiORM.configure do |config|
+  config.log_filter_parameters = %w[passw email token secret]
+  config.log_filter_mask = "[HIDDEN]"
+end
+```
+
+In Rails integration, HakumiORM automatically reuses "Rails.application.config.filter_parameters".
 
 ## Rake Tasks
 

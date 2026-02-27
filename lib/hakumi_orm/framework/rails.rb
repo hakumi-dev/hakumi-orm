@@ -24,6 +24,8 @@ module HakumiORM
             HakumiORM.config,
             log_level: ::Rails.configuration.log_level || :info
           )
+          filters = ::Rails.application.config.filter_parameters
+          HakumiORM.config.log_filter_parameters = filters.map(&:to_s) if filters
           apply_rails_logger_defaults!(HakumiORM.config)
           if HakumiORM.config.form_model_adapter == HakumiORM::FormModel::NoopAdapter
             HakumiORM.config.form_model_adapter = HakumiORM::Framework::Rails::FormModel

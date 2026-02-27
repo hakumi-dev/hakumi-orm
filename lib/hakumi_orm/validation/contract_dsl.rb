@@ -26,6 +26,13 @@ module HakumiORM
         add_validation_rules(attribute, normalized)
       end
 
+      sig { params(method_name: Symbol, kwargs: T::Hash[Symbol, Object]).void.checked(:never) }
+      def validate(method_name, **kwargs)
+        context = context_option(kwargs)
+        validate_context!(context)
+        add_custom_validation_rule(method_name, context, kwargs)
+      end
+
       sig { void }
       def clear_validations!
         @hakumi_validation_rules = T.let([], T.nilable(T::Array[HakumiORM::Validation::RulePayload]))
@@ -125,6 +132,17 @@ module HakumiORM
         validation_rules << options.merge(attribute: attribute, kind: kind)
       end
 
+      sig { params(method_name: Symbol, context: Symbol, kwargs: T::Hash[Symbol, Object]).void }
+      def add_custom_validation_rule(method_name, context, kwargs)
+        validation_rules << {
+          method: method_name,
+          kind: :custom,
+          on: context,
+          if: kwargs[:if],
+          unless: kwargs[:unless]
+        }
+      end
+
       sig { params(attribute: Symbol, normalized: HakumiORM::Validation::RulePayload).void }
       def add_validation_rules(attribute, normalized)
         common_options = {
@@ -193,6 +211,11 @@ module HakumiORM
 
       sig { params(rule: HakumiORM::Validation::RulePayload, record: Object, errors: HakumiORM::Errors).void }
       def validate_rule(rule, record, errors)
+        if rule[:kind] == :custom
+          run_custom_validation(rule, record, errors)
+          return
+        end
+
         attribute = T.cast(rule[:attribute], Symbol)
         value = read_attribute(record, attribute)
         context = HakumiORM::Validation::RuleContext.new(attribute: attribute, value: value, errors: errors, record: record)

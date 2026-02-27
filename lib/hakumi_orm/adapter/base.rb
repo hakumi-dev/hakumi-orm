@@ -8,6 +8,16 @@ module HakumiORM
       extend T::Helpers
 
       abstract!
+      PREDICATE_BIND_REGEX = T.let(
+        /
+          (
+            (?:[A-Za-z_]\w*|"[^"]+"|`[^`]+`)
+            (?:\.(?:[A-Za-z_]\w*|"[^"]+"|`[^`]+`))?
+          )
+          \s*(?:=|<>|!=|<|>|<=|>=|LIKE|ILIKE|IN)\s*\(?\s*(?:\$\d+|\?)
+        /ix,
+        Regexp
+      )
 
       sig { abstract.returns(Dialect::Base) }
       def dialect; end
@@ -114,6 +124,8 @@ module HakumiORM
         log = HakumiORM.config.logger
         return unless log
 
+        note ||= "TRANSACTION" if transaction_control_sql?(sql)
+        safe_params = filter_params_for_log(sql, params)
         elapsed = T.let(
           T.cast(((T.cast(Process.clock_gettime(Process::CLOCK_MONOTONIC), Float) - start) * 1000).round(2), Float),
           Float
@@ -124,15 +136,83 @@ module HakumiORM
             SqlLogFormatter.format(
               elapsed_ms: elapsed,
               sql: sql,
-              params: params,
+              params: safe_params,
               note: note,
               colorize: config.colorize_sql_logs
             )
           else
             suffix = note ? " [#{note}]" : ""
-            params.empty? ? "[HakumiORM] (#{elapsed}ms) #{sql}#{suffix}" : "[HakumiORM] (#{elapsed}ms) #{sql} #{params.inspect}#{suffix}"
+            if safe_params.empty?
+              "[HakumiORM] (#{elapsed}ms) #{sql}#{suffix}"
+            else
+              "[HakumiORM] (#{elapsed}ms) #{sql} #{safe_params.inspect}#{suffix}"
+            end
           end
         end
+      end
+
+      sig { params(sql: String, params: T::Array[PGValue]).returns(T::Array[PGValue]) }
+      def filter_params_for_log(sql, params)
+        return params if params.empty?
+        return params unless sensitive_bind_reference?(sql)
+
+        T.let(Array.new(params.length, HakumiORM.config.log_filter_mask), T::Array[PGValue])
+      end
+
+      sig { params(sql: String).returns(T::Boolean) }
+      def sensitive_bind_reference?(sql)
+        patterns = HakumiORM.config.log_filter_parameters
+        return false if patterns.empty?
+
+        lowered = sql.downcase
+        return false unless patterns.any? { |entry| !entry.empty? && lowered.include?(entry.downcase) }
+
+        insert_columns = extract_insert_columns(sql)
+        return true if insert_columns.any? { |col| sensitive_column?(col, patterns) }
+
+        predicate_column_tokens(sql).any? { |col| sensitive_column?(col, patterns) }
+      end
+
+      sig { params(sql: String).returns(T::Boolean) }
+      def transaction_control_sql?(sql)
+        stripped = sql.lstrip.upcase
+        stripped.start_with?("BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "RELEASE SAVEPOINT")
+      end
+
+      sig { params(column: String, patterns: T::Array[String]).returns(T::Boolean) }
+      def sensitive_column?(column, patterns)
+        lowered = column.downcase
+        patterns.any? { |entry| !entry.empty? && lowered.include?(entry.downcase) }
+      end
+
+      sig { params(sql: String).returns(T::Array[String]) }
+      def extract_insert_columns(sql)
+        match = /\A\s*INSERT\s+INTO\s+.+?\(([^)]+)\)\s+VALUES\b/im.match(sql)
+        return [] unless match
+
+        raw = T.must(match[1])
+        raw.split(",").map { |token| normalize_identifier(token) }.reject(&:empty?)
+      end
+
+      sig { params(sql: String).returns(T::Array[String]) }
+      def predicate_column_tokens(sql)
+        tokens = T.let([], T::Array[String])
+        sql.scan(PREDICATE_BIND_REGEX) do |match|
+          token = T.cast(match, T::Array[String]).first
+          next unless token
+
+          normalized = normalize_identifier(token)
+          tokens << normalized unless normalized.empty?
+        end
+        tokens
+      end
+
+      sig { params(raw: String).returns(String) }
+      def normalize_identifier(raw)
+        token = raw.strip
+        parts = token.split(".")
+        id = parts.last || token
+        id.gsub(/\A["`]|["`]\z/, "")
       end
 
       sig { params(blk: T.proc.params(adapter: Base).void).void }

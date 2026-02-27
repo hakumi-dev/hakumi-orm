@@ -54,6 +54,12 @@ module HakumiORM
     sig { returns(T::Boolean) }
     attr_accessor :colorize_sql_logs
 
+    sig { returns(T::Array[String]) }
+    attr_accessor :log_filter_parameters
+
+    sig { returns(String) }
+    attr_accessor :log_filter_mask
+
     sig { returns(String) }
     attr_accessor :migrations_path
 
@@ -90,6 +96,11 @@ module HakumiORM
       @logger = T.let(nil, T.nilable(Loggable))
       @pretty_sql_logs = T.let(false, T::Boolean)
       @colorize_sql_logs = T.let(true, T::Boolean)
+      @log_filter_parameters = T.let(
+        %w[passw email secret token _key crypt salt certificate otp ssn cvv cvc],
+        T::Array[String]
+      )
+      @log_filter_mask = T.let("[FILTERED]", String)
       @migrations_path = T.let("db/migrate", String)
       @definitions_path = T.let("db/definitions.rb", String)
       @seeds_path = T.let("db/seeds.rb", String)

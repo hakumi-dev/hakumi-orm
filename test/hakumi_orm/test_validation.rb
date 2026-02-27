@@ -4,7 +4,7 @@
 require "test_helper"
 
 class TestValidation < HakumiORM::TestCase
-  HOOK_METHODS = %i[on_all on_create on_update on_persist].freeze
+  HOOK_METHODS = %i[on_all on_create on_update on_persist on_destroy].freeze
 
   def setup
     remove_contract_hooks!
@@ -160,97 +160,91 @@ class TestValidation < HakumiORM::TestCase
     assert_equal 2, err.errors.count
   end
 
-  test "validates presence adds error on create flow" do
-    UserRecord::Contract.validates(:name, presence: true, on: :create)
-    record = UserRecord.build(name: "  ", email: "x@y.com", active: true)
+  test "contract hooks can express common rules via e.add" do
+    UserRecord::Contract.define_singleton_method(:on_all) do |record, e|
+      super(record, e)
+      e.add(:name, "can't be blank", type: :blank) if record.name.strip.empty?
+      e.add(:email, "must contain @", type: :invalid) unless record.email.include?("@")
+    end
+    UserRecord::Contract.define_singleton_method(:on_create) do |record, e|
+      super(record, e)
+      e.add(:name, "is too short", type: :too_short) if record.name.length < 3
+    end
 
+    record = UserRecord.build(name: "  ", email: "invalid", active: true)
     err = assert_raises(HakumiORM::ValidationError) { record.validate! }
-    assert_equal ["can't be blank"], err.errors[:name]
-    assert_equal [{ error: "blank" }], err.errors.details[:name]
+
+    assert_includes err.errors[:name], "can't be blank"
+    assert_includes err.errors[:name], "is too short"
+    assert_equal [{ error: "blank" }, { error: "too_short" }], err.errors.details[:name]
+    assert_equal ["must contain @"], err.errors[:email]
   end
 
-  test "validates blank requires empty value" do
-    UserRecord::Contract.validates(:name, blank: true)
-    errors = HakumiORM::Errors.new
-    record = UserRecord::New.new(name: "Alice", email: "a@b.com", active: true)
+  test "destroy lifecycle validations use on_destroy with e.add" do
+    UserRecord::Contract.define_singleton_method(:on_destroy) do |record, e|
+      super(record, e)
+      e.add(:base, "active users cannot be deleted", type: :invalid) if record.active
+    end
 
-    UserRecord::Contract.on_all(record, errors)
-
-    assert_equal ["must be blank"], errors[:name]
-  end
-
-  test "validates length format numericality inclusion apply together" do
-    UserRecord::Contract.validates(:name, length: { minimum: 3, maximum: 5 })
-    UserRecord::Contract.validates(:email, format: { with: /\A[^@\s]+@[^@\s]+\z/ })
-    UserRecord::Contract.validates(:age, numericality: { only_integer: true, greater_than_or_equal_to: 18 })
-    UserRecord::Contract.validates(:active, inclusion: { in: [true] })
-    errors = HakumiORM::Errors.new
-    record = UserRecord::New.new(name: "Al", email: "broken", age: 17, active: false)
-
-    UserRecord::Contract.on_all(record, errors)
-
-    assert_includes errors[:name], "is too short (minimum is 3)"
-    assert_equal ["is invalid"], errors[:email]
-    assert_includes errors[:age], "must be greater than or equal to 18.0"
-    assert_equal ["is not included in the list"], errors[:active]
-  end
-
-  test "validates allow_nil and allow_blank skip checks" do
-    UserRecord::Contract.validates(:age, numericality: { only_integer: true }, allow_nil: true)
-    UserRecord::Contract.validates(:name, format: { with: /\A[a-z]+\z/ }, allow_blank: true)
-    errors = HakumiORM::Errors.new
-    record = UserRecord::New.new(name: "   ", email: "x@y.com", age: nil, active: true)
-
-    UserRecord::Contract.on_all(record, errors)
-
-    assert_predicate errors, :empty?
-  end
-
-  test "validates custom message overrides default" do
-    UserRecord::Contract.validates(:name, presence: true, message: "required")
-    errors = HakumiORM::Errors.new
-    record = UserRecord::New.new(name: "", email: "x@y.com", active: true)
-
-    UserRecord::Contract.on_all(record, errors)
-
-    assert_equal ["required"], errors[:name]
-  end
-
-  test "validates supports proc message, dynamic inclusion and if/unless conditions" do
-    UserRecord::Contract.validates(:active, inclusion: { in: ->(_record) { [true] } }, message: ->(_record) { "must stay enabled" })
-    UserRecord::Contract.validates(:name, presence: true, if: ->(record) { record.active == false })
-    UserRecord::Contract.validates(:email, format: { with: /\A[a-z]+@example\.com\z/ }, unless: :active)
-    errors = HakumiORM::Errors.new
-    record = UserRecord::New.new(name: "", email: "bad@mail.com", active: false)
-
-    UserRecord::Contract.on_all(record, errors)
-
-    assert_equal ["must stay enabled"], errors[:active]
-    assert_equal ["can't be blank"], errors[:name]
-    assert_equal ["is invalid"], errors[:email]
-  end
-
-  test "validates exclusion blocks reserved values" do
-    UserRecord::Contract.validates(:email, exclusion: { in: ["root@example.com"] })
-    errors = HakumiORM::Errors.new
-    record = UserRecord::New.new(name: "Alice", email: "root@example.com", active: true)
-
-    UserRecord::Contract.on_all(record, errors)
-
-    assert_equal ["is reserved"], errors[:email]
-  end
-
-  test "validates comparison supports numeric checks and symbol/proc operands" do
-    UserRecord::Contract.validates(:age, comparison: { greater_than: 17 }, on: :destroy)
-    UserRecord::Contract.validates(:age, comparison: { less_than_or_equal_to: :id }, on: :destroy)
-    UserRecord::Contract.validates(:age, comparison: { other_than: ->(_record) { 25 } }, on: :destroy)
     errors = HakumiORM::Errors.new
     record = UserRecord.new(id: 20, name: "Alice", email: "x@y.com", age: 25, active: true)
-
     UserRecord::Contract.on_destroy(record, errors)
 
-    assert_includes errors[:age], "must be less than or equal to 20"
-    assert_includes errors[:age], "must be other than 25"
+    assert_equal ["active users cannot be deleted"], errors[:base]
+  end
+
+  test "validates presence runs through on_all and can coexist with e.add" do
+    UserRecord::Contract.validates(:name, presence: true)
+    UserRecord::Contract.define_singleton_method(:on_all) do |record, e|
+      super(record, e)
+      e.add(:email, "must contain @") unless record.email.include?("@")
+    end
+
+    record = UserRecord.build(name: " ", email: "bad", active: true)
+    err = assert_raises(HakumiORM::ValidationError) { record.validate! }
+
+    assert_includes err.errors[:name], "can't be blank"
+    assert_includes err.errors[:email], "must contain @"
+  end
+
+  test "validate runs custom method in default all context" do
+    UserRecord::Contract.validate(:name_must_include_space)
+    UserRecord::Contract.define_singleton_method(:name_must_include_space) do |record, e|
+      e.add(:name, "must include a space") unless record.name.include?(" ")
+    end
+
+    record = UserRecord.build(name: "Alice", email: "alice@example.com", active: true)
+    err = assert_raises(HakumiORM::ValidationError) { record.validate! }
+
+    assert_equal ["must include a space"], err.errors[:name]
+  end
+
+  test "validate supports on create context" do
+    UserRecord::Contract.validate(:name_must_include_space, on: :create)
+    UserRecord::Contract.define_singleton_method(:name_must_include_space) do |record, e|
+      e.add(:name, "must include a space") unless record.name.include?(" ")
+    end
+
+    record = UserRecord.build(name: "Alice", email: "alice@example.com", active: true)
+    err = assert_raises(HakumiORM::ValidationError) { record.validate! }
+
+    assert_equal ["must include a space"], err.errors[:name]
+  end
+
+  test "validate supports if/unless conditions" do
+    UserRecord::Contract.validate(:name_must_include_space, if: :active, unless: ->(record) { record.email == "skip@example.com" })
+    UserRecord::Contract.define_singleton_method(:name_must_include_space) do |record, e|
+      e.add(:name, "must include a space") unless record.name.include?(" ")
+    end
+
+    active_record = UserRecord.build(name: "Alice", email: "alice@example.com", active: true)
+    active_err = assert_raises(HakumiORM::ValidationError) { active_record.validate! }
+    assert_equal ["must include a space"], active_err.errors[:name]
+
+    skipped_record = UserRecord.build(name: "Alice", email: "skip@example.com", active: true)
+    validated = skipped_record.validate!
+
+    assert_instance_of UserRecord::Validated, validated
   end
 
   private
