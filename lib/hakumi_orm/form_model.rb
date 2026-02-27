@@ -8,7 +8,7 @@ module HakumiORM
       extend T::Sig
       include Kernel
 
-      sig { params(base: Module).void }
+      sig { params(base: T::Module[T.anything]).void }
       def self.included(base)
         base.extend(ClassMethods)
         HakumiORM.config.form_model_adapter.apply_to(base)

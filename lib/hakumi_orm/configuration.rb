@@ -161,7 +161,7 @@ module HakumiORM
 
     sig { params(adapter: FormModelAdapter).void }
     def form_model_adapter=(adapter)
-      adapter_module = T.cast(adapter, Module)
+      adapter_module = T.cast(adapter, T::Module[T.anything])
       raise ArgumentError, "form_model_adapter must define instance method 'to_model'" unless adapter_module.method_defined?(:to_model)
 
       @form_model_adapter = adapter

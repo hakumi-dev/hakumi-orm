@@ -9,7 +9,7 @@ module HakumiORM
 
     interface!
 
-    sig { abstract.params(base: Module).void }
+    sig { abstract.params(base: T::Module[T.anything]).void }
     def apply_to(base); end
   end
 end

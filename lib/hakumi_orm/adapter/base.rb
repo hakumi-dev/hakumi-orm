@@ -10,6 +10,9 @@ module HakumiORM
       extend T::Helpers
 
       abstract!
+      SQL_SPACE_BYTES = T.let([9, 10, 12, 13, 32].freeze, T::Array[Integer])
+      INSERT_KEYWORD = "INSERT"
+      INTO_KEYWORD = "INTO"
       PoolStats = T.type_alias do
         {
           size: Integer,
@@ -206,15 +209,15 @@ module HakumiORM
       def extract_insert_columns(sql)
         upper_sql = sql.upcase
         idx = skip_sql_space(upper_sql, 0)
-        idx = consume_sql_keyword(upper_sql, idx, "INSERT")
-        return [] unless idx
+        return [] unless upper_sql[idx, 6] == INSERT_KEYWORD
 
+        idx += 6
         idx = skip_sql_space(upper_sql, idx)
-        idx = consume_sql_keyword(upper_sql, idx, "INTO")
-        return [] unless idx
+        return [] unless upper_sql[idx, 4] == INTO_KEYWORD
 
+        idx += 4
         idx = skip_sql_space(upper_sql, idx)
-        values_idx = index_sql_keyword(upper_sql, "VALUES", idx)
+        values_idx = upper_sql.index("VALUES", idx)
         return [] unless values_idx
 
         open_idx = sql.index("(", idx)
@@ -255,44 +258,11 @@ module HakumiORM
         i = T.let(idx, Integer)
         while i < sql.length
           ch = sql.getbyte(i)
-          break unless ch == 9 || ch == 10 || ch == 12 || ch == 13 || ch == 32
+          break unless SQL_SPACE_BYTES.include?(ch)
 
           i += 1
         end
         i
-      end
-
-      sig { params(sql: String, idx: Integer, keyword: String).returns(T.nilable(Integer)) }
-      def consume_sql_keyword(sql, idx, keyword)
-        return nil unless sql[idx, keyword.length] == keyword
-
-        boundary = idx + keyword.length
-        return boundary if boundary >= sql.length
-
-        ch = sql.getbyte(boundary)
-        return boundary unless ch && ((ch >= 65 && ch <= 90) || (ch >= 48 && ch <= 57) || ch == 95)
-
-        nil
-      end
-
-      sig { params(sql: String, keyword: String, start_idx: Integer).returns(T.nilable(Integer)) }
-      def index_sql_keyword(sql, keyword, start_idx)
-        from = T.let(start_idx, Integer)
-        while from < sql.length
-          idx = sql.index(keyword, from)
-          return nil unless idx
-
-          before = idx.zero? ? nil : sql.getbyte(idx - 1)
-          after_pos = idx + keyword.length
-          after = after_pos >= sql.length ? nil : sql.getbyte(after_pos)
-          before_ok = before.nil? || !((before >= 65 && before <= 90) || (before >= 48 && before <= 57) || before == 95)
-          after_ok = after.nil? || !((after >= 65 && after <= 90) || (after >= 48 && after <= 57) || after == 95)
-          return idx if before_ok && after_ok
-
-          from = idx + 1
-        end
-
-        nil
       end
 
       sig { params(blk: T.proc.params(adapter: Base).void).void }

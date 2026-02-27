@@ -221,7 +221,7 @@ module HakumiORM
     def quote_pg_array_string(value)
       escaped = +""
       value.each_char do |ch|
-        escaped << "\\" if ch == "\\" || ch == '"'
+        escaped << "\\" if ["\\", '"'].include?(ch)
         escaped << ch
       end
       "\"#{escaped}\""

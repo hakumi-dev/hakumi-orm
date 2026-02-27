@@ -9,7 +9,7 @@ module HakumiORM
       extend HakumiORM::FormModelAdapter
       include Kernel
 
-      sig { override.params(base: Module).void }
+      sig { override.params(base: T::Module[T.anything]).void }
       def self.apply_to(base)
         base.prepend(self) unless base < self
       end
