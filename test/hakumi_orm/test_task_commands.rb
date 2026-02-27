@@ -55,6 +55,20 @@ class TestTaskCommands < HakumiORM::TestCase
     end
   end
 
+  test "run_prepare delegates to run_migrate" do
+    calls = []
+    original = HakumiORM::TaskCommands.method(:run_migrate)
+    HakumiORM::TaskCommands.define_singleton_method(:run_migrate) do |task_prefix:|
+      calls << task_prefix
+    end
+
+    HakumiORM::TaskCommands.run_prepare(task_prefix: "db:")
+
+    assert_equal ["db:"], calls
+  ensure
+    HakumiORM::TaskCommands.define_singleton_method(:run_migrate, original)
+  end
+
   test "run_fixtures_load loads yaml fixtures into sqlite database" do
     require "hakumi_orm/adapter/sqlite_result"
     require "hakumi_orm/adapter/sqlite"
@@ -127,6 +141,41 @@ class TestTaskCommands < HakumiORM::TestCase
 
       assert_equal 1, users_count
       assert_equal 0, posts_count
+    ensure
+      adapter.close
+    end
+  end
+
+  test "run_fixtures_load auto-generates deterministic integer id when missing" do
+    require "hakumi_orm/adapter/sqlite_result"
+    require "hakumi_orm/adapter/sqlite"
+
+    Dir.mktmpdir do |dir|
+      db_path = File.join(dir, "fixtures_ids.sqlite3")
+      adapter = HakumiORM::Adapter::Sqlite.connect(db_path)
+      adapter.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)").close
+
+      fixtures_dir = File.join(dir, "test", "fixtures")
+      FileUtils.mkdir_p(fixtures_dir)
+      File.write(File.join(fixtures_dir, "users.yml"), "alice:\n  name: Alice\nbob:\n  name: Bob\n")
+
+      HakumiORM.config.adapter = adapter
+      HakumiORM.config.adapter_name = :sqlite
+      HakumiORM.config.database = db_path
+      HakumiORM.config.fixtures_path = fixtures_dir
+
+      HakumiORM::TaskCommands.run_fixtures_load
+
+      result = adapter.exec('SELECT id, name FROM "users" ORDER BY name ASC')
+      rows = result.values
+      result.close
+
+      assert_equal 2, rows.size
+      assert_equal "Alice", rows[0][1]
+      assert_equal "Bob", rows[1][1]
+      refute_equal rows[0][0], rows[1][0]
+      assert_predicate rows[0][0], :positive?
+      assert_predicate rows[1][0], :positive?
     ensure
       adapter.close
     end

@@ -74,6 +74,10 @@ module HakumiORM
       post_migrate_fingerprint!(task_prefix: task_prefix)
     end
 
+    def run_prepare(task_prefix:)
+      run_migrate(task_prefix: task_prefix)
+    end
+
     def run_rollback(count:, task_prefix:)
       runner = build_runner
       runner.rollback!(count: count)

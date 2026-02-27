@@ -1765,6 +1765,7 @@ Available tasks:
 bundle exec rake db:install                # create initial project structure (dirs, config)
 bundle exec rake db:generate           # generate models from DB schema + update annotations
 bundle exec rake db:migrate            # run pending migrations + auto-regenerate
+bundle exec rake db:prepare            # prepare DB for current env (migrate + generate)
 bundle exec rake db:rollback[N]        # rollback N migrations
 bundle exec rake db:migrate:status     # show migration status
 bundle exec rake db:version            # show current schema version
@@ -1793,6 +1794,7 @@ end
 ```
 
 "use_transactional_tests" defaults to true. You can access rows with "users(:alice)" or "fixture(:users, :alice)".
+When a fixture row omits an integer primary key, HakumiORM assigns a deterministic id from the fixture label.
 
 ## Low-Level Reference
 

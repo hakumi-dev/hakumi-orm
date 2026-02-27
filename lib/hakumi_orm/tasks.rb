@@ -54,6 +54,14 @@ module HakumiORM
         HakumiORM::TaskCommands.run_migrate(task_prefix: HakumiORM::Tasks.task_prefix)
       end
 
+      desc "Prepare database for current environment (migrate + generate)"
+      task :prepare do
+        require "hakumi_orm"
+        require "hakumi_orm/migration"
+
+        HakumiORM::TaskCommands.run_prepare(task_prefix: HakumiORM::Tasks.task_prefix)
+      end
+
       desc "Rollback the last migration (usage: rake #{HakumiORM::Tasks.task_prefix}rollback or rake #{HakumiORM::Tasks.task_prefix}rollback[N])"
       task :rollback, [:count] do |_t, args|
         require "hakumi_orm"

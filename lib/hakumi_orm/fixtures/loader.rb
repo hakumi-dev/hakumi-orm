@@ -6,6 +6,7 @@ require "yaml"
 require "date"
 require "bigdecimal"
 require "json"
+require "zlib"
 
 module HakumiORM
   module Fixtures
@@ -51,7 +52,8 @@ module HakumiORM
           table = @tables[table_name]
           next unless table
 
-          rows = parse_fixture_rows(parse_labeled_rows(file))
+          labeled = parse_labeled_rows(file)
+          rows = parse_fixture_rows(table, labeled)
           replace_table_rows!(table, rows)
           loaded_tables[table_name] = true
         end
@@ -74,7 +76,7 @@ module HakumiORM
           next unless table
 
           labeled_rows = parse_labeled_rows(file)
-          replace_table_rows!(table, parse_fixture_rows(labeled_rows))
+          replace_table_rows!(table, parse_fixture_rows(table, labeled_rows))
           loaded[table_name] = labeled_rows
         end
         loaded
@@ -141,9 +143,11 @@ module HakumiORM
         rows
       end
 
-      sig { params(labeled_rows: FixtureRowSet).returns(T::Array[FixtureRow]) }
-      def parse_fixture_rows(labeled_rows)
-        labeled_rows.values
+      sig { params(table: Codegen::TableInfo, labeled_rows: FixtureRowSet).returns(T::Array[FixtureRow]) }
+      def parse_fixture_rows(table, labeled_rows)
+        labeled_rows.map do |label, row|
+          apply_primary_key_defaults(table, label, row)
+        end
       end
 
       sig { params(attrs: T::Hash[T.any(String, Symbol), FixtureValue]).returns(FixtureRow) }
@@ -151,6 +155,33 @@ module HakumiORM
         row = T.let({}, FixtureRow)
         attrs.each { |k, v| row[k.to_s] = v }
         row
+      end
+
+      sig { params(table: Codegen::TableInfo, label: String, row: FixtureRow).returns(FixtureRow) }
+      def apply_primary_key_defaults(table, label, row)
+        pk = table.primary_key
+        return row unless pk
+        return row if row.key?(pk)
+
+        column = table.columns.find { |c| c.name == pk }
+        return row unless column
+
+        if integer_column?(column)
+          row.merge(pk => fixture_id(label))
+        else
+          row
+        end
+      end
+
+      sig { params(column: Codegen::ColumnInfo).returns(T::Boolean) }
+      def integer_column?(column)
+        %w[smallint integer bigint int tinyint].include?(column.data_type.downcase)
+      end
+
+      sig { params(label: String).returns(Integer) }
+      def fixture_id(label)
+        id = Zlib.crc32(label) % 2_147_483_647
+        id.zero? ? 1 : id
       end
 
       sig { params(table: Codegen::TableInfo, rows: T::Array[FixtureRow]).void }
