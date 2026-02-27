@@ -1796,6 +1796,7 @@ end
 
 "use_transactional_tests" defaults to true. You can access rows with "users(:alice)" or "fixture(:users, :alice)".
 When a fixture row omits an integer primary key, HakumiORM assigns a deterministic id from the fixture label.
+Foreign key labels are supported (`user: alice` / `user_id: alice`) and join rows can expand labels (`user: alice,bob` or YAML array).
 
 ## Low-Level Reference
 

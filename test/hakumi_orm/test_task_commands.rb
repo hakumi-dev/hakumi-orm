@@ -246,4 +246,64 @@ class TestTaskCommands < HakumiORM::TestCase
       adapter.close
     end
   end
+
+  test "run_fixtures_load expands multi-label fk references for join rows" do
+    require "hakumi_orm/adapter/sqlite_result"
+    require "hakumi_orm/adapter/sqlite"
+
+    Dir.mktmpdir do |dir|
+      db_path = File.join(dir, "fixtures_join_expand.sqlite3")
+      adapter = HakumiORM::Adapter::Sqlite.connect(db_path)
+      adapter.exec("PRAGMA foreign_keys = ON").close
+      adapter.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)").close
+      adapter.exec("CREATE TABLE teams (id INTEGER PRIMARY KEY, name TEXT NOT NULL)").close
+      adapter.exec(<<~SQL).close
+        CREATE TABLE memberships (
+          id INTEGER PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          team_id INTEGER NOT NULL,
+          FOREIGN KEY(user_id) REFERENCES users(id),
+          FOREIGN KEY(team_id) REFERENCES teams(id)
+        )
+      SQL
+
+      fixtures_dir = File.join(dir, "test", "fixtures")
+      FileUtils.mkdir_p(fixtures_dir)
+      File.write(File.join(fixtures_dir, "users.yml"), "alice:\n  name: Alice\nbob:\n  name: Bob\n")
+      File.write(File.join(fixtures_dir, "teams.yml"), "core:\n  name: Core\n")
+      File.write(
+        File.join(fixtures_dir, "memberships.yml"),
+        <<~YAML
+          duo_csv:
+            user: alice,bob
+            team: core
+          duo_array:
+            user:
+              - alice
+              - bob
+            team: core
+        YAML
+      )
+
+      HakumiORM.config.adapter = adapter
+      HakumiORM.config.adapter_name = :sqlite
+      HakumiORM.config.database = db_path
+      HakumiORM.config.fixtures_path = fixtures_dir
+
+      HakumiORM::TaskCommands.run_fixtures_load
+
+      count = adapter.exec('SELECT COUNT(*) FROM "memberships"').get_value(0, 0)
+      user_names = adapter.exec(<<~SQL).values.map { |row| row[0] }
+        SELECT u.name
+        FROM memberships m
+        JOIN users u ON u.id = m.user_id
+        ORDER BY m.id ASC
+      SQL
+
+      assert_equal 4, count
+      assert_equal %w[Alice Alice Bob Bob], user_names.sort
+    ensure
+      adapter.close
+    end
+  end
 end

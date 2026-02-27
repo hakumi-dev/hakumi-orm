@@ -7,6 +7,7 @@ require "date"
 require "bigdecimal"
 require "json"
 require "zlib"
+require_relative "reference_resolver"
 module HakumiORM
   module Fixtures
     # Loads YAML fixtures into the configured database.
@@ -40,6 +41,7 @@ module HakumiORM
       def initialize(adapter:, tables:, verify_foreign_keys: false)
         @adapter = T.let(adapter, Adapter::Base)
         @tables = T.let(tables, T::Hash[String, Codegen::TableInfo])
+        @resolver = T.let(ReferenceResolver.new(tables: @tables), ReferenceResolver)
         @verify_foreign_keys = T.let(verify_foreign_keys, T::Boolean)
       end
 
@@ -151,13 +153,6 @@ module HakumiORM
         rows
       end
 
-      sig { params(table: Codegen::TableInfo, labeled_rows: FixtureRowSet).returns(T::Array[FixtureRow]) }
-      def parse_fixture_rows(table, labeled_rows)
-        labeled_rows.map do |label, row|
-          apply_primary_key_defaults(table, label, row)
-        end
-      end
-
       sig { params(table: Codegen::TableInfo, labeled_rows: FixtureRowSet).returns(FixtureRowSet) }
       def parse_labeled_rows_for_table(table, labeled_rows)
         rows = T.let({}, FixtureRowSet)
@@ -192,13 +187,18 @@ module HakumiORM
 
       sig { params(rows_by_table: LoadedFixtures).void }
       def insert_fixture_tables!(rows_by_table)
-        insertion_order(rows_by_table.keys).each do |table_name|
+        @resolver.insertion_order(rows_by_table.keys).each do |table_name|
           table = @tables[table_name]
           next unless table
 
           labeled_rows = rows_by_table[table_name] || {}
-          rows = labeled_rows.map do |_label, row|
-            resolve_row_references(table, row, rows_by_table)
+          rows = labeled_rows.flat_map do |label, row|
+            @resolver.expand_row_fk_references(
+              table: table,
+              fixture_label: label,
+              row: row,
+              rows_by_table: rows_by_table
+            )
           end
           replace_table_rows!(table, rows)
         end
@@ -245,87 +245,6 @@ module HakumiORM
         end
       ensure
         result&.close
-      end
-
-      sig { params(table: Codegen::TableInfo, row: FixtureRow, rows_by_table: LoadedFixtures).returns(FixtureRow) }
-      def resolve_row_references(table, row, rows_by_table)
-        resolved = row.dup
-        table.foreign_keys.each do |fk|
-          map_association_label_to_fk!(resolved, fk)
-          raw = resolved[fk.column_name]
-          next unless raw.is_a?(String) || raw.is_a?(Symbol)
-
-          resolved[fk.column_name] = resolve_reference_value(fk, raw.to_s, rows_by_table)
-        end
-        resolved
-      end
-
-      sig { params(row: FixtureRow, fk: Codegen::ForeignKeyInfo).void }
-      def map_association_label_to_fk!(row, fk)
-        return unless fk.column_name.end_with?("_id")
-
-        assoc_key = fk.column_name.delete_suffix("_id")
-        return unless row.key?(assoc_key)
-        return if row.key?(fk.column_name)
-
-        row[fk.column_name] = row.delete(assoc_key)
-      end
-
-      sig { params(fk: Codegen::ForeignKeyInfo, label: String, rows_by_table: LoadedFixtures).returns(FixtureValue) }
-      def resolve_reference_value(fk, label, rows_by_table)
-        foreign_rows = rows_by_table[fk.foreign_table]
-        if foreign_rows
-          referenced = foreign_rows[label]
-          if referenced
-            foreign_table = @tables[fk.foreign_table]
-            if foreign_table
-              pk = foreign_table.primary_key
-              return referenced[pk] if pk && referenced.key?(pk)
-            end
-          end
-        end
-
-        foreign_table = @tables[fk.foreign_table]
-        if foreign_table&.primary_key
-          pk_column = foreign_table.columns.find { |col| col.name == foreign_table.primary_key }
-          return fixture_id(label) if pk_column && integer_column?(pk_column)
-        end
-
-        label
-      end
-
-      sig { params(table_names: T::Array[String]).returns(T::Array[String]) }
-      def insertion_order(table_names)
-        remaining = table_names.sort
-        done = T.let({}, T::Hash[String, T::Boolean])
-        ordered = T.let([], T::Array[String])
-
-        loop do
-          progress = T.let(false, T::Boolean)
-          remaining.reject! do |table_name|
-            table = @tables[table_name]
-            deps = if table
-                     table.foreign_keys.map(&:foreign_table).select { |dep| table_names.include?(dep) && dep != table_name }
-                   else
-                     []
-                   end
-
-            ready = deps.all? { |dep| done[dep] }
-            if ready
-              ordered << table_name
-              done[table_name] = true
-              progress = true
-              true
-            else
-              false
-            end
-          end
-
-          break if remaining.empty?
-          break unless progress
-        end
-
-        ordered.concat(remaining)
       end
 
       sig { params(column: Codegen::ColumnInfo).returns(T::Boolean) }
