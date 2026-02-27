@@ -180,4 +180,36 @@ class TestTaskCommands < HakumiORM::TestCase
       adapter.close
     end
   end
+
+  test "run_fixtures_load resolves fk label references and association keys" do
+    require "hakumi_orm/adapter/sqlite_result"
+    require "hakumi_orm/adapter/sqlite"
+
+    Dir.mktmpdir do |dir|
+      db_path = File.join(dir, "fixtures_refs.sqlite3")
+      adapter = HakumiORM::Adapter::Sqlite.connect(db_path)
+      adapter.exec("PRAGMA foreign_keys = ON").close
+      adapter.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)").close
+      adapter.exec("CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, title TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id))").close
+
+      fixtures_dir = File.join(dir, "test", "fixtures")
+      FileUtils.mkdir_p(fixtures_dir)
+      File.write(File.join(fixtures_dir, "posts.yml"), "welcome:\n  user: alice\n  title: Hello\n")
+      File.write(File.join(fixtures_dir, "users.yml"), "alice:\n  name: Alice\n")
+
+      HakumiORM.config.adapter = adapter
+      HakumiORM.config.adapter_name = :sqlite
+      HakumiORM.config.database = db_path
+      HakumiORM.config.fixtures_path = fixtures_dir
+
+      HakumiORM::TaskCommands.run_fixtures_load
+
+      user_id = adapter.exec('SELECT id FROM "users" WHERE name = "Alice"').get_value(0, 0)
+      post_user_id = adapter.exec('SELECT user_id FROM "posts" WHERE title = "Hello"').get_value(0, 0)
+
+      assert_equal user_id, post_user_id
+    ensure
+      adapter.close
+    end
+  end
 end
