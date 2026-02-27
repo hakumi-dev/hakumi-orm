@@ -7,6 +7,16 @@ module HakumiORM
     class IntegrityVerifier
       extend T::Sig
 
+      Finding = T.type_alias do
+        {
+          table: String,
+          column: String,
+          foreign_table: String,
+          foreign_column: String,
+          orphan_count: Integer
+        }
+      end
+
       sig do
         params(
           adapter: Adapter::Base,
@@ -20,6 +30,22 @@ module HakumiORM
 
       sig { params(table_names: T::Array[String]).void }
       def verify!(table_names)
+        findings = collect_findings(table_names)
+        return if findings.empty?
+
+        details = findings.map do |finding|
+          "- #{finding[:table]}.#{finding[:column]} -> " \
+            "#{finding[:foreign_table]}.#{finding[:foreign_column]} " \
+            "(#{finding[:orphan_count]} orphan row(s))"
+        end
+
+        raise HakumiORM::Error,
+              "Fixture foreign key check failed:\n#{details.join("\n")}"
+      end
+
+      sig { params(table_names: T::Array[String]).returns(T::Array[Finding]) }
+      def collect_findings(table_names)
+        findings = T.let([], T::Array[Finding])
         table_names.each do |table_name|
           table = @tables[table_name]
           next unless table
@@ -30,11 +56,16 @@ module HakumiORM
             orphans = orphan_count(table, fk)
             next if orphans.zero?
 
-            raise HakumiORM::Error,
-                  "Fixture foreign key check failed: #{table.name}.#{fk.column_name} -> " \
-                  "#{fk.foreign_table}.#{fk.foreign_column} (#{orphans} orphan row(s))"
+            findings << {
+              table: table.name,
+              column: fk.column_name,
+              foreign_table: fk.foreign_table,
+              foreign_column: fk.foreign_column,
+              orphan_count: orphans
+            }
           end
         end
+        findings
       end
 
       private

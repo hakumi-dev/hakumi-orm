@@ -247,6 +247,49 @@ class TestTaskCommands < HakumiORM::TestCase
     end
   end
 
+  test "run_fixtures_load reports all orphan fk violations when verification enabled" do
+    require "hakumi_orm/adapter/sqlite_result"
+    require "hakumi_orm/adapter/sqlite"
+
+    Dir.mktmpdir do |dir|
+      db_path = File.join(dir, "fixtures_fk_verify_all.sqlite3")
+      adapter = HakumiORM::Adapter::Sqlite.connect(db_path)
+      adapter.exec("PRAGMA foreign_keys = OFF").close
+      adapter.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)").close
+      adapter.exec("CREATE TABLE teams (id INTEGER PRIMARY KEY, name TEXT NOT NULL)").close
+      adapter.exec("CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, title TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id))").close
+      adapter.exec("CREATE TABLE memberships (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, team_id INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(team_id) REFERENCES teams(id))").close
+
+      fixtures_dir = File.join(dir, "test", "fixtures")
+      FileUtils.mkdir_p(fixtures_dir)
+      File.write(File.join(fixtures_dir, "users.yml"), "alice:\n  name: Alice\n")
+      File.write(File.join(fixtures_dir, "teams.yml"), "core:\n  name: Core\n")
+      File.write(File.join(fixtures_dir, "posts.yml"), "broken_post:\n  user_id: ghost\n  title: Broken\n")
+      File.write(
+        File.join(fixtures_dir, "memberships.yml"),
+        <<~YAML
+          broken_member:
+            user_id: ghost
+            team_id: phantom
+        YAML
+      )
+
+      HakumiORM.config.adapter = adapter
+      HakumiORM.config.adapter_name = :sqlite
+      HakumiORM.config.database = db_path
+      HakumiORM.config.fixtures_path = fixtures_dir
+      HakumiORM.config.verify_foreign_keys_for_fixtures = true
+
+      error = assert_raises(HakumiORM::Error) { HakumiORM::TaskCommands.run_fixtures_load }
+      assert_includes error.message, "Fixture foreign key check failed"
+      assert_includes error.message, "posts.user_id -> users.id"
+      assert_includes error.message, "memberships.user_id -> users.id"
+      assert_includes error.message, "memberships.team_id -> teams.id"
+    ensure
+      adapter.close
+    end
+  end
+
   test "run_fixtures_load expands multi-label fk references for join rows" do
     require "hakumi_orm/adapter/sqlite_result"
     require "hakumi_orm/adapter/sqlite"
