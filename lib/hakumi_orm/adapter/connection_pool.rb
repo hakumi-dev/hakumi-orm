@@ -25,6 +25,8 @@ module HakumiORM
         @available = T.let([], T::Array[Base])
         @in_use = T.let({}, T::Hash[Integer, Base])
         @total = T.let(0, Integer)
+        @waiting = T.let(0, Integer)
+        @dead = T.let(0, Integer)
         @mutex = T.let(Mutex.new, Mutex)
         @cond = T.let(ConditionVariable.new, ConditionVariable)
 
@@ -87,6 +89,8 @@ module HakumiORM
           @in_use.each_value(&:close)
           @in_use.clear
           @total = 0
+          @waiting = 0
+          @dead = 0
         end
       end
 
@@ -103,6 +107,35 @@ module HakumiORM
       sig { returns(Integer) }
       def available_connections
         @mutex.synchronize { @available.size }
+      end
+
+      sig { returns(Integer) }
+      def total_connections
+        @mutex.synchronize { @total }
+      end
+
+      sig { returns(Integer) }
+      def waiting_connections
+        @mutex.synchronize { @waiting }
+      end
+
+      sig { returns(Integer) }
+      def dead_connections
+        @mutex.synchronize { @dead }
+      end
+
+      sig { override.returns(T.nilable(PoolStats)) }
+      def pool_stats
+        @mutex.synchronize do
+          {
+            size: @size,
+            connections: @total,
+            busy: @in_use.size,
+            idle: @available.size,
+            waiting: @waiting,
+            dead: @dead
+          }
+        end
       end
 
       private
@@ -154,6 +187,7 @@ module HakumiORM
             if @total < @size
               conn = @connector.call
               @total += 1
+              @dead -= 1 if @dead.positive?
               @in_use[tid] = conn
               return conn
             end
@@ -161,7 +195,12 @@ module HakumiORM
             remaining = deadline - Time.now.to_f
             raise TimeoutError, "Could not obtain a connection within #{@timeout}s" if remaining <= 0
 
-            @cond.wait(@mutex, remaining)
+            @waiting += 1
+            begin
+              @cond.wait(@mutex, remaining)
+            ensure
+              @waiting -= 1 if @waiting.positive?
+            end
           end
         end
       end
@@ -187,6 +226,7 @@ module HakumiORM
             rescue StandardError
               nil
             end
+            @dead += 1
             @total -= 1
             @cond.signal
           end

@@ -13,6 +13,7 @@ class TestConnectionPool < HakumiORM::TestCase
   test "pool creates first connection eagerly" do
     assert_equal 1, @pool.available_connections
     assert_equal 0, @pool.active_connections
+    assert_equal 1, @pool.total_connections
   end
 
   test "exec_params delegates to a connection" do
@@ -33,6 +34,18 @@ class TestConnectionPool < HakumiORM::TestCase
 
   test "pool_size returns configured size" do
     assert_equal 3, @pool.pool_size
+  end
+
+  test "pool_stats exposes active record style pool metrics" do
+    stats = @pool.pool_stats
+
+    refute_nil stats
+    assert_equal 3, stats[:size]
+    assert_equal 1, stats[:connections]
+    assert_equal 0, stats[:busy]
+    assert_equal 1, stats[:idle]
+    assert_equal 0, stats[:waiting]
+    assert_equal 0, stats[:dead]
   end
 
   test "transaction holds same connection for the block" do
@@ -111,10 +124,12 @@ class TestConnectionPool < HakumiORM::TestCase
     assert_raises(RuntimeError) { pool.exec_params("SELECT 1", []) }
 
     assert_equal 0, pool.available_connections
+    assert_equal 1, pool.dead_connections
 
     pool.exec_params("SELECT 1", [])
 
     assert_equal 2, call_count
+    assert_equal 0, pool.dead_connections
   end
 
   test "healthy connection is returned to pool after query error" do
@@ -205,9 +220,23 @@ class TestConnectionPool < HakumiORM::TestCase
 
     sleep 0.05
 
-    assert_raises(HakumiORM::Adapter::TimeoutError) do
-      tiny_pool.exec("SELECT 1")
+    waiting_probe = Queue.new
+    timeout_thread = Thread.new do
+      waiting_probe << :started
+      assert_raises(HakumiORM::Adapter::TimeoutError) do
+        tiny_pool.exec("SELECT 1")
+      end
     end
+
+    waiting_probe.pop
+    deadline = Time.now + 0.1
+    sleep 0.005 while tiny_pool.waiting_connections.zero? && Time.now < deadline
+
+    assert_equal 1, tiny_pool.waiting_connections
+
+    timeout_thread.join
+
+    assert_equal 0, tiny_pool.waiting_connections
 
     blocker << :done
     t.join

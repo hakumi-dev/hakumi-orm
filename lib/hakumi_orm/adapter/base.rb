@@ -10,6 +10,16 @@ module HakumiORM
       extend T::Helpers
 
       abstract!
+      PoolStats = T.type_alias do
+        {
+          size: Integer,
+          connections: Integer,
+          busy: Integer,
+          idle: Integer,
+          waiting: Integer,
+          dead: Integer
+        }
+      end
       PREDICATE_BIND_REGEX = T.let(
         /
           (
@@ -62,6 +72,11 @@ module HakumiORM
 
       sig { overridable.returns(T.nilable(Integer)) }
       def max_bind_params
+        nil
+      end
+
+      sig { overridable.returns(T.nilable(PoolStats)) }
+      def pool_stats
         nil
       end
 

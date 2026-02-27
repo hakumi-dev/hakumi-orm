@@ -1616,6 +1616,20 @@ end
 
 The pool implements "Adapter::Base", so it can replace any single adapter without changing application code. Connections are checked out per-thread and reused within nested calls (transactions, etc.). Dead connections are automatically evicted: if a query fails and "alive?" returns false, the connection is discarded and a fresh one is created on the next checkout.
 
+Pool metrics API:
+
+```ruby
+stats = HakumiORM.adapter.pool_stats
+# => {
+#   size: 10,        # configured pool limit
+#   connections: 4,  # open connections
+#   busy: 2,         # in use right now
+#   idle: 2,         # open and idle
+#   waiting: 0,      # waiting threads
+#   dead: 0          # dead connections pending replacement
+# }
+```
+
 | Option | Default | Description |
 |---|---|---|
 | "size" | "5" | Maximum number of connections in the pool |
