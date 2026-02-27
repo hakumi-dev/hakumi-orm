@@ -99,7 +99,7 @@ module HakumiORM
         raise ArgumentError, "#{key} must be true/false"
       end
 
-      sig { params(rule: HakumiORM::Validation::RulePayload, record: Object, errors: HakumiORM::Errors).void }
+      sig { params(rule: HakumiORM::Validation::RulePayload, record: HakumiORM::Validation::ValidatableInterface, errors: HakumiORM::Errors).void }
       def run_custom_validation(rule, record, errors)
         method_name = T.cast(rule[:method], Symbol)
         raise ArgumentError, "Custom validation method #{method_name.inspect} is not defined on #{self}" unless respond_to?(method_name)

@@ -54,7 +54,7 @@ module HakumiORM
         @registry[name]
       end
 
-      sig { params(subclass: T::Class[T.anything]).void }
+      sig { params(subclass: T::Class[Migration]).void }
       def inherited(subclass)
         super
         klass_name = subclass.name

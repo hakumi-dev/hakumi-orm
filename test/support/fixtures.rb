@@ -22,6 +22,7 @@ end
 
 class UserRecord
   extend T::Sig
+  include HakumiORM::Validation::Validatable
 
   sig { returns(Integer) }
   attr_reader :id
@@ -219,6 +220,7 @@ class UserRecord
   module Checkable
     extend T::Sig
     extend T::Helpers
+    include HakumiORM::Validation::Validatable
 
     interface!
 

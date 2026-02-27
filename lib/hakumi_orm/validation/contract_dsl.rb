@@ -3,20 +3,17 @@
 
 module HakumiORM
   module Validation
-    # Contract-level validator DSL used by generated BaseContract classes.
     module ContractDSL
       extend T::Sig
       include Kernel
 
       VALID_CONTEXTS = T.let(%i[all create update persist destroy].freeze, T::Array[Symbol])
-      OPTION_VALIDATORS = T.let({
-        length: :parse_length_options,
-        format: :parse_format_options,
-        numericality: :parse_numericality_options,
-        inclusion: :parse_inclusion_options,
-        exclusion: :parse_exclusion_options,
-        comparison: :parse_comparison_options
-      }.freeze, T::Hash[Symbol, Symbol])
+      OPTION_VALIDATORS = T.let(
+        %i[length format numericality inclusion exclusion comparison]
+          .to_h { |kind| [kind, :"parse_#{kind}_options"] }
+          .freeze,
+        T::Hash[Symbol, Symbol]
+      )
 
       sig { params(attribute: Symbol, kwargs: T::Hash[Symbol, Object]).void.checked(:never) }
       def validates(attribute, **kwargs)
@@ -38,27 +35,27 @@ module HakumiORM
         @hakumi_validation_rules = T.let([], T.nilable(T::Array[HakumiORM::Validation::RulePayload]))
       end
 
-      sig { params(record: Object, errors: HakumiORM::Errors).void }
+      sig { params(record: HakumiORM::Validation::ValidatableInterface, errors: HakumiORM::Errors).void }
       def run_validations_for_all(record, errors)
         run_validation_rules(:all, record, errors)
       end
 
-      sig { params(record: Object, errors: HakumiORM::Errors).void }
+      sig { params(record: HakumiORM::Validation::ValidatableInterface, errors: HakumiORM::Errors).void }
       def run_validations_for_create(record, errors)
         run_validation_rules(:create, record, errors)
       end
 
-      sig { params(record: Object, errors: HakumiORM::Errors).void }
+      sig { params(record: HakumiORM::Validation::ValidatableInterface, errors: HakumiORM::Errors).void }
       def run_validations_for_update(record, errors)
         run_validation_rules(:update, record, errors)
       end
 
-      sig { params(record: Object, errors: HakumiORM::Errors).void }
+      sig { params(record: HakumiORM::Validation::ValidatableInterface, errors: HakumiORM::Errors).void }
       def run_validations_for_persist(record, errors)
         run_validation_rules(:persist, record, errors)
       end
 
-      sig { params(record: Object, errors: HakumiORM::Errors).void }
+      sig { params(record: HakumiORM::Validation::ValidatableInterface, errors: HakumiORM::Errors).void }
       def run_validations_for_destroy(record, errors)
         run_validation_rules(:destroy, record, errors)
       end
@@ -199,7 +196,7 @@ module HakumiORM
         add_validation_rule(attribute, kind, common_options.merge(parsed))
       end
 
-      sig { params(context: Symbol, record: Object, errors: HakumiORM::Errors).void }
+      sig { params(context: Symbol, record: HakumiORM::Validation::ValidatableInterface, errors: HakumiORM::Errors).void }
       def run_validation_rules(context, record, errors)
         validation_rules.each do |rule|
           next unless rule[:on] == context
@@ -209,7 +206,7 @@ module HakumiORM
         end
       end
 
-      sig { params(rule: HakumiORM::Validation::RulePayload, record: Object, errors: HakumiORM::Errors).void }
+      sig { params(rule: HakumiORM::Validation::RulePayload, record: HakumiORM::Validation::ValidatableInterface, errors: HakumiORM::Errors).void }
       def validate_rule(rule, record, errors)
         if rule[:kind] == :custom
           run_custom_validation(rule, record, errors)
@@ -218,7 +215,12 @@ module HakumiORM
 
         attribute = T.cast(rule[:attribute], Symbol)
         value = read_attribute(record, attribute)
-        context = HakumiORM::Validation::RuleContext.new(attribute: attribute, value: value, errors: errors, record: record)
+        context = HakumiORM::Validation::RuleContext.new(
+          attribute: attribute,
+          value: value,
+          errors: errors,
+          record: T.cast(record, Object)
+        )
         return if value.nil? && T.cast(rule[:allow_nil], T::Boolean)
         return if context.blank_value? && T.cast(rule[:allow_blank], T::Boolean)
 
@@ -227,14 +229,12 @@ module HakumiORM
         validator.validate(context, rule)
       end
 
-      sig { params(record: Object, attribute: Symbol).returns(Object) }
+      sig { params(record: HakumiORM::Validation::ValidatableInterface, attribute: Symbol).returns(Object) }
       def read_attribute(record, attribute)
-        return T.cast(record.public_send(attribute), Object) if record.respond_to?(attribute)
-
-        raise ArgumentError, "Validation attribute #{attribute.inspect} is not defined on #{record.class}"
+        record.validation_value(attribute)
       end
 
-      sig { params(rule: HakumiORM::Validation::RulePayload, record: Object).returns(T::Boolean) }
+      sig { params(rule: HakumiORM::Validation::RulePayload, record: HakumiORM::Validation::ValidatableInterface).returns(T::Boolean) }
       def rule_condition_matches?(rule, record)
         if_cond = rule[:if]
         unless_cond = rule[:unless]
@@ -244,16 +244,23 @@ module HakumiORM
         true
       end
 
-      sig { params(raw_condition: Object, record: Object).returns(T::Boolean) }
+      sig { params(raw_condition: Object, record: HakumiORM::Validation::ValidatableInterface).returns(T::Boolean) }
       def resolve_condition(raw_condition, record)
         return T.cast(raw_condition, T::Boolean) if [true, false].include?(raw_condition)
-        return record.public_send(raw_condition) if raw_condition.is_a?(Symbol)
+
+        if raw_condition.is_a?(Symbol)
+          value = record.validation_value(raw_condition)
+          return T.cast(value, T::Boolean) if [true, false].include?(value)
+
+          raise ArgumentError, "validation condition symbol must resolve to true/false"
+        end
+
         return call_proc_condition(raw_condition, record) if raw_condition.is_a?(Proc)
 
         raise ArgumentError, "validation condition must be Symbol, Proc or Boolean"
       end
 
-      sig { params(callable: Proc, record: Object).returns(T::Boolean) }
+      sig { params(callable: Proc, record: HakumiORM::Validation::ValidatableInterface).returns(T::Boolean) }
       def call_proc_condition(callable, record)
         value = callable.arity.zero? ? callable.call : callable.call(record)
         return value if [true, false].include?(value)

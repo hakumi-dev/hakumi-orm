@@ -9,6 +9,7 @@ module <%= module_name %>
 <%= ind %>  module Checkable
 <%= ind %>    extend T::Sig
 <%= ind %>    extend T::Helpers
+<%= ind %>    include ::HakumiORM::Validation::Validatable
 
 <%= ind %>    interface!
 

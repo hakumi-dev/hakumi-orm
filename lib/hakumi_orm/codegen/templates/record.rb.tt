@@ -10,6 +10,7 @@ module <%= module_name %>
 <%= ind %>class <%= record_class_name %>
 <%= ind %>  include ::HakumiORM::RecordRuntime
 <%= ind %>  include ::HakumiORM::FormModel::Default
+<%= ind %>  include ::HakumiORM::Validation::Validatable
 <%= ind %>  extend T::Sig
 
 <%- columns.each do |col| -%>

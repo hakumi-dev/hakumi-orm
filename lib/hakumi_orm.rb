@@ -57,6 +57,8 @@ require_relative "hakumi_orm/relation_preloader"
 require_relative "hakumi_orm/record_runtime"
 
 require_relative "hakumi_orm/errors"
+require_relative "hakumi_orm/validation/validatable_interface"
+require_relative "hakumi_orm/validation/validatable"
 require_relative "hakumi_orm/validation/rule_payload"
 require_relative "hakumi_orm/validation/rule_context"
 require_relative "hakumi_orm/validation/contract_dsl"
