@@ -78,6 +78,19 @@ class TestArrayColumns < HakumiORM::TestCase
     assert_equal '{"a",NULL,"b"}', bind.pg_value
   end
 
+  test "StrArrayBind escapes all quotes and backslashes" do
+    bind = HakumiORM::StrArrayBind.new(['a"b"c', 'x\\y\\z'])
+
+    assert_equal '{"a\\"b\\"c","x\\\\y\\\\z"}', bind.pg_value
+  end
+
+  test "StrArrayBind escaped values round-trip through Cast" do
+    values = ['a"b"c', 'x\\y\\z', nil]
+    encoded = HakumiORM::StrArrayBind.new(values).pg_value
+
+    assert_equal values, HakumiORM::Cast.to_str_array(encoded)
+  end
+
   test "FloatArrayBind serializes to PG array literal" do
     bind = HakumiORM::FloatArrayBind.new([1.5, 2.7])
 

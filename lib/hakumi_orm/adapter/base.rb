@@ -204,10 +204,28 @@ module HakumiORM
 
       sig { params(sql: String).returns(T::Array[String]) }
       def extract_insert_columns(sql)
-        match = /\A\s*INSERT\s+INTO\s+.+?\(([^)]+)\)\s+VALUES\b/im.match(sql)
-        return [] unless match
+        upper_sql = sql.upcase
+        idx = skip_sql_space(upper_sql, 0)
+        idx = consume_sql_keyword(upper_sql, idx, "INSERT")
+        return [] unless idx
 
-        raw = T.must(match[1])
+        idx = skip_sql_space(upper_sql, idx)
+        idx = consume_sql_keyword(upper_sql, idx, "INTO")
+        return [] unless idx
+
+        idx = skip_sql_space(upper_sql, idx)
+        values_idx = index_sql_keyword(upper_sql, "VALUES", idx)
+        return [] unless values_idx
+
+        open_idx = sql.index("(", idx)
+        return [] unless open_idx && open_idx < values_idx
+
+        close_idx = sql.index(")", open_idx + 1)
+        return [] unless close_idx && close_idx < values_idx
+
+        raw = sql[(open_idx + 1)...close_idx]
+        return [] unless raw
+
         raw.split(",").map { |token| normalize_identifier(token) }.reject(&:empty?)
       end
 
@@ -230,6 +248,51 @@ module HakumiORM
         parts = token.split(".")
         id = parts.last || token
         id.gsub(/\A["`]|["`]\z/, "")
+      end
+
+      sig { params(sql: String, idx: Integer).returns(Integer) }
+      def skip_sql_space(sql, idx)
+        i = T.let(idx, Integer)
+        while i < sql.length
+          ch = sql.getbyte(i)
+          break unless ch == 9 || ch == 10 || ch == 12 || ch == 13 || ch == 32
+
+          i += 1
+        end
+        i
+      end
+
+      sig { params(sql: String, idx: Integer, keyword: String).returns(T.nilable(Integer)) }
+      def consume_sql_keyword(sql, idx, keyword)
+        return nil unless sql[idx, keyword.length] == keyword
+
+        boundary = idx + keyword.length
+        return boundary if boundary >= sql.length
+
+        ch = sql.getbyte(boundary)
+        return boundary unless ch && ((ch >= 65 && ch <= 90) || (ch >= 48 && ch <= 57) || ch == 95)
+
+        nil
+      end
+
+      sig { params(sql: String, keyword: String, start_idx: Integer).returns(T.nilable(Integer)) }
+      def index_sql_keyword(sql, keyword, start_idx)
+        from = T.let(start_idx, Integer)
+        while from < sql.length
+          idx = sql.index(keyword, from)
+          return nil unless idx
+
+          before = idx.zero? ? nil : sql.getbyte(idx - 1)
+          after_pos = idx + keyword.length
+          after = after_pos >= sql.length ? nil : sql.getbyte(after_pos)
+          before_ok = before.nil? || !((before >= 65 && before <= 90) || (before >= 48 && before <= 57) || before == 95)
+          after_ok = after.nil? || !((after >= 65 && after <= 90) || (after >= 48 && after <= 57) || after == 95)
+          return idx if before_ok && after_ok
+
+          from = idx + 1
+        end
+
+        nil
       end
 
       sig { params(blk: T.proc.params(adapter: Base).void).void }

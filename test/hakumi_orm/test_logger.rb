@@ -199,6 +199,23 @@ class TestLogger < HakumiORM::TestCase
     assert_includes output, "[HIDDEN]"
   end
 
+  test "logger filters insert bind params when sensitive columns are present" do
+    io = StringIO.new
+    HakumiORM.config.logger = Logger.new(io)
+    HakumiORM.config.log_filter_parameters = ["email"]
+
+    @adapter.exec_params(
+      'INSERT INTO "users" ("email", "name") VALUES ($1, $2)',
+      ["secret@example.com", "Alice"]
+    )
+
+    output = io.string
+
+    refute_includes output, "secret@example.com"
+    refute_includes output, "Alice"
+    assert_includes output, "[FILTERED]"
+  end
+
   test "transaction control statements are tagged in logs" do
     io = StringIO.new
     HakumiORM.config.logger = Logger.new(io)

@@ -209,10 +209,22 @@ module HakumiORM
         if v.nil?
           "NULL"
         else
-          "\"#{v.gsub("\\", "\\\\\\\\").gsub('"', '\\"')}\""
+          quote_pg_array_string(v)
         end
       end
       "{#{inner.join(",")}}"
+    end
+
+    private
+
+    sig { params(value: String).returns(String) }
+    def quote_pg_array_string(value)
+      escaped = +""
+      value.each_char do |ch|
+        escaped << "\\" if ch == "\\" || ch == '"'
+        escaped << ch
+      end
+      "\"#{escaped}\""
     end
   end
 
