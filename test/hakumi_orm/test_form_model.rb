@@ -6,6 +6,7 @@ require "test_helper"
 module FormModelTestHelpers
   module Adapter
     extend HakumiORM::FormModelAdapter
+    include HakumiORM::FormModel::Host
 
     def self.apply_to(base)
       base.prepend(self) unless base < self

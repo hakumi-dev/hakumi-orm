@@ -7,11 +7,14 @@ module HakumiORM
     module Default
       extend T::Sig
       include Kernel
+      include HakumiORM::FormModel::Host
 
-      sig { params(base: T::Module[T.anything]).void }
+      sig { params(base: T.class_of(BasicObject)).void }
       def self.included(base)
+        base.include(HakumiORM::FormModel::Host) unless base < HakumiORM::FormModel::Host
         base.extend(ClassMethods)
-        HakumiORM.config.form_model_adapter.apply_to(base)
+        typed_base = T.cast(base, T::Class[HakumiORM::FormModel::Host])
+        HakumiORM.config.form_model_adapter.apply_to(typed_base)
       end
 
       # Class-level API expected by form builders.

@@ -140,7 +140,7 @@ class TestTaskCommands < HakumiORM::TestCase
       HakumiORM.config.fixtures_path = fixtures_dir
       ENV["FIXTURES"] = "users"
 
-      HakumiORM::TaskCommands.run_fixtures_load
+      capture_io { HakumiORM::TaskCommands.run_fixtures_load }
 
       users_count = adapter.exec('SELECT COUNT(*) FROM "users"').get_value(0, 0)
       posts_count = adapter.exec('SELECT COUNT(*) FROM "posts"').get_value(0, 0)
@@ -170,7 +170,7 @@ class TestTaskCommands < HakumiORM::TestCase
       HakumiORM.config.database = db_path
       HakumiORM.config.fixtures_path = fixtures_dir
 
-      HakumiORM::TaskCommands.run_fixtures_load
+      capture_io { HakumiORM::TaskCommands.run_fixtures_load }
 
       result = adapter.exec('SELECT id, name FROM "users" ORDER BY name ASC')
       rows = result.values
@@ -208,7 +208,7 @@ class TestTaskCommands < HakumiORM::TestCase
       HakumiORM.config.database = db_path
       HakumiORM.config.fixtures_path = fixtures_dir
 
-      HakumiORM::TaskCommands.run_fixtures_load
+      capture_io { HakumiORM::TaskCommands.run_fixtures_load }
 
       user_id = adapter.exec('SELECT id FROM "users" WHERE name = "Alice"').get_value(0, 0)
       post_user_id = adapter.exec('SELECT user_id FROM "posts" WHERE title = "Hello"').get_value(0, 0)
@@ -241,7 +241,7 @@ class TestTaskCommands < HakumiORM::TestCase
       HakumiORM.config.fixtures_path = fixtures_dir
       HakumiORM.config.verify_foreign_keys_for_fixtures = true
 
-      error = assert_raises(HakumiORM::Error) { HakumiORM::TaskCommands.run_fixtures_load }
+      error = assert_raises(HakumiORM::Error) { capture_io { HakumiORM::TaskCommands.run_fixtures_load } }
       assert_includes error.message, "Fixture foreign key check failed"
       assert_includes error.message, "posts.user_id"
     ensure
@@ -282,7 +282,7 @@ class TestTaskCommands < HakumiORM::TestCase
       HakumiORM.config.fixtures_path = fixtures_dir
       HakumiORM.config.verify_foreign_keys_for_fixtures = true
 
-      error = assert_raises(HakumiORM::Error) { HakumiORM::TaskCommands.run_fixtures_load }
+      error = assert_raises(HakumiORM::Error) { capture_io { HakumiORM::TaskCommands.run_fixtures_load } }
       assert_includes error.message, "Fixture foreign key check failed"
       assert_includes error.message, "posts.user_id -> users.id"
       assert_includes error.message, "memberships.user_id -> users.id"
@@ -335,7 +335,7 @@ class TestTaskCommands < HakumiORM::TestCase
       HakumiORM.config.database = db_path
       HakumiORM.config.fixtures_path = fixtures_dir
 
-      HakumiORM::TaskCommands.run_fixtures_load
+      capture_io { HakumiORM::TaskCommands.run_fixtures_load }
 
       count = adapter.exec('SELECT COUNT(*) FROM "memberships"').get_value(0, 0)
       user_names = adapter.exec(<<~SQL).values.map { |row| row[0] }

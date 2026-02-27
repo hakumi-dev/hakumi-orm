@@ -8,9 +8,10 @@ module HakumiORM
       module FormModel
         extend T::Sig
         extend HakumiORM::FormModelAdapter
+        include HakumiORM::FormModel::Host
         include Kernel
 
-        sig { override.params(base: T::Module[T.anything]).void }
+        sig { override.params(base: T::Class[HakumiORM::FormModel::Host]).void }
         def self.apply_to(base)
           base.prepend(self) unless base < self
         end
@@ -36,7 +37,7 @@ module HakumiORM
           end
         end
 
-        sig { params(base: T::Module[T.anything]).void }
+        sig { params(base: T::Class[HakumiORM::FormModel::Host]).void }
         def self.prepended(base)
           base.extend(ClassMethods)
         end
