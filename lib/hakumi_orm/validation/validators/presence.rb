@@ -4,6 +4,7 @@
 module HakumiORM
   module Validation
     module Validators
+      # Ensures a value is present.
       class Presence
         extend T::Sig
         include Base

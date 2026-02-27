@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 module HakumiORM
+  # Centralizes task output formatting for the console.
   module TaskOutput
     module_function
 

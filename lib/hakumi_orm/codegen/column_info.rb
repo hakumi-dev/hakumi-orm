@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for codegen/column_info.
 module HakumiORM
   module Codegen
+    # Internal class for HakumiORM.
     class ColumnInfo < T::Struct
       const :name, String
       const :data_type, String

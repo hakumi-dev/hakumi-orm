@@ -4,6 +4,7 @@
 module HakumiORM
   module Validation
     module Validators
+      # Ensures a value is blank.
       class Blank
         extend T::Sig
         include Base

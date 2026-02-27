@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for database_config.
 module HakumiORM
+  # Internal class for HakumiORM.
   class DatabaseConfig < T::Struct
     const :adapter_name, Symbol
     const :database, String

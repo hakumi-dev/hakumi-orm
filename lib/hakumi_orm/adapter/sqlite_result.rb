@@ -3,8 +3,10 @@
 
 require "sqlite3"
 
+# Internal component for adapter/sqlite_result.
 module HakumiORM
   module Adapter
+    # Internal class for HakumiORM.
     class SqliteResult < Result
       extend T::Sig
 

@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for dialect/postgresql.
 module HakumiORM
   module Dialect
+    # Internal class for HakumiORM.
     class Postgresql < Base
       extend T::Sig
 

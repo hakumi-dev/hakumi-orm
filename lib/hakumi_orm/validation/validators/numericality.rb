@@ -4,6 +4,7 @@
 module HakumiORM
   module Validation
     module Validators
+      # Validates numeric coercion and numeric comparison options.
       class Numericality
         extend T::Sig
         include Base

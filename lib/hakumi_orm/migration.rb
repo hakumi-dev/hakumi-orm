@@ -16,7 +16,9 @@ require_relative "migration/version_store"
 require_relative "migration/executor"
 require_relative "migration/runner"
 
+# Internal component for migration.
 module HakumiORM
+  # Internal class for HakumiORM.
   class Migration
     extend T::Sig
 

@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for field/int_field.
 module HakumiORM
+  # Internal class for HakumiORM.
   class IntField < ComparableField
     extend T::Sig
 

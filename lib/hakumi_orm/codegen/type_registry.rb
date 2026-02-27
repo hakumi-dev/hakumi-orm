@@ -3,6 +3,7 @@
 
 module HakumiORM
   module Codegen
+    # Internal class for HakumiORM.
     class TypeRegistryEntry < T::Struct
       const :name, Symbol
       const :ruby_type, String
@@ -11,6 +12,7 @@ module HakumiORM
       const :bind_class, String
     end
 
+    # Internal module for HakumiORM.
     module TypeRegistry
       class << self
         extend T::Sig

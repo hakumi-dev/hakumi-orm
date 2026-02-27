@@ -3,8 +3,10 @@
 
 require "mysql2"
 
+# Internal component for adapter/mysql_result.
 module HakumiORM
   module Adapter
+    # Internal class for HakumiORM.
     class MysqlResult < Result
       extend T::Sig
 

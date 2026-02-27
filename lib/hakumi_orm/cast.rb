@@ -5,7 +5,9 @@ require "bigdecimal"
 require "date"
 require "time"
 
+# Internal component for cast.
 module HakumiORM
+  # Internal module for HakumiORM.
   module Cast
     class << self
       extend T::Sig

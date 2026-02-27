@@ -3,8 +3,10 @@
 
 require "pg"
 
+# Internal component for adapter/postgresql_result.
 module HakumiORM
   module Adapter
+    # Internal class for HakumiORM.
     class PostgresqlResult < Result
       extend T::Sig
 

@@ -7,6 +7,7 @@ require "date"
 module HakumiORM
   PGValue = T.type_alias { T.nilable(T.any(Integer, Float, String, T::Boolean)) }
 
+  # Base value wrapper used to bind typed parameters to SQL statements.
   class Bind
     extend T::Sig
     extend T::Helpers
@@ -18,6 +19,7 @@ module HakumiORM
     def pg_value; end
   end
 
+  # Nullable integer bind.
   class IntBind < Bind
     extend T::Sig
 
@@ -35,6 +37,7 @@ module HakumiORM
     end
   end
 
+  # String bind.
   class StrBind < Bind
     extend T::Sig
 
@@ -52,6 +55,7 @@ module HakumiORM
     end
   end
 
+  # Float bind.
   class FloatBind < Bind
     extend T::Sig
 
@@ -69,6 +73,7 @@ module HakumiORM
     end
   end
 
+  # Decimal bind serialized as fixed-point string.
   class DecimalBind < Bind
     extend T::Sig
 
@@ -86,6 +91,7 @@ module HakumiORM
     end
   end
 
+  # Boolean bind normalized to PostgreSQL boolean literals.
   class BoolBind < Bind
     extend T::Sig
 
@@ -103,6 +109,7 @@ module HakumiORM
     end
   end
 
+  # Time bind normalized to UTC with microseconds.
   class TimeBind < Bind
     extend T::Sig
 
@@ -120,6 +127,7 @@ module HakumiORM
     end
   end
 
+  # Date bind serialized as ISO-8601.
   class DateBind < Bind
     extend T::Sig
 
@@ -137,6 +145,7 @@ module HakumiORM
     end
   end
 
+  # JSON bind serialized through JSON encoding.
   class JsonBind < Bind
     extend T::Sig
 
@@ -154,6 +163,7 @@ module HakumiORM
     end
   end
 
+  # Explicit null bind.
   class NullBind < Bind
     extend T::Sig
 
@@ -163,6 +173,7 @@ module HakumiORM
     end
   end
 
+  # Integer array bind for PostgreSQL array literals.
   class IntArrayBind < Bind
     extend T::Sig
 
@@ -180,6 +191,7 @@ module HakumiORM
     end
   end
 
+  # String array bind for PostgreSQL array literals.
   class StrArrayBind < Bind
     extend T::Sig
 
@@ -204,6 +216,7 @@ module HakumiORM
     end
   end
 
+  # Float array bind for PostgreSQL array literals.
   class FloatArrayBind < Bind
     extend T::Sig
 
@@ -221,6 +234,7 @@ module HakumiORM
     end
   end
 
+  # Boolean array bind for PostgreSQL array literals.
   class BoolArrayBind < Bind
     extend T::Sig
 

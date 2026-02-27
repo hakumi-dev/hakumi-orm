@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for codegen/generator_options.
 module HakumiORM
   module Codegen
+    # Internal class for HakumiORM.
     class GeneratorOptions < T::Struct
       const :dialect, T.nilable(Dialect::Base), default: nil
       const :output_dir, T.nilable(String), default: nil

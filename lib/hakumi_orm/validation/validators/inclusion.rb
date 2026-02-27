@@ -4,6 +4,7 @@
 module HakumiORM
   module Validation
     module Validators
+      # Validates that a value belongs to a whitelist.
       class Inclusion
         extend T::Sig
         include Base

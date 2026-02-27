@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for assignment.
 module HakumiORM
+  # Internal class for HakumiORM.
   class Assignment
     extend T::Sig
 

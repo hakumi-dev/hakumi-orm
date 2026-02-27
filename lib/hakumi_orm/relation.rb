@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 module HakumiORM
+  # Mutable fluent query object that compiles and executes ORM relations.
   class Relation
     extend T::Sig
     extend T::Helpers

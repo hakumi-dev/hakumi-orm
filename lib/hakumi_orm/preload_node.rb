@@ -1,9 +1,11 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for preload_node.
 module HakumiORM
   PreloadSpec = T.type_alias { T.any(Symbol, T::Hash[Symbol, T.any(Symbol, T::Array[Symbol])]) }
 
+  # Internal class for HakumiORM.
   class PreloadNode
     extend T::Sig
 

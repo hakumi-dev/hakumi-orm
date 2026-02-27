@@ -3,7 +3,9 @@
 
 require "uri"
 
+# Internal component for database_url_parser.
 module HakumiORM
+  # Internal class for HakumiORM.
   class DatabaseUrlParser
     extend T::Sig
 

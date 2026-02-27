@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for dialect/mysql.
 module HakumiORM
   module Dialect
+    # Internal class for HakumiORM.
     class Mysql < Base
       extend T::Sig
 

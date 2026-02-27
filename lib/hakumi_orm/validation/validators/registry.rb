@@ -4,6 +4,7 @@
 module HakumiORM
   module Validation
     module Validators
+      # Resolves validator instances by validation kind.
       module Registry
         extend T::Sig
 

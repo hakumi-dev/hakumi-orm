@@ -3,8 +3,10 @@
 
 require "digest"
 
+# Internal component for migration/schema_fingerprint.
 module HakumiORM
   class Migration
+    # Internal module for HakumiORM.
     module SchemaFingerprint
       extend T::Sig
 

@@ -5,6 +5,7 @@ require_relative "sinatra_config"
 
 module HakumiORM
   module Framework
+    # Hooks Sinatra app boot to apply Hakumi ORM defaults.
     module Sinatra
       HakumiORM::Framework.register(:sinatra) { true }
 

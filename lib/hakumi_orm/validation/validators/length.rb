@@ -4,6 +4,7 @@
 module HakumiORM
   module Validation
     module Validators
+      # Validates value length with minimum, maximum, or exact constraints.
       class Length
         extend T::Sig
         include Base

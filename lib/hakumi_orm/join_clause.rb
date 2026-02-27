@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for join_clause.
 module HakumiORM
+  # Internal class for HakumiORM.
   class JoinClause
     extend T::Sig
 

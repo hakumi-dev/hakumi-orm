@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for dialect/sqlite.
 module HakumiORM
   module Dialect
+    # Internal class for HakumiORM.
     class Sqlite < Base
       extend T::Sig
 

@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for record_runtime.
 module HakumiORM
+  # Internal module for HakumiORM.
   module RecordRuntime
     extend T::Sig
 

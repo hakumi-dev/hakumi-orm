@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for sql_compiler.
 module HakumiORM
+  # Internal class for HakumiORM.
   class SqlCompiler
     extend T::Sig
 

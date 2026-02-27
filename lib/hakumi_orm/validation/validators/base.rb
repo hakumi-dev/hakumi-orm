@@ -4,6 +4,7 @@
 module HakumiORM
   module Validation
     module Validators
+      # Contract every built-in validator implements.
       module Base
         extend T::Sig
         extend T::Helpers

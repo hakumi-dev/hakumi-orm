@@ -7,6 +7,7 @@ require_relative "task_output"
 require_relative "tasks_compat"
 
 module HakumiORM
+  # Defines canonical rake tasks under the db namespace.
   module Tasks
     extend Rake::DSL
 

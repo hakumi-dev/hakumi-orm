@@ -3,6 +3,7 @@
 
 module HakumiORM
   module Validation
+    # Option parsers and custom validation dispatch for the contract DSL.
     module ContractDSL
       private
 

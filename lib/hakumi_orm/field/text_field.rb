@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for field/text_field.
 module HakumiORM
+  # Internal class for HakumiORM.
   class TextField < Field
     extend T::Sig
     extend T::Helpers

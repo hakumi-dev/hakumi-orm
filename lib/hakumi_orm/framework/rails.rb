@@ -8,6 +8,7 @@ require_relative "rails/form_model"
 module HakumiORM
   module Framework
     module Rails
+      # Boots Hakumi ORM inside Rails, applies defaults, and registers tasks.
       class Railtie < ::Rails::Railtie
         HakumiORM::Framework.register(:rails) { true }
 

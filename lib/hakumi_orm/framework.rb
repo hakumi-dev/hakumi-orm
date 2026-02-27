@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 module HakumiORM
+  # Tracks active framework integration and provides runtime detection hooks.
   module Framework
     extend T::Sig
 

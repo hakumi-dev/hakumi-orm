@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for compiled_query.
 module HakumiORM
+  # Internal class for HakumiORM.
   class CompiledQuery
     extend T::Sig
 

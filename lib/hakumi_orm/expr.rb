@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 module HakumiORM
+  # Base node for boolean expressions used in WHERE and HAVING clauses.
   class Expr
     extend T::Sig
     extend T::Helpers
@@ -40,6 +41,7 @@ module HakumiORM
     end
   end
 
+  # Field predicate with operation and typed bind values.
   class Predicate < Expr
     extend T::Sig
 
@@ -60,6 +62,7 @@ module HakumiORM
     end
   end
 
+  # Logical conjunction of two expressions.
   class AndExpr < Expr
     extend T::Sig
 
@@ -76,6 +79,7 @@ module HakumiORM
     end
   end
 
+  # Logical disjunction of two expressions.
   class OrExpr < Expr
     extend T::Sig
 
@@ -92,6 +96,7 @@ module HakumiORM
     end
   end
 
+  # Logical negation of an expression.
   class NotExpr < Expr
     extend T::Sig
 
@@ -104,6 +109,7 @@ module HakumiORM
     end
   end
 
+  # Unsafe SQL fragment with placeholder count validation.
   class RawExpr < Expr
     extend T::Sig
 
@@ -131,6 +137,7 @@ module HakumiORM
     end
   end
 
+  # Predicate against a compiled subquery.
   class SubqueryExpr < Expr
     extend T::Sig
 

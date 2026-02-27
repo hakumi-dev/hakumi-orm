@@ -536,7 +536,8 @@ User
 | "exists?" | "T::Boolean" | Execute "SELECT 1 ... LIMIT 1" and return whether any row matches. |
 | "pluck_raw(field)" | "T::Array[T.nilable(String)]" | Return raw string values for a single column. |
 | "pluck(*fields)" | "T::Array[T::Array[T.nilable(String)]]" | Multi-column pluck returning raw string arrays. |
-| "delete_all" | "Integer" | Execute "DELETE" and return the number of deleted rows. |
+| "delete_all" | "Integer" | Bulk delete entrypoint. Subclasses may override this (for example, soft delete via UPDATE). |
+| "really_delete_all" | "Integer" | Force physical "DELETE" and return the number of deleted rows. |
 | "update_all(assignments)" | "Integer" | Execute "UPDATE" and return the number of updated rows. |
 | "sum(field)" | "T.nilable(String)" | Execute "SELECT SUM(field)". |
 | "average(field)" | "T.nilable(String)" | Execute "SELECT AVG(field)". |
@@ -565,6 +566,7 @@ User.where(UserSchema::ACTIVE.eq(false))
   .update_all([HakumiORM::Assignment.new(UserSchema::ACTIVE, HakumiORM::BoolBind.new(true))])
 
 User.where(UserSchema::NAME.eq("temp")).delete_all
+User.where(UserSchema::NAME.eq("temp")).really_delete_all
 ```
 
 ### Field Predicates
@@ -887,14 +889,15 @@ end
 
 The generated "run_preloads" delegates any association name it does not recognize to "custom_preload", which is a no-op by default.
 
-### Dependent delete/destroy
+### Dependent destroy semantics
 
-When deleting a parent record, you can cascade to associated records:
+Current record-level API is lifecycle-oriented: "delete!" behaves like AR "destroy" (runs contract hooks and supports dependent strategies). Use "really_delete!" to force physical DELETE on soft-delete models.
 
 ```ruby
-user.delete!(dependent: :delete_all)   # batch SQL DELETE on children (no callbacks)
-user.delete!(dependent: :destroy)      # loads children and calls delete! on each (cascades recursively)
-user.delete!                           # :none (default) -- no cascade, relies on DB constraints
+user.delete!(dependent: :delete_all)   # delete children in batch SQL
+user.delete!(dependent: :destroy)      # load children and call delete! recursively
+user.delete!                           # :none (default), still runs on_destroy and after_destroy
+user.really_delete!                    # force physical DELETE in soft-delete models
 ```
 
 The "dependent" parameter is only generated when the record has "has_many" or "has_one" associations.

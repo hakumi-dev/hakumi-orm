@@ -3,6 +3,7 @@
 
 module HakumiORM
   module Validation
+    # Contract for records that expose values to the validation engine.
     module ValidatableInterface
       extend T::Sig
       extend T::Helpers

@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for pending_migration_error.
 module HakumiORM
+  # Internal class for HakumiORM.
   class PendingMigrationError < Error
     extend T::Sig
 

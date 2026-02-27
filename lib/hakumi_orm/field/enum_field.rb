@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for field/enum_field.
 module HakumiORM
+  # Internal class for HakumiORM.
   class EnumField < Field
     extend T::Sig
 

@@ -3,6 +3,7 @@
 
 require "bigdecimal"
 
+# Internal component for adapter/result.
 module HakumiORM
   module Adapter
     # Database drivers with C-level casting (PG::TypeMapByColumn, mysql2 prepared
@@ -10,6 +11,7 @@ module HakumiORM
     # union of all types a result cell can hold across all supported adapters.
     CellValue = T.type_alias { T.nilable(T.any(String, Integer, Float, T::Boolean, Time, Date, BigDecimal)) }
 
+    # Internal class for HakumiORM.
     class Result
       extend T::Sig
       extend T::Helpers

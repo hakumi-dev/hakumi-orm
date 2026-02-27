@@ -69,20 +69,13 @@ module HakumiORM
 
     sig { params(adapter: Adapter::Base).returns(Integer) }
     def delete_all(adapter: HakumiORM.adapter)
-      compiled = adapter.dialect.compiler.delete(
-        table: @table_name,
-        where_expr: combined_where
-      )
-      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect)), &:affected_rows)
+      perform_physical_delete_all(adapter)
     end
 
+    # Always performs a physical DELETE even when subclasses override delete_all.
     sig { params(adapter: Adapter::Base).returns(Integer) }
     def really_delete_all(adapter: HakumiORM.adapter)
-      compiled = adapter.dialect.compiler.delete(
-        table: @table_name,
-        where_expr: combined_where
-      )
-      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect)), &:affected_rows)
+      perform_physical_delete_all(adapter)
     end
 
     sig { params(assignments: T::Array[Assignment], adapter: Adapter::Base).returns(Integer) }
@@ -129,6 +122,15 @@ module HakumiORM
       return false unless adapter.dialect.is_a?(Dialect::Postgresql)
 
       @where_exprs.empty? && @joins.empty? && @defaults_pristine
+    end
+
+    sig { params(adapter: Adapter::Base).returns(Integer) }
+    def perform_physical_delete_all(adapter)
+      compiled = adapter.dialect.compiler.delete(
+        table: @table_name,
+        where_expr: combined_where
+      )
+      use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect)), &:affected_rows)
     end
   end
 end

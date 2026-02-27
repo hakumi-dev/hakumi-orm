@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for adapter/base.
 module HakumiORM
   module Adapter
+    # Internal class for HakumiORM.
     class Base
       extend T::Sig
       extend T::Helpers

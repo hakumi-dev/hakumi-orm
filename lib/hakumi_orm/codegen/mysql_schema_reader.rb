@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for codegen/mysql_schema_reader.
 module HakumiORM
   module Codegen
+    # Internal class for HakumiORM.
     class MysqlSchemaReader
       extend T::Sig
 

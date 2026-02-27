@@ -1,6 +1,7 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for codegen/generator_enum.
 module HakumiORM
   module Codegen
     EnumValue = T.type_alias { T::Hash[Symbol, T.any(String, T::Boolean)] }
@@ -13,6 +14,7 @@ module HakumiORM
     end
     EnumTypeMap = T.type_alias { T::Hash[String, EnumEntry] }
 
+    # Internal class for HakumiORM.
     class Generator
       private
 

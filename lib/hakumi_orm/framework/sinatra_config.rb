@@ -3,6 +3,7 @@
 
 module HakumiORM
   module Framework
+    # Applies framework defaults for Sinatra projects.
     module SinatraConfig
       extend T::Sig
 

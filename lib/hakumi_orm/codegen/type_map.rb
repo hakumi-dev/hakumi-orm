@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for codegen/type_map.
 module HakumiORM
   module Codegen
+    # Internal module for HakumiORM.
     module TypeMap
       class << self
         extend T::Sig

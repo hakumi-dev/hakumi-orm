@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for sql_compiler_expr.
 module HakumiORM
+  # Internal class for HakumiORM.
   class SqlCompiler
     private
 

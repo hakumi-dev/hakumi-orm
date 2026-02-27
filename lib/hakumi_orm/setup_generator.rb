@@ -3,7 +3,9 @@
 
 require "fileutils"
 
+# Internal component for setup_generator.
 module HakumiORM
+  # Internal class for HakumiORM.
   class SetupGenerator
     extend T::Sig
 

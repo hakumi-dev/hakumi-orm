@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for codegen/enum_loader.
 module HakumiORM
   module Codegen
+    # Internal class for HakumiORM.
     class EnumLoader
       extend T::Sig
 

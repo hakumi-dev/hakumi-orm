@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for field/bool_array_field.
 module HakumiORM
+  # Internal class for HakumiORM.
   class BoolArrayField < Field
     extend T::Sig
 

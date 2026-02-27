@@ -101,18 +101,7 @@ Lint/MissingSuper:
 Style/Documentation:
   Enabled: true
   Include:
-    - "lib/hakumi_orm/errors.rb"
-    - "lib/hakumi_orm/form_model_adapter.rb"
-    - "lib/hakumi_orm/form_model/noop_adapter.rb"
-    - "lib/hakumi_orm/form_model.rb"
-    - "lib/hakumi_orm/framework/rails/form_model.rb"
-    - "lib/hakumi_orm/schema_drift/**/*.rb"
-    - "lib/hakumi_orm/relation_query.rb"
-    - "lib/hakumi_orm/relation_executor.rb"
-    - "lib/hakumi_orm/relation_preloader.rb"
-    - "lib/hakumi_orm/relation_preloading.rb"
-    - "lib/hakumi_orm/relation_aggregates.rb"
-    - "lib/hakumi_orm/relation_batches.rb"
+    - "lib/**/*.rb"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes

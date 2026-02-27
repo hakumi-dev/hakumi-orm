@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for database_config_builder.
 module HakumiORM
+  # Internal class for HakumiORM.
   class DatabaseConfigBuilder
     extend T::Sig
 

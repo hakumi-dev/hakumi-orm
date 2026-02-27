@@ -1,11 +1,13 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for codegen/generator_assoc.
 module HakumiORM
   module Codegen
     AssocEntry = T.type_alias { T::Hash[Symbol, T.any(String, T::Boolean)] }
     AssocMap = T.type_alias { T::Hash[String, T::Array[AssocEntry]] }
 
+    # Internal class for HakumiORM.
     class Generator
       private
 

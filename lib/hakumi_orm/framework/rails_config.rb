@@ -3,6 +3,7 @@
 
 module HakumiORM
   module Framework
+    # Applies framework defaults for Rails projects.
     module RailsConfig
       extend T::Sig
 

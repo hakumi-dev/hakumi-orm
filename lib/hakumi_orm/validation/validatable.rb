@@ -3,6 +3,7 @@
 
 module HakumiORM
   module Validation
+    # Runtime mixin that implements the ValidatableInterface contract.
     module Validatable
       extend T::Sig
       include ValidatableInterface

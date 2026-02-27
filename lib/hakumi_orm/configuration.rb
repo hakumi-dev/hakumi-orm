@@ -3,7 +3,9 @@
 
 require_relative "migration/schema_fingerprint"
 
+# Internal component for configuration.
 module HakumiORM
+  # Internal class for HakumiORM.
   class Configuration
     extend T::Sig
 

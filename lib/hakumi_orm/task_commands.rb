@@ -5,6 +5,7 @@ require "digest"
 require_relative "task_output"
 
 module HakumiORM
+  # Implements the behavior behind rake tasks and CLI task entrypoints.
   module TaskCommands
     module_function
 

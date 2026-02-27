@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for migration/column_definition.
 module HakumiORM
   class Migration
+    # Internal class for HakumiORM.
     class ColumnDefinition < T::Struct
       const :name, String
       const :type, Symbol

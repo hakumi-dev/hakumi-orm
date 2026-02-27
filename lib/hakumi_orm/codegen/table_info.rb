@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for codegen/table_info.
 module HakumiORM
   module Codegen
+    # Internal class for HakumiORM.
     class TableInfo
       extend T::Sig
 

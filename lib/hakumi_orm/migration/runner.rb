@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for migration/runner.
 module HakumiORM
   class Migration
+    # Internal class for HakumiORM.
     class Runner
       extend T::Sig
 

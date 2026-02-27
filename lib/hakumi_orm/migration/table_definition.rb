@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for migration/table_definition.
 module HakumiORM
   class Migration
+    # Internal class for HakumiORM.
     class TableDefinition
       extend T::Sig
 

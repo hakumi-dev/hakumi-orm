@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for sql_log_formatter.
 module HakumiORM
+  # Internal class for HakumiORM.
   class SqlLogFormatter
     extend T::Sig
 

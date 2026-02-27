@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for codegen/hakumi_type.
 module HakumiORM
   module Codegen
+    # Internal class for HakumiORM.
     class HakumiType < T::Enum
       extend T::Sig
 

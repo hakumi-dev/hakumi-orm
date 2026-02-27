@@ -4,6 +4,7 @@
 module HakumiORM
   module Validation
     module Validators
+      # Validates that a value is not in a blocked list.
       class Exclusion
         extend T::Sig
         include Base

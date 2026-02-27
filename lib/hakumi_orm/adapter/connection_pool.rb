@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for adapter/connection_pool.
 module HakumiORM
   module Adapter
+    # Internal class for HakumiORM.
     class ConnectionPool < Base
       extend T::Sig
 

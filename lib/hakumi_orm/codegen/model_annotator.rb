@@ -3,6 +3,7 @@
 
 module HakumiORM
   module Codegen
+    # Internal class for HakumiORM.
     class ModelAnnotator
       extend T::Sig
 
@@ -13,6 +14,7 @@ module HakumiORM
 
       AssocHash = T.type_alias { T::Hash[Symbol, T.any(String, T::Boolean)] }
 
+      # Internal class for HakumiORM.
       class Context < T::Struct
         const :table, TableInfo
         const :dialect, Dialect::Base

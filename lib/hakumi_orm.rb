@@ -5,6 +5,7 @@ require "sorbet-runtime"
 
 require_relative "hakumi_orm/version"
 
+# Internal component for .
 module HakumiORM
   class Error < StandardError; end
 end
@@ -102,6 +103,7 @@ rescue LoadError => e
   raise unless e.respond_to?(:path) && e.path == "rails/railtie"
 end
 
+# Internal module for HakumiORM.
 module HakumiORM
   class << self
     extend T::Sig

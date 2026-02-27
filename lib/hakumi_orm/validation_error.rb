@@ -1,7 +1,9 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for validation_error.
 module HakumiORM
+  # Internal class for HakumiORM.
   class ValidationError < Error
     extend T::Sig
 

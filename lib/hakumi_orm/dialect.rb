@@ -5,8 +5,10 @@ require "bigdecimal"
 require "date"
 require "time"
 
+# Internal component for dialect.
 module HakumiORM
   module Dialect
+    # Internal class for HakumiORM.
     class Base
       extend T::Sig
       extend T::Helpers

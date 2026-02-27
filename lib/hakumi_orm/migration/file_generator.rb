@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for migration/file_generator.
 module HakumiORM
   class Migration
+    # Internal module for HakumiORM.
     module FileGenerator
       extend T::Sig
 

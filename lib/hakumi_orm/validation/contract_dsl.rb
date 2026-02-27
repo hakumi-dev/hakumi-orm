@@ -3,6 +3,7 @@
 
 module HakumiORM
   module Validation
+    # DSL used by generated contracts to register and execute validations.
     module ContractDSL
       extend T::Sig
       include Kernel

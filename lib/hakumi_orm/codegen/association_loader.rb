@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for codegen/association_loader.
 module HakumiORM
   module Codegen
+    # Internal class for HakumiORM.
     class AssociationLoader
       extend T::Sig
 

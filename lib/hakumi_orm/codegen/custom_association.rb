@@ -1,8 +1,10 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for codegen/custom_association.
 module HakumiORM
   module Codegen
+    # Internal class for HakumiORM.
     class CustomAssociation < T::Struct
       VALID_KINDS = T.let(%i[has_many has_one].freeze, T::Array[Symbol])
       VALID_NAME_PATTERN = T.let(/\A[a-z_]\w*\z/, Regexp)

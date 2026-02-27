@@ -4,6 +4,7 @@
 module HakumiORM
   module Validation
     module Validators
+      # Validates string values against a regular expression.
       class Format
         extend T::Sig
         include Base

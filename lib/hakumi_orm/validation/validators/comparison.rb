@@ -4,6 +4,7 @@
 module HakumiORM
   module Validation
     module Validators
+      # Compares a value against another value using comparison operators.
       class Comparison
         extend T::Sig
         include Base

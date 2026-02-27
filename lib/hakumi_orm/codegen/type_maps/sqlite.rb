@@ -1,9 +1,11 @@
 # typed: strict
 # frozen_string_literal: true
 
+# Internal component for codegen/type_maps/sqlite.
 module HakumiORM
   module Codegen
     module TypeMaps
+      # Internal module for HakumiORM.
       module Sqlite
         extend T::Sig
 
