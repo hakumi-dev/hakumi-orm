@@ -109,7 +109,8 @@ module <%= module_name %>
 
 <%= ind %>  sig { params(pk_value: <%= pk_ruby_type %>, adapter: ::HakumiORM::Adapter::Base).returns(T.nilable(<%= record_class_name %>)) }
 <%= ind %>  def self.find(pk_value, adapter: ::HakumiORM.adapter)
-<%= ind %>    result = adapter.prepare_exec(STMT_FIND_BY_PK, SQL_FIND_BY_PK, [pk_value])
+<%= ind %>    sql = _rewrite_table_sql(SQL_FIND_BY_PK, adapter)
+<%= ind %>    result = adapter.exec_params(sql, [pk_value])
 <%= ind %>    return nil if result.row_count.zero?
 
 <%= ind %>    from_result_first(result, dialect: adapter.dialect)
@@ -151,6 +152,15 @@ module <%= module_name %>
 <%= ind %>  sig { void }
 <%= ind %>  def self.reset_table_name!
 <%= ind %>    <%= qualified_relation %>.table_name_override = nil
+<%= ind %>  end
+
+<%= ind %>  sig { params(sql: String, adapter: ::HakumiORM::Adapter::Base).returns(String) }
+<%= ind %>  def self._rewrite_table_sql(sql, adapter)
+<%= ind %>    default_table = <%= qualified_schema %>::TABLE_NAME
+<%= ind %>    active_table = table_name
+<%= ind %>    return sql if active_table == default_table
+
+<%= ind %>    sql.gsub(adapter.dialect.quote_id(default_table), adapter.dialect.quote_id(active_table))
 <%= ind %>  end
 
 <%= ind %>  sig { returns(T::Hash[Symbol, <%= to_h_value_type %>]) }
@@ -228,9 +238,9 @@ module <%= module_name %>
 <%- end -%>
 <%= ind %>    end
 <%- if soft_delete -%>
-<%= ind %>    result = adapter.exec_params(SQL_SOFT_DELETE_BY_PK, [adapter.encode(::HakumiORM::TimeBind.new(::Time.now)), @<%= pk_attr %>])
+<%= ind %>    result = adapter.exec_params(self.class._rewrite_table_sql(SQL_SOFT_DELETE_BY_PK, adapter), [adapter.encode(::HakumiORM::TimeBind.new(::Time.now)), @<%= pk_attr %>])
 <%- else -%>
-<%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
+<%= ind %>    result = adapter.exec_params(self.class._rewrite_table_sql(SQL_DELETE_BY_PK, adapter), [@<%= pk_attr %>])
 <%- end -%>
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
 <%= ind %>
@@ -241,7 +251,7 @@ module <%= module_name %>
 
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def delete!(adapter: ::HakumiORM.adapter)
-<%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
+<%= ind %>    result = adapter.exec_params(self.class._rewrite_table_sql(SQL_DELETE_BY_PK, adapter), [@<%= pk_attr %>])
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
 <%= ind %>  ensure
 <%= ind %>    result&.close
@@ -261,7 +271,7 @@ module <%= module_name %>
 <%= ind %>    <%= record_class_name %>::Contract.on_destroy(self, errors)
 <%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
 <%= ind %>
-<%= ind %>    result = adapter.exec_params(SQL_SOFT_DELETE_BY_PK, [adapter.encode(::HakumiORM::TimeBind.new(::Time.now)), @<%= pk_attr %>])
+<%= ind %>    result = adapter.exec_params(self.class._rewrite_table_sql(SQL_SOFT_DELETE_BY_PK, adapter), [adapter.encode(::HakumiORM::TimeBind.new(::Time.now)), @<%= pk_attr %>])
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
 <%= ind %>
 <%= ind %>    <%= record_class_name %>::Contract.after_destroy(self, adapter)
@@ -271,7 +281,7 @@ module <%= module_name %>
 
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def delete!(adapter: ::HakumiORM.adapter)
-<%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
+<%= ind %>    result = adapter.exec_params(self.class._rewrite_table_sql(SQL_DELETE_BY_PK, adapter), [@<%= pk_attr %>])
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
 <%= ind %>  ensure
 <%= ind %>    result&.close
@@ -288,7 +298,7 @@ module <%= module_name %>
 <%= ind %>    <%= record_class_name %>::Contract.on_destroy(self, errors)
 <%= ind %>    raise ::HakumiORM::ValidationError, errors unless errors.valid?
 <%= ind %>
-<%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
+<%= ind %>    result = adapter.exec_params(self.class._rewrite_table_sql(SQL_DELETE_BY_PK, adapter), [@<%= pk_attr %>])
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
 <%= ind %>
 <%= ind %>    <%= record_class_name %>::Contract.after_destroy(self, adapter)
@@ -298,7 +308,7 @@ module <%= module_name %>
 
 <%= ind %>  sig { params(adapter: ::HakumiORM::Adapter::Base).void }
 <%= ind %>  def delete!(adapter: ::HakumiORM.adapter)
-<%= ind %>    result = adapter.exec_params(SQL_DELETE_BY_PK, [@<%= pk_attr %>])
+<%= ind %>    result = adapter.exec_params(self.class._rewrite_table_sql(SQL_DELETE_BY_PK, adapter), [@<%= pk_attr %>])
 <%= ind %>    raise ::HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
 <%= ind %>  ensure
 <%= ind %>    result&.close
@@ -368,7 +378,7 @@ module <%= module_name %>
 <%= ind %>    binds << @<%= pk_attr %>
 <%= ind %>    binds << adapter.encode(::HakumiORM::IntBind.new(@lock_version))
 <%- end -%>
-<%= ind %>    result = adapter.exec_params(sql, binds)
+<%= ind %>    result = adapter.exec_params(self.class._rewrite_table_sql(sql, adapter), binds)
 <%- if supports_returning -%>
 <%= ind %>    record = <%= record_class_name %>.from_result_first(result, dialect: adapter.dialect)
 <%- else -%>
@@ -384,7 +394,7 @@ module <%= module_name %>
 <%= ind %>    sql = %(UPDATE <%= update_table %> SET #{sets} WHERE <%= update_pk_where %> = ?<%= supports_returning ? " RETURNING #{update_returning}" : "" %>)
 <%- end -%>
 <%= ind %>    binds << @<%= pk_attr %>
-<%= ind %>    result = adapter.exec_params(sql, binds)
+<%= ind %>    result = adapter.exec_params(self.class._rewrite_table_sql(sql, adapter), binds)
 <%- if supports_returning -%>
 <%= ind %>    record = <%= record_class_name %>.from_result_first(result, dialect: adapter.dialect)
 <%- else -%>

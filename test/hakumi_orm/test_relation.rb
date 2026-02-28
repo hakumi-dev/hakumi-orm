@@ -808,6 +808,40 @@ class TestRelation < HakumiORM::TestCase
     assert_includes @adapter.last_sql, '"users"."active" = $1'
   end
 
+  test "record table_name override applies to find by primary key" do
+    @adapter.stub_default([["1", "Alice", "a@b.com", "25", "t"]])
+    UserRecord.table_name = "archived_users"
+
+    record = UserRecord.find(1, adapter: @adapter)
+
+    refute_nil record
+    assert_includes @adapter.last_sql, 'FROM "archived_users"'
+    assert_includes @adapter.last_sql, 'WHERE "archived_users"."id" = $1'
+  end
+
+  test "record table_name override applies to update by primary key" do
+    @adapter.stub_default([["1", "Updated", "a@b.com", "25", "t"]])
+    UserRecord.table_name = "archived_users"
+    record = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+
+    updated = record.update!(name: "Updated", adapter: @adapter)
+
+    assert_equal "Updated", updated.name
+    assert_includes @adapter.last_sql, 'UPDATE "archived_users"'
+    assert_includes @adapter.last_sql, 'WHERE "archived_users"."id" = $'
+  end
+
+  test "record table_name override applies to delete by primary key" do
+    @adapter.stub_default([], affected: 1)
+    UserRecord.table_name = "archived_users"
+    record = UserRecord.new(id: 1, name: "Alice", email: "a@b.com", age: 25, active: true)
+
+    record.delete!(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, 'DELETE FROM "archived_users"'
+    assert_includes @adapter.last_sql, 'WHERE "archived_users"."id" = $1'
+  end
+
   test "with adds CTE and rebases bind markers" do
     subquery = @adapter.dialect.compiler.select(
       table: "users",

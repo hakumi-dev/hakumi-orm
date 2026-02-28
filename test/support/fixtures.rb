@@ -66,12 +66,14 @@ class UserRecord
     rows
   end
 
+  SQL_FIND_BY_PK = T.let(
+    'SELECT "users"."id", "users"."name", "users"."email", "users"."age", "users"."active" FROM "users" WHERE "users"."id" = $1 LIMIT 1',
+    String
+  )
+
   sig { params(pk_value: Integer, adapter: HakumiORM::Adapter::Base).returns(T.nilable(UserRecord)) }
   def self.find(pk_value, adapter: HakumiORM.adapter)
-    result = adapter.exec_params(
-      'SELECT "users"."id", "users"."name", "users"."email", "users"."age", "users"."active" FROM "users" WHERE "users"."id" = $1 LIMIT 1',
-      [pk_value]
-    )
+    result = adapter.exec_params(rewrite_table_sql(SQL_FIND_BY_PK, adapter), [pk_value])
     return nil if result.row_count.zero?
 
     from_result(result, dialect: adapter.dialect).first
@@ -92,7 +94,7 @@ class UserRecord
     UserRecord::Contract.on_destroy(self, errors)
     raise HakumiORM::ValidationError, errors unless errors.valid?
 
-    result = adapter.exec_params(SQL_DELETE_BY_PK, [@id])
+    result = adapter.exec_params(self.class.rewrite_table_sql(SQL_DELETE_BY_PK, adapter), [@id])
     raise HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
 
     UserRecord::Contract.after_destroy(self, adapter)
@@ -102,7 +104,7 @@ class UserRecord
 
   sig { params(adapter: HakumiORM::Adapter::Base).void }
   def delete!(adapter: HakumiORM.adapter)
-    result = adapter.exec_params(SQL_DELETE_BY_PK, [@id])
+    result = adapter.exec_params(self.class.rewrite_table_sql(SQL_DELETE_BY_PK, adapter), [@id])
     raise HakumiORM::Error, "DELETE affected 0 rows" if result.affected_rows.zero?
   ensure
     result&.close
@@ -155,7 +157,7 @@ class UserRecord
     binds = pairs.map(&:last)
     binds << @id
     sql = %(UPDATE "users" SET #{sets} WHERE "users"."id" = $#{binds.size} RETURNING "id", "name", "email", "age", "active")
-    result = adapter.exec_params(sql, binds)
+    result = adapter.exec_params(self.class.rewrite_table_sql(sql, adapter), binds)
     record = UserRecord.from_result(result, dialect: adapter.dialect).first
     raise HakumiORM::Error, "UPDATE returned no rows" unless record
 
@@ -236,6 +238,15 @@ class UserRecord
   sig { void }
   def self.reset_table_name!
     UserRelation.table_name_override = nil
+  end
+
+  sig { params(sql: String, adapter: HakumiORM::Adapter::Base).returns(String) }
+  def self.rewrite_table_sql(sql, adapter)
+    default_table = UserSchema::TABLE_NAME
+    active_table = table_name
+    return sql if active_table == default_table
+
+    sql.gsub(adapter.dialect.quote_id(default_table), adapter.dialect.quote_id(active_table))
   end
 end
 
