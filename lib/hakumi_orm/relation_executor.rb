@@ -39,6 +39,8 @@ module HakumiORM
 
       compiled = adapter.dialect.compiler.exists(
         table: source_table_name,
+        table_alias: source_table_alias,
+        ctes: cte_entries,
         where_expr: combined_where,
         joins: @joins
       )
@@ -60,6 +62,8 @@ module HakumiORM
 
       compiled = adapter.dialect.compiler.count(
         table: source_table_name,
+        table_alias: source_table_alias,
+        ctes: cte_entries,
         where_expr: combined_where,
         joins: @joins
       )
@@ -81,7 +85,9 @@ module HakumiORM
     sig { params(assignments: T::Array[Assignment], adapter: Adapter::Base).returns(Integer) }
     def update_all(assignments, adapter: HakumiORM.adapter)
       compiled = adapter.dialect.compiler.update(
-        table: @table_name,
+        table: source_table_name,
+        table_alias: source_table_alias,
+        ctes: cte_entries,
         assignments: assignments,
         where_expr: combined_where
       )
@@ -127,7 +133,9 @@ module HakumiORM
     sig { params(adapter: Adapter::Base).returns(Integer) }
     def perform_physical_delete_all(adapter)
       compiled = adapter.dialect.compiler.delete(
-        table: @table_name,
+        table: source_table_name,
+        table_alias: source_table_alias,
+        ctes: cte_entries,
         where_expr: combined_where
       )
       use_result(adapter.exec_params(compiled.sql, compiled.params_for(adapter.dialect)), &:affected_rows)

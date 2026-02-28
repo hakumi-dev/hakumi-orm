@@ -222,6 +222,21 @@ class UserRecord
   def self.all
     UserRelation.new
   end
+
+  sig { returns(String) }
+  def self.table_name
+    UserRelation.table_name_override || UserSchema::TABLE_NAME
+  end
+
+  sig { params(name: String).void }
+  def self.table_name=(name)
+    UserRelation.table_name_override = name
+  end
+
+  sig { void }
+  def self.reset_table_name!
+    UserRelation.table_name_override = nil
+  end
 end
 
 class UserRecord

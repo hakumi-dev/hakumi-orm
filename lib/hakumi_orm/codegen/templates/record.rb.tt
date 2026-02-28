@@ -138,6 +138,21 @@ module <%= module_name %>
 <%= ind %>    <%= qualified_relation %>.new
 <%= ind %>  end
 
+<%= ind %>  sig { returns(String) }
+<%= ind %>  def self.table_name
+<%= ind %>    <%= qualified_relation %>.table_name_override || <%= qualified_schema %>::TABLE_NAME
+<%= ind %>  end
+
+<%= ind %>  sig { params(name: String).void }
+<%= ind %>  def self.table_name=(name)
+<%= ind %>    <%= qualified_relation %>.table_name_override = name
+<%= ind %>  end
+
+<%= ind %>  sig { void }
+<%= ind %>  def self.reset_table_name!
+<%= ind %>    <%= qualified_relation %>.table_name_override = nil
+<%= ind %>  end
+
 <%= ind %>  sig { returns(T::Hash[Symbol, <%= to_h_value_type %>]) }
 <%= ind %>  def to_h
 <%= ind %>    ::HakumiORM::RecordRuntime.build_symbol_hash do |h|

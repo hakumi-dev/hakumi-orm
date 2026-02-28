@@ -203,6 +203,7 @@ module HakumiORM
                pg_decoders: build_pg_decoders(table),
                last_cast_index: table.columns.length - 1,
                qualified_relation: qualify("#{cls}Relation"),
+               qualified_schema: qualify("#{cls}Schema"),
                has_many: hm,
                has_one: ho,
                has_many_through: hmt,

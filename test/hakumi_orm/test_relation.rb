@@ -11,6 +11,7 @@ class TestRelation < HakumiORM::TestCase
   end
 
   def teardown
+    UserRecord.reset_table_name!
     HakumiORM.config.adapter = @prev_adapter
   end
 
@@ -771,30 +772,68 @@ class TestRelation < HakumiORM::TestCase
   test "from replaces source table in SELECT" do
     UserRecord.all.from("archived_users").to_a(adapter: @adapter)
 
-    assert_includes @adapter.last_sql, 'FROM "archived_users"'
+    assert_includes @adapter.last_sql, 'FROM "archived_users" AS "users"'
   end
 
   test "from also affects count and aggregate source table" do
     @adapter.stub_default([["4"]])
     count = UserRecord.all.from("archived_users").count(adapter: @adapter)
     assert_equal 4, count
-    assert_includes @adapter.last_sql, 'FROM "archived_users"'
+    assert_includes @adapter.last_sql, 'FROM "archived_users" AS "users"'
 
     @adapter.stub_default([["120"]])
     sum = UserRecord.all.from("archived_users").sum(UserSchema::AGE, adapter: @adapter)
     assert_equal "120", sum
-    assert_includes @adapter.last_sql, 'FROM "archived_users"'
+    assert_includes @adapter.last_sql, 'FROM "archived_users" AS "users"'
   end
 
   test "from validates source table name" do
     assert_raises(ArgumentError) { UserRecord.all.from("users u") }
     assert_raises(ArgumentError) { UserRecord.all.from("users; DROP TABLE users") }
+    UserRecord.all.from("legacy.users").to_a(adapter: @adapter)
+    assert_includes @adapter.last_sql, 'FROM "legacy.users" AS "users"'
   end
 
   test "unscope can clear from source table override" do
     UserRecord.all.from("archived_users").unscope(:from).to_a(adapter: @adapter)
 
     assert_includes @adapter.last_sql, 'FROM "users"'
+  end
+
+  test "record table_name override applies to query relations" do
+    UserRecord.table_name = "archived_users"
+    UserRecord.all.where(UserSchema::ACTIVE.eq(true)).to_a(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, 'FROM "archived_users" AS "users"'
+    assert_includes @adapter.last_sql, '"users"."active" = $1'
+  end
+
+  test "with adds CTE and rebases bind markers" do
+    subquery = @adapter.dialect.compiler.select(
+      table: "users",
+      columns: [UserSchema::ID],
+      where_expr: UserSchema::ACTIVE.eq(true)
+    )
+    UserRecord.all
+              .with("active_users", subquery)
+              .from("active_users")
+              .where(UserSchema::AGE.gt(18))
+              .to_a(adapter: @adapter)
+
+    sql = @adapter.last_sql
+
+    assert_match(/\AWITH "active_users" AS \(/, sql)
+    assert_includes sql, 'FROM "active_users" AS "users"'
+    assert_includes sql, '"users"."active" = $1'
+    assert_includes sql, '"users"."age" > $2'
+    assert_equal ["t", 18], @adapter.last_params
+  end
+
+  test "with_recursive emits WITH RECURSIVE" do
+    subquery = @adapter.dialect.compiler.select(table: "users", columns: [UserSchema::ID])
+    UserRecord.all.with_recursive("tree", subquery).from("tree").to_a(adapter: @adapter)
+
+    assert_match(/\AWITH RECURSIVE "tree" AS \(/, @adapter.last_sql)
   end
 
   test "compile caches compiled query per dialect on unchanged relation" do

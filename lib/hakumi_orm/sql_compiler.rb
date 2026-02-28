@@ -29,6 +29,7 @@ module HakumiORM
       params(
         table: String,
         columns: T::Array[FieldRef],
+        table_alias: T.nilable(String),
         ctes: T::Array[CteEntry],
         where_expr: T.nilable(Expr),
         orders: T::Array[OrderClause],
@@ -41,7 +42,7 @@ module HakumiORM
         having_expr: T.nilable(Expr)
       ).returns(CompiledQuery)
     end
-    def select(table:, columns:, ctes: [], where_expr: nil, orders: [], joins: [], limit_val: nil, offset_val: nil,
+    def select(table:, columns:, table_alias: nil, ctes: [], where_expr: nil, orders: [], joins: [], limit_val: nil, offset_val: nil,
                distinct: false, lock: nil, group_fields: [], having_expr: nil)
       binds = T.let([], T::Array[Bind])
       idx = T.let(0, Integer)
@@ -54,7 +55,7 @@ module HakumiORM
       end
 
       buf << " FROM "
-      buf << @dialect.quote_id(table)
+      append_table_reference(buf, table, table_alias)
 
       joins.each do |j|
         buf << join_keyword(j.join_type)
@@ -102,19 +103,20 @@ module HakumiORM
     sig do
       params(
         table: String,
-        ctes: T::Array[CteEntry],
         function: String,
         field: FieldRef,
+        table_alias: T.nilable(String),
+        ctes: T::Array[CteEntry],
         where_expr: T.nilable(Expr)
       ).returns(CompiledQuery)
     end
-    def aggregate(table:, ctes: [], function:, field:, where_expr: nil)
+    def aggregate(table:, function:, field:, table_alias: nil, ctes: [], where_expr: nil)
       binds = T.let([], T::Array[Bind])
       idx = T.let(0, Integer)
       buf = String.new(capacity: 128)
 
       buf << "SELECT " << function << "(" << qualify(field) << ") FROM "
-      buf << @dialect.quote_id(table)
+      append_table_reference(buf, table, table_alias)
 
       if where_expr
         buf << " WHERE "
@@ -129,16 +131,17 @@ module HakumiORM
         table: String,
         ctes: T::Array[CteEntry],
         where_expr: T.nilable(Expr),
-        joins: T::Array[JoinClause]
+        joins: T::Array[JoinClause],
+        table_alias: T.nilable(String)
       ).returns(CompiledQuery)
     end
-    def count(table:, ctes: [], where_expr: nil, joins: [])
+    def count(table:, ctes: [], where_expr: nil, joins: [], table_alias: nil)
       binds = T.let([], T::Array[Bind])
       idx = T.let(0, Integer)
       buf = String.new(capacity: 128)
 
       buf << "SELECT COUNT(*) FROM "
-      buf << @dialect.quote_id(table)
+      append_table_reference(buf, table, table_alias)
 
       joins.each do |j|
         buf << join_keyword(j.join_type)
@@ -162,16 +165,17 @@ module HakumiORM
         table: String,
         ctes: T::Array[CteEntry],
         where_expr: T.nilable(Expr),
-        joins: T::Array[JoinClause]
+        joins: T::Array[JoinClause],
+        table_alias: T.nilable(String)
       ).returns(CompiledQuery)
     end
-    def exists(table:, ctes: [], where_expr: nil, joins: [])
+    def exists(table:, ctes: [], where_expr: nil, joins: [], table_alias: nil)
       binds = T.let([], T::Array[Bind])
       idx = T.let(0, Integer)
       buf = String.new(capacity: 128)
 
       buf << "SELECT 1 FROM "
-      buf << @dialect.quote_id(table)
+      append_table_reference(buf, table, table_alias)
 
       joins.each do |j|
         buf << join_keyword(j.join_type)
@@ -196,16 +200,17 @@ module HakumiORM
       params(
         table: String,
         ctes: T::Array[CteEntry],
-        where_expr: T.nilable(Expr)
+        where_expr: T.nilable(Expr),
+        table_alias: T.nilable(String)
       ).returns(CompiledQuery)
     end
-    def delete(table:, ctes: [], where_expr: nil)
+    def delete(table:, ctes: [], where_expr: nil, table_alias: nil)
       binds = T.let([], T::Array[Bind])
       idx = T.let(0, Integer)
       buf = String.new(capacity: 128)
 
       buf << "DELETE FROM "
-      buf << @dialect.quote_id(table)
+      append_table_reference(buf, table, table_alias)
 
       if where_expr
         buf << " WHERE "
@@ -218,18 +223,19 @@ module HakumiORM
     sig do
       params(
         table: String,
-        ctes: T::Array[CteEntry],
         assignments: T::Array[Assignment],
-        where_expr: T.nilable(Expr)
+        ctes: T::Array[CteEntry],
+        where_expr: T.nilable(Expr),
+        table_alias: T.nilable(String)
       ).returns(CompiledQuery)
     end
-    def update(table:, ctes: [], assignments:, where_expr: nil)
+    def update(table:, assignments:, ctes: [], where_expr: nil, table_alias: nil)
       binds = T.let([], T::Array[Bind])
       idx = T.let(0, Integer)
       buf = String.new(capacity: 256)
 
       buf << "UPDATE "
-      buf << @dialect.quote_id(table)
+      append_table_reference(buf, table, table_alias)
       buf << " SET "
 
       assignments.each_with_index do |a, i|
@@ -303,6 +309,14 @@ module HakumiORM
       JOIN_KEYWORDS.fetch(join_type, " INNER JOIN ")
     end
 
+    sig { params(buf: String, table: String, table_alias: T.nilable(String)).void }
+    def append_table_reference(buf, table, table_alias)
+      buf << @dialect.quote_id(table)
+      return unless table_alias && table_alias != table
+
+      buf << " AS " << @dialect.quote_id(table_alias)
+    end
+
     sig { params(sql: String, binds: T::Array[Bind], ctes: T::Array[CteEntry]).returns(CompiledQuery) }
     def finalize_query(sql, binds, ctes)
       return CompiledQuery.new(-sql, binds) if ctes.empty?
@@ -323,7 +337,7 @@ module HakumiORM
       all_binds = T.let([], T::Array[Bind])
       all_binds.concat(cte_binds)
       all_binds.concat(binds)
-      CompiledQuery.new(-"#{prefix}#{cte_clauses.join(', ')} #{main_sql}", all_binds)
+      CompiledQuery.new(-"#{prefix}#{cte_clauses.join(", ")} #{main_sql}", all_binds)
     end
   end
 end

@@ -38,6 +38,8 @@ module HakumiORM
     def run_aggregate(func, field, adapter)
       compiled = adapter.dialect.compiler.aggregate(
         table: source_table_name,
+        table_alias: source_table_alias,
+        ctes: cte_entries,
         function: func,
         field: field,
         where_expr: combined_where

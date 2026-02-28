@@ -13,6 +13,18 @@ module HakumiORM
     ModelType = type_member
     CteEntry = T.type_alias { [String, CompiledQuery, T::Boolean] }
 
+    class << self
+      extend T::Sig
+
+      sig { returns(T.nilable(String)) }
+      attr_reader :table_name_override
+
+      sig { params(name: T.nilable(String)).void }
+      def table_name_override=(name)
+        @table_name_override = T.let(name, T.nilable(String))
+      end
+    end
+
     sig { params(table_name: String, columns: T::Array[FieldRef]).void }
     def initialize(table_name, columns)
       @table_name = T.let(table_name, String)
@@ -34,6 +46,8 @@ module HakumiORM
       @_preload_nodes = T.let([], T::Array[PreloadNode])
       @defaults_pristine = T.let(true, T::Boolean)
       @compiled_select_cache = T.let({}, T::Hash[Symbol, CompiledQuery])
+      default_from = self.class.table_name_override
+      @from_table_name = default_from if default_from
     end
 
     sig { params(expr: Expr).returns(T.self_type) }
@@ -252,10 +266,14 @@ module HakumiORM
       @from_table_name || @table_name
     end
 
-    sig { returns(T::Array[CteEntry]) }
-    def cte_entries
-      @cte_entries
+    sig { returns(T.nilable(String)) }
+    def source_table_alias
+      return nil if source_table_name == @table_name
+
+      @table_name
     end
+    sig { returns(T::Array[CteEntry]) }
+    attr_reader :cte_entries
 
     private
 
@@ -316,6 +334,7 @@ module HakumiORM
     def build_select(dialect, columns_override: nil, limit_override: nil, offset_override: nil)
       dialect.compiler.select(
         table: source_table_name,
+        table_alias: source_table_alias,
         columns: columns_override || @select_columns || @columns,
         ctes: @cte_entries,
         where_expr: combined_where,
@@ -371,7 +390,8 @@ module HakumiORM
 
     sig { params(table_name: String).void }
     def validate_table_name!(table_name)
-      return if table_name.match?(IDENTIFIER)
+      parts = table_name.split(".")
+      return if !parts.empty? && parts.all? { |part| part.match?(IDENTIFIER) }
 
       raise ArgumentError, "Invalid table name for from: #{table_name.inspect}"
     end

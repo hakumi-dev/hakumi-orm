@@ -26,6 +26,12 @@ class TestSqlCompiler < HakumiORM::TestCase
     assert_empty q.binds
   end
 
+  test "select supports source table alias" do
+    q = @compiler.select(table: "archived_users", table_alias: "users", columns: [UserSchema::ID])
+
+    assert_includes q.sql, 'FROM "archived_users" AS "users"'
+  end
+
   test "select with eq uses bind marker" do
     q = @compiler.select(table: "users", columns: [UserSchema::ID], where_expr: UserSchema::AGE.eq(25))
 
@@ -218,6 +224,36 @@ class TestSqlCompiler < HakumiORM::TestCase
     q = @compiler.select(table: "users", columns: [UserSchema::NAME], distinct: true)
 
     assert_match(/\ASELECT DISTINCT /, q.sql)
+  end
+
+  test "select supports CTE and rebases bind markers" do
+    cte_query = @compiler.select(
+      table: "users",
+      columns: [UserSchema::ID],
+      where_expr: UserSchema::ACTIVE.eq(true)
+    )
+    q = @compiler.select(
+      table: "users",
+      columns: [UserSchema::ID],
+      ctes: [["active_users", cte_query, false]],
+      where_expr: UserSchema::AGE.gt(30)
+    )
+
+    assert_match(/\AWITH "active_users" AS \(/, q.sql)
+    assert_includes q.sql, '"users"."active" = $1'
+    assert_includes q.sql, '"users"."age" > $2'
+    assert_equal ["t", 30], q.pg_params
+  end
+
+  test "select emits WITH RECURSIVE when any CTE is recursive" do
+    cte_query = @compiler.select(table: "users", columns: [UserSchema::ID])
+    q = @compiler.select(
+      table: "users",
+      columns: [UserSchema::ID],
+      ctes: [["tree", cte_query, true]]
+    )
+
+    assert_match(/\AWITH RECURSIVE "tree" AS \(/, q.sql)
   end
 
   test "select without distinct does not include DISTINCT" do
