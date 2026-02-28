@@ -246,8 +246,7 @@ module HakumiORM
         record_cls = "#{cls}Record"
 
         ins_cols = insertable_columns(table)
-        required_ins = ins_cols.reject(&:nullable)
-        optional_ins = ins_cols.select(&:nullable)
+        required_ins, optional_ins = ins_cols.partition { |col| !col.nullable }
 
         ordered = required_ins + optional_ins
         cols = ordered.map { |c| { name: c.name, ruby_type: ruby_type(c) } }
