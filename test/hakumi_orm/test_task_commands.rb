@@ -63,16 +63,15 @@ class TestTaskCommands < HakumiORM::TestCase
 
   test "run_prepare delegates to run_migrate" do
     calls = []
-    original = HakumiORM::TaskCommands.method(:run_migrate)
-    HakumiORM::TaskCommands.define_singleton_method(:run_migrate) do |task_prefix:|
+    runner = proc do |task_prefix:|
       calls << task_prefix
     end
 
-    HakumiORM::TaskCommands.run_prepare(task_prefix: "db:")
+    HakumiORM::TaskCommands.stub(:run_migrate, runner) do
+      HakumiORM::TaskCommands.run_prepare(task_prefix: "db:")
+    end
 
     assert_equal ["db:"], calls
-  ensure
-    HakumiORM::TaskCommands.define_singleton_method(:run_migrate, original)
   end
 
   test "run_fixtures_load loads yaml fixtures into sqlite database" do

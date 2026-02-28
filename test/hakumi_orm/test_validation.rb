@@ -208,6 +208,7 @@ class TestValidation < HakumiORM::TestCase
   end
 
   test "validate runs custom method in default all context" do
+    remove_contract_singleton_method!(:name_must_include_space)
     UserRecord::Contract.validate(:name_must_include_space)
     UserRecord::Contract.define_singleton_method(:name_must_include_space) do |record, e|
       e.add(:name, "must include a space") unless record.name.include?(" ")
@@ -220,6 +221,7 @@ class TestValidation < HakumiORM::TestCase
   end
 
   test "validate supports on create context" do
+    remove_contract_singleton_method!(:name_must_include_space)
     UserRecord::Contract.validate(:name_must_include_space, on: :create)
     UserRecord::Contract.define_singleton_method(:name_must_include_space) do |record, e|
       e.add(:name, "must include a space") unless record.name.include?(" ")
@@ -232,6 +234,7 @@ class TestValidation < HakumiORM::TestCase
   end
 
   test "validate supports if/unless conditions" do
+    remove_contract_singleton_method!(:name_must_include_space)
     UserRecord::Contract.validate(:name_must_include_space, if: :active, unless: ->(record) { record.email == "skip@example.com" })
     UserRecord::Contract.define_singleton_method(:name_must_include_space) do |record, e|
       e.add(:name, "must include a space") unless record.name.include?(" ")
@@ -252,5 +255,10 @@ class TestValidation < HakumiORM::TestCase
   def remove_contract_hooks!
     sc = UserRecord::Contract.singleton_class
     HOOK_METHODS.each { |m| sc.remove_method(m) if sc.method_defined?(m, false) }
+  end
+
+  def remove_contract_singleton_method!(method_name)
+    sc = UserRecord::Contract.singleton_class
+    sc.remove_method(method_name) if sc.method_defined?(method_name, false)
   end
 end
