@@ -33,7 +33,7 @@ module HakumiORM
 
       sig { override.params(sql: String, params: T::Array[PGValue]).returns(SqliteResult) }
       def exec_params(sql, params)
-        return exec(sql) if params.empty?
+        return exec_without_params(sql) if params.empty?
 
         start = log_query_start
         rows =
@@ -49,6 +49,11 @@ module HakumiORM
 
       sig { override.params(sql: String).returns(SqliteResult) }
       def exec(sql)
+        exec_without_params(sql)
+      end
+
+      sig { params(sql: String).returns(SqliteResult) }
+      def exec_without_params(sql)
         start = log_query_start
         rows =
           if cacheable_read_sql?(sql)
@@ -60,6 +65,7 @@ module HakumiORM
         log_query_done(sql, [], start)
         r
       end
+      private :exec_without_params
 
       sig { override.params(name: String, sql: String).void }
       def prepare(name, sql)
