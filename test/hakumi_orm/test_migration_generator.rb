@@ -63,10 +63,9 @@ class TestMigrationGenerator < HakumiORM::TestCase
   end
 
   test "bumps timestamp when collision with existing file in same second" do
-    Time.stub(:now, Time.new(2026, 1, 1, 12, 0, 0)) do
-      HakumiORM::Migration::FileGenerator.generate(name: "create_users", path: @dir)
-      HakumiORM::Migration::FileGenerator.generate(name: "create_posts", path: @dir)
-    end
+    now = Time.new(2026, 1, 1, 12, 0, 0)
+    HakumiORM::Migration::FileGenerator.generate(name: "create_users", path: @dir, now: now)
+    HakumiORM::Migration::FileGenerator.generate(name: "create_posts", path: @dir, now: now)
 
     files = Dir.children(@dir).sort
     timestamps = files.map { |f| f[0, 14] }
@@ -76,11 +75,10 @@ class TestMigrationGenerator < HakumiORM::TestCase
   end
 
   test "bumps timestamp multiple times if needed" do
-    Time.stub(:now, Time.new(2026, 1, 1, 12, 0, 0)) do
-      HakumiORM::Migration::FileGenerator.generate(name: "step_one", path: @dir)
-      HakumiORM::Migration::FileGenerator.generate(name: "step_two", path: @dir)
-      HakumiORM::Migration::FileGenerator.generate(name: "step_three", path: @dir)
-    end
+    now = Time.new(2026, 1, 1, 12, 0, 0)
+    HakumiORM::Migration::FileGenerator.generate(name: "step_one", path: @dir, now: now)
+    HakumiORM::Migration::FileGenerator.generate(name: "step_two", path: @dir, now: now)
+    HakumiORM::Migration::FileGenerator.generate(name: "step_three", path: @dir, now: now)
 
     files = Dir.children(@dir).sort
     timestamps = files.map { |f| f[0, 14] }

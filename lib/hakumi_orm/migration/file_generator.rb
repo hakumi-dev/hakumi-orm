@@ -10,15 +10,15 @@ module HakumiORM
 
       VALID_NAME_PATTERN = T.let(/\A[a-z]\w*\z/, Regexp)
 
-      sig { params(name: String, path: String).returns(String) }
-      def self.generate(name:, path:)
+      sig { params(name: String, path: String, now: Time).returns(String) }
+      def self.generate(name:, path:, now: Time.now)
         validate_name!(name)
         FileUtils.mkdir_p(path)
 
         existing = Dir.children(path).select { |f| f.end_with?("_#{name}.rb") }
         raise HakumiORM::Error, "Migration '#{name}' already exists: #{existing.first}" unless existing.empty?
 
-        timestamp = next_timestamp(path)
+        timestamp = next_timestamp(path, now: now)
         filename = "#{timestamp}_#{name}.rb"
         class_name = name.split("_").map(&:capitalize).join
 
@@ -40,9 +40,9 @@ module HakumiORM
         filepath
       end
 
-      sig { params(path: String).returns(String) }
-      def self.next_timestamp(path)
-        candidate = Time.now.strftime("%Y%m%d%H%M%S")
+      sig { params(path: String, now: Time).returns(String) }
+      def self.next_timestamp(path, now:)
+        candidate = now.strftime("%Y%m%d%H%M%S")
         max_existing = Dir.children(path)
                           .grep(/\A\d{14}_/)
                           .map { |f| f[0, 14] }

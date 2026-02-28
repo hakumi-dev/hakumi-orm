@@ -37,7 +37,7 @@ module HakumiORM
     sig { params(func: String, field: FieldRef, adapter: Adapter::Base).returns(T.nilable(String)) }
     def run_aggregate(func, field, adapter)
       compiled = adapter.dialect.compiler.aggregate(
-        table: @table_name,
+        table: source_table_name,
         function: func,
         field: field,
         where_expr: combined_where

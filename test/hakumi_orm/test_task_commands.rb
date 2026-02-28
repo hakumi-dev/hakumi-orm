@@ -61,17 +61,17 @@ class TestTaskCommands < HakumiORM::TestCase
     end
   end
 
-  test "run_prepare delegates to run_migrate" do
-    calls = []
-    runner = proc do |task_prefix:|
-      calls << task_prefix
-    end
+  test "run_prepare follows run_migrate error path when adapter is missing" do
+    HakumiORM.config.adapter = nil
 
-    HakumiORM::TaskCommands.stub(:run_migrate, runner) do
+    migrate_error = assert_raises(HakumiORM::Error) do
+      HakumiORM::TaskCommands.run_migrate(task_prefix: "db:")
+    end
+    prepare_error = assert_raises(HakumiORM::Error) do
       HakumiORM::TaskCommands.run_prepare(task_prefix: "db:")
     end
 
-    assert_equal ["db:"], calls
+    assert_equal migrate_error.message, prepare_error.message
   end
 
   test "run_fixtures_load loads yaml fixtures into sqlite database" do

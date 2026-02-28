@@ -16,6 +16,7 @@ module HakumiORM
     def initialize(table_name, columns)
       @table_name = T.let(table_name, String)
       @columns = T.let(columns, T::Array[FieldRef])
+      @from_table_name = T.let(nil, T.nilable(String))
       @select_columns = T.let(nil, T.nilable(T::Array[FieldRef]))
       @where_exprs = T.let([], T::Array[Expr])
       @default_exprs = T.let([], T::Array[Expr])
@@ -89,6 +90,13 @@ module HakumiORM
       self
     end
 
+    sig { params(clause: JoinClause).returns(T.self_type) }
+    def left_joins(clause)
+      @joins << with_join_type(clause, :left)
+      invalidate_compiled_cache!
+      self
+    end
+
     sig { returns(T.self_type) }
     def distinct
       @distinct_value = true
@@ -133,6 +141,35 @@ module HakumiORM
     sig { params(expr: Expr).returns(T.self_type) }
     def where_not(expr)
       @where_exprs << NotExpr.new(expr)
+      invalidate_compiled_cache!
+      self
+    end
+
+    sig { params(expr: Expr).returns(T.self_type) }
+    def rewhere(expr)
+      @where_exprs = [expr]
+      invalidate_compiled_cache!
+      self
+    end
+
+    sig { params(clauses: OrderClause).returns(T.self_type) }
+    def reorder(*clauses)
+      @order_clauses = clauses
+      invalidate_compiled_cache!
+      self
+    end
+
+    sig { params(scopes: Symbol).returns(T.self_type) }
+    def unscope(*scopes)
+      scopes.each { |scope| unscope_single!(scope) }
+      invalidate_compiled_cache!
+      self
+    end
+
+    sig { params(table_name: String).returns(T.self_type) }
+    def from(table_name)
+      validate_table_name!(table_name)
+      @from_table_name = table_name
       invalidate_compiled_cache!
       self
     end
@@ -192,7 +229,14 @@ module HakumiORM
     sig { returns(T.nilable(Expr)) }
     def where_expression = combined_where
 
+    sig { returns(String) }
+    def source_table_name
+      @from_table_name || @table_name
+    end
+
     private
+
+    IDENTIFIER = T.let(/\A[a-zA-Z_][a-zA-Z0-9_]*\z/, Regexp)
 
     sig { void }
     def mark_defaults_dirty!
@@ -214,6 +258,7 @@ module HakumiORM
       @group_fields = @group_fields.dup
       @having_exprs = @having_exprs.dup
       @_preload_nodes = @_preload_nodes.dup
+      @from_table_name = @from_table_name&.dup
       @compiled_select_cache = {}
     end
 
@@ -246,7 +291,7 @@ module HakumiORM
     end
     def build_select(dialect, columns_override: nil, limit_override: nil, offset_override: nil)
       dialect.compiler.select(
-        table: @table_name,
+        table: source_table_name,
         columns: columns_override || @select_columns || @columns,
         where_expr: combined_where,
         orders: @order_clauses,
@@ -258,6 +303,50 @@ module HakumiORM
         group_fields: @group_fields,
         having_expr: combined_having
       )
+    end
+
+    sig { params(clause: JoinClause, join_type: Symbol).returns(JoinClause) }
+    def with_join_type(clause, join_type)
+      return clause if clause.join_type == join_type
+
+      JoinClause.new(join_type, clause.target_table, clause.source_field, clause.target_field)
+    end
+
+    sig { params(scope: Symbol).void }
+    def unscope_single!(scope)
+      case scope
+      when :where
+        @where_exprs = []
+      when :order
+        @order_clauses = []
+      when :joins
+        @joins = []
+      when :group
+        @group_fields = []
+      when :having
+        @having_exprs = []
+      when :limit
+        @limit_value = nil
+      when :offset
+        @offset_value = nil
+      when :lock
+        @lock_value = nil
+      when :select
+        @select_columns = nil
+      when :distinct
+        @distinct_value = false
+      when :from
+        @from_table_name = nil
+      else
+        raise ArgumentError, "Unsupported unscope target: #{scope.inspect}"
+      end
+    end
+
+    sig { params(table_name: String).void }
+    def validate_table_name!(table_name)
+      return if table_name.match?(IDENTIFIER)
+
+      raise ArgumentError, "Invalid table name for from: #{table_name.inspect}"
     end
   end
 end

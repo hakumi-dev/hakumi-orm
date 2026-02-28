@@ -104,6 +104,17 @@ class TestRelation < HakumiORM::TestCase
     assert_includes @adapter.last_sql, "COUNT(*)"
   end
 
+  test "left_joins rewrites join clause to LEFT JOIN" do
+    dialect = @adapter.dialect
+    source = HakumiORM::FieldRef.new(:id, "users", "id", dialect.qualified_name("users", "id"))
+    target = HakumiORM::FieldRef.new(:user_id, "posts", "user_id", dialect.qualified_name("posts", "user_id"))
+    clause = HakumiORM::JoinClause.new(:inner, "posts", source, target)
+
+    UserRecord.all.left_joins(clause).to_a(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, "LEFT JOIN"
+  end
+
   test "count rejects group" do
     err = assert_raises(HakumiORM::Error) do
       UserRecord.all.group(UserSchema::ACTIVE).count(adapter: @adapter)
@@ -128,6 +139,19 @@ class TestRelation < HakumiORM::TestCase
 
     assert_includes @adapter.last_sql, "AND"
     assert_equal [18, "t"], @adapter.last_params
+  end
+
+  test "rewhere replaces previously added where predicates" do
+    UserRecord.all
+              .where(UserSchema::ACTIVE.eq(true))
+              .rewhere(UserSchema::AGE.gt(30))
+              .to_a(adapter: @adapter)
+
+    sql = @adapter.last_sql
+
+    assert_includes sql, '"users"."age" > $1'
+    refute_includes sql, '"users"."active" ='
+    assert_equal [30], @adapter.last_params
   end
 
   test "to_sql returns CompiledQuery without hitting the adapter" do
@@ -307,6 +331,37 @@ class TestRelation < HakumiORM::TestCase
     UserRecord.all.distinct.to_a(adapter: @adapter)
 
     assert_match(/\ASELECT DISTINCT /, @adapter.last_sql)
+  end
+
+  test "reorder replaces previous order clauses" do
+    UserRecord.all
+              .order(UserSchema::NAME.asc)
+              .reorder(UserSchema::AGE.desc)
+              .to_a(adapter: @adapter)
+
+    sql = @adapter.last_sql
+
+    assert_includes sql, '"users"."age" DESC'
+    refute_includes sql, '"users"."name" ASC'
+  end
+
+  test "unscope removes where and order clauses" do
+    UserRecord.all
+              .where(UserSchema::ACTIVE.eq(true))
+              .order(UserSchema::NAME.asc)
+              .unscope(:where, :order)
+              .to_a(adapter: @adapter)
+
+    sql = @adapter.last_sql
+
+    refute_includes sql, "WHERE"
+    refute_includes sql, "ORDER BY"
+  end
+
+  test "unscope raises for unsupported scope target" do
+    err = assert_raises(ArgumentError) { UserRecord.all.unscope(:banana) }
+
+    assert_includes err.message, "Unsupported unscope target"
   end
 
   test "distinct is chainable with where" do
@@ -711,6 +766,35 @@ class TestRelation < HakumiORM::TestCase
     compiled = UserRecord.all.select(UserSchema::ID, UserSchema::NAME).to_sql(adapter: @adapter)
 
     assert_includes compiled.sql, "SELECT"
+  end
+
+  test "from replaces source table in SELECT" do
+    UserRecord.all.from("archived_users").to_a(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, 'FROM "archived_users"'
+  end
+
+  test "from also affects count and aggregate source table" do
+    @adapter.stub_default([["4"]])
+    count = UserRecord.all.from("archived_users").count(adapter: @adapter)
+    assert_equal 4, count
+    assert_includes @adapter.last_sql, 'FROM "archived_users"'
+
+    @adapter.stub_default([["120"]])
+    sum = UserRecord.all.from("archived_users").sum(UserSchema::AGE, adapter: @adapter)
+    assert_equal "120", sum
+    assert_includes @adapter.last_sql, 'FROM "archived_users"'
+  end
+
+  test "from validates source table name" do
+    assert_raises(ArgumentError) { UserRecord.all.from("users u") }
+    assert_raises(ArgumentError) { UserRecord.all.from("users; DROP TABLE users") }
+  end
+
+  test "unscope can clear from source table override" do
+    UserRecord.all.from("archived_users").unscope(:from).to_a(adapter: @adapter)
+
+    assert_includes @adapter.last_sql, 'FROM "users"'
   end
 
   test "compile caches compiled query per dialect on unchanged relation" do

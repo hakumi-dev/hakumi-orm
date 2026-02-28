@@ -38,7 +38,7 @@ module HakumiORM
       return !preloaded.empty? if preloaded
 
       compiled = adapter.dialect.compiler.exists(
-        table: @table_name,
+        table: source_table_name,
         where_expr: combined_where,
         joins: @joins
       )
@@ -59,7 +59,7 @@ module HakumiORM
       end
 
       compiled = adapter.dialect.compiler.count(
-        table: @table_name,
+        table: source_table_name,
         where_expr: combined_where,
         joins: @joins
       )
@@ -121,7 +121,7 @@ module HakumiORM
     def can_use_prepared_count_all?(adapter)
       return false unless adapter.dialect.is_a?(Dialect::Postgresql)
 
-      @where_exprs.empty? && @joins.empty? && @defaults_pristine
+      @where_exprs.empty? && @joins.empty? && @defaults_pristine && source_table_name == @table_name
     end
 
     sig { params(adapter: Adapter::Base).returns(Integer) }
