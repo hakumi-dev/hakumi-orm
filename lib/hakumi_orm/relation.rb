@@ -11,6 +11,7 @@ module HakumiORM
     abstract!
 
     ModelType = type_member
+    CteEntry = T.type_alias { [String, CompiledQuery, T::Boolean] }
 
     sig { params(table_name: String, columns: T::Array[FieldRef]).void }
     def initialize(table_name, columns)
@@ -20,6 +21,7 @@ module HakumiORM
       @select_columns = T.let(nil, T.nilable(T::Array[FieldRef]))
       @where_exprs = T.let([], T::Array[Expr])
       @default_exprs = T.let([], T::Array[Expr])
+      @cte_entries = T.let([], T::Array[CteEntry])
       @order_clauses = T.let([], T::Array[OrderClause])
       @joins = T.let([], T::Array[JoinClause])
       @limit_value = T.let(nil, T.nilable(Integer))
@@ -174,6 +176,22 @@ module HakumiORM
       self
     end
 
+    sig { params(name: String, subquery: CompiledQuery).returns(T.self_type) }
+    def with(name, subquery)
+      validate_cte_name!(name)
+      @cte_entries << [name, subquery, false]
+      invalidate_compiled_cache!
+      self
+    end
+
+    sig { params(name: String, subquery: CompiledQuery).returns(T.self_type) }
+    def with_recursive(name, subquery)
+      validate_cte_name!(name)
+      @cte_entries << [name, subquery, true]
+      invalidate_compiled_cache!
+      self
+    end
+
     sig { returns(T.self_type) }
     def unscoped
       @default_exprs = []
@@ -234,6 +252,11 @@ module HakumiORM
       @from_table_name || @table_name
     end
 
+    sig { returns(T::Array[CteEntry]) }
+    def cte_entries
+      @cte_entries
+    end
+
     private
 
     IDENTIFIER = T.let(/\A[a-zA-Z_][a-zA-Z0-9_]*\z/, Regexp)
@@ -253,6 +276,7 @@ module HakumiORM
       super
       @where_exprs = @where_exprs.dup
       @default_exprs = @default_exprs.dup
+      @cte_entries = @cte_entries.dup
       @order_clauses = @order_clauses.dup
       @joins = @joins.dup
       @group_fields = @group_fields.dup
@@ -293,6 +317,7 @@ module HakumiORM
       dialect.compiler.select(
         table: source_table_name,
         columns: columns_override || @select_columns || @columns,
+        ctes: @cte_entries,
         where_expr: combined_where,
         orders: @order_clauses,
         joins: @joins,
@@ -337,6 +362,8 @@ module HakumiORM
         @distinct_value = false
       when :from
         @from_table_name = nil
+      when :with
+        @cte_entries = []
       else
         raise ArgumentError, "Unsupported unscope target: #{scope.inspect}"
       end
@@ -347,6 +374,13 @@ module HakumiORM
       return if table_name.match?(IDENTIFIER)
 
       raise ArgumentError, "Invalid table name for from: #{table_name.inspect}"
+    end
+
+    sig { params(name: String).void }
+    def validate_cte_name!(name)
+      return if name.match?(IDENTIFIER)
+
+      raise ArgumentError, "Invalid CTE name: #{name.inspect}"
     end
   end
 end

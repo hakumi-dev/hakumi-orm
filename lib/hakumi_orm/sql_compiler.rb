@@ -6,6 +6,7 @@ module HakumiORM
   # Internal class for HakumiORM.
   class SqlCompiler
     extend T::Sig
+    CteEntry = T.type_alias { [String, CompiledQuery, T::Boolean] }
 
     JOIN_KEYWORDS = T.let({
       inner: " INNER JOIN ",
@@ -28,6 +29,7 @@ module HakumiORM
       params(
         table: String,
         columns: T::Array[FieldRef],
+        ctes: T::Array[CteEntry],
         where_expr: T.nilable(Expr),
         orders: T::Array[OrderClause],
         joins: T::Array[JoinClause],
@@ -39,7 +41,7 @@ module HakumiORM
         having_expr: T.nilable(Expr)
       ).returns(CompiledQuery)
     end
-    def select(table:, columns:, where_expr: nil, orders: [], joins: [], limit_val: nil, offset_val: nil,
+    def select(table:, columns:, ctes: [], where_expr: nil, orders: [], joins: [], limit_val: nil, offset_val: nil,
                distinct: false, lock: nil, group_fields: [], having_expr: nil)
       binds = T.let([], T::Array[Bind])
       idx = T.let(0, Integer)
@@ -94,18 +96,19 @@ module HakumiORM
       buf << " OFFSET " << offset_val.to_s if offset_val
       buf << " " << lock if lock
 
-      CompiledQuery.new(-buf, binds)
+      finalize_query(buf, binds, ctes)
     end
 
     sig do
       params(
         table: String,
+        ctes: T::Array[CteEntry],
         function: String,
         field: FieldRef,
         where_expr: T.nilable(Expr)
       ).returns(CompiledQuery)
     end
-    def aggregate(table:, function:, field:, where_expr: nil)
+    def aggregate(table:, ctes: [], function:, field:, where_expr: nil)
       binds = T.let([], T::Array[Bind])
       idx = T.let(0, Integer)
       buf = String.new(capacity: 128)
@@ -118,17 +121,18 @@ module HakumiORM
         compile_expr(where_expr, buf, binds, idx)
       end
 
-      CompiledQuery.new(-buf, binds)
+      finalize_query(buf, binds, ctes)
     end
 
     sig do
       params(
         table: String,
+        ctes: T::Array[CteEntry],
         where_expr: T.nilable(Expr),
         joins: T::Array[JoinClause]
       ).returns(CompiledQuery)
     end
-    def count(table:, where_expr: nil, joins: [])
+    def count(table:, ctes: [], where_expr: nil, joins: [])
       binds = T.let([], T::Array[Bind])
       idx = T.let(0, Integer)
       buf = String.new(capacity: 128)
@@ -150,17 +154,18 @@ module HakumiORM
         compile_expr(where_expr, buf, binds, idx)
       end
 
-      CompiledQuery.new(-buf, binds)
+      finalize_query(buf, binds, ctes)
     end
 
     sig do
       params(
         table: String,
+        ctes: T::Array[CteEntry],
         where_expr: T.nilable(Expr),
         joins: T::Array[JoinClause]
       ).returns(CompiledQuery)
     end
-    def exists(table:, where_expr: nil, joins: [])
+    def exists(table:, ctes: [], where_expr: nil, joins: [])
       binds = T.let([], T::Array[Bind])
       idx = T.let(0, Integer)
       buf = String.new(capacity: 128)
@@ -184,16 +189,17 @@ module HakumiORM
 
       buf << " LIMIT 1"
 
-      CompiledQuery.new(-buf, binds)
+      finalize_query(buf, binds, ctes)
     end
 
     sig do
       params(
         table: String,
+        ctes: T::Array[CteEntry],
         where_expr: T.nilable(Expr)
       ).returns(CompiledQuery)
     end
-    def delete(table:, where_expr: nil)
+    def delete(table:, ctes: [], where_expr: nil)
       binds = T.let([], T::Array[Bind])
       idx = T.let(0, Integer)
       buf = String.new(capacity: 128)
@@ -206,17 +212,18 @@ module HakumiORM
         compile_expr(where_expr, buf, binds, idx)
       end
 
-      CompiledQuery.new(-buf, binds)
+      finalize_query(buf, binds, ctes)
     end
 
     sig do
       params(
         table: String,
+        ctes: T::Array[CteEntry],
         assignments: T::Array[Assignment],
         where_expr: T.nilable(Expr)
       ).returns(CompiledQuery)
     end
-    def update(table:, assignments:, where_expr: nil)
+    def update(table:, ctes: [], assignments:, where_expr: nil)
       binds = T.let([], T::Array[Bind])
       idx = T.let(0, Integer)
       buf = String.new(capacity: 256)
@@ -239,7 +246,7 @@ module HakumiORM
         idx = compile_expr(where_expr, buf, binds, idx)
       end
 
-      CompiledQuery.new(-buf, binds)
+      finalize_query(buf, binds, ctes)
     end
 
     sig do
@@ -294,6 +301,29 @@ module HakumiORM
     sig { params(join_type: Symbol).returns(String) }
     def join_keyword(join_type)
       JOIN_KEYWORDS.fetch(join_type, " INNER JOIN ")
+    end
+
+    sig { params(sql: String, binds: T::Array[Bind], ctes: T::Array[CteEntry]).returns(CompiledQuery) }
+    def finalize_query(sql, binds, ctes)
+      return CompiledQuery.new(-sql, binds) if ctes.empty?
+
+      cte_clauses = T.let([], T::Array[String])
+      cte_binds = T.let([], T::Array[Bind])
+      recursive = T.let(false, T::Boolean)
+
+      ctes.each do |name, query, is_recursive|
+        recursive ||= is_recursive
+        rebased = rebase_binds(query.sql, cte_binds.length)
+        cte_clauses << "#{@dialect.quote_id(name)} AS (#{rebased})"
+        cte_binds.concat(query.binds)
+      end
+
+      main_sql = rebase_binds(sql, cte_binds.length)
+      prefix = recursive ? "WITH RECURSIVE " : "WITH "
+      all_binds = T.let([], T::Array[Bind])
+      all_binds.concat(cte_binds)
+      all_binds.concat(binds)
+      CompiledQuery.new(-"#{prefix}#{cte_clauses.join(', ')} #{main_sql}", all_binds)
     end
   end
 end
