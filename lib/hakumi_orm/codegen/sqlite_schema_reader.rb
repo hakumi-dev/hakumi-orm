@@ -104,7 +104,7 @@ module HakumiORM
 
       sig { params(raw: String).returns(String) }
       def normalize_type(raw)
-        raw.upcase.sub(/\(.*\)/, "").strip
+        raw.upcase.sub(/\(.*\)/, "").strip # security-audit: allow-sub
       end
 
       sig { params(table_name: String, tbl: TableInfo).void }

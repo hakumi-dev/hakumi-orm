@@ -13,6 +13,10 @@ echo "==> RuboCop"
 bundle exec rubocop
 
 echo ""
+echo "==> Security audit"
+bundle exec ruby bin/security_audit
+
+echo ""
 echo "==> Sorbet"
 bundle exec srb tc
 

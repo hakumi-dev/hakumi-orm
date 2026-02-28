@@ -1,0 +1,34 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+violations = []
+files = Dir.glob("lib/hakumi_orm/**/*.rb").sort
+
+files.each do |path|
+  File.readlines(path, chomp: true).each_with_index do |line, idx|
+    lineno = idx + 1
+
+    if line.include?(".sub(") && !line.include?("# security-audit: allow-sub")
+      violations << "#{path}:#{lineno}: avoid String#sub in runtime code (use gsub or explicit parser), or annotate allowlist"
+    end
+
+    if line.match?(%r{/(?:\\.|[^/])*\.\+\?(?:\\.|[^/])*/}) &&
+       !line.include?("# security-audit: allow-lazy-dot")
+      violations << "#{path}:#{lineno}: regex contains lazy dot-quantifier (.+?) which may hide backtracking risks"
+    end
+
+    if line.match?(/\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*]/) &&
+       !line.include?("# security-audit: allow-nested-quantifier")
+      violations << "#{path}:#{lineno}: regex appears to have nested quantifiers"
+    end
+  end
+end
+
+if violations.empty?
+  puts "Security audit passed"
+  exit 0
+end
+
+warn "Security audit failed:"
+violations.each { |v| warn "  - #{v}" }
+exit 1

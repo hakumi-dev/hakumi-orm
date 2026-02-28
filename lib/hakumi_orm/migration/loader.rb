@@ -25,7 +25,7 @@ module HakumiORM
           version = match[1]
           next unless version
 
-          name = filename.delete_suffix(".rb").sub(/\A\d{14}_/, "")
+          name = filename.delete_suffix(".rb").sub(/\A\d{14}_/, "") # security-audit: allow-sub
           FileInfo.new(version: version, name: name, filename: filename)
         end
       end
