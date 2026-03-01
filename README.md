@@ -32,6 +32,7 @@
 | [How It Compares to ActiveRecord](#how-it-compares-to-activerecord) | Side-by-side comparison |
 | [Installation](#installation) | Gem setup and requirements |
 | [Configuration](#configuration) | Database connections, paths, options |
+| [Singularizer](#singularizer) | Custom plural-to-singular mapping for irregular words |
 | [Code Generation](#code-generation) | Generate models from live schema |
 | [Custom Models](#custom-models) | Your editable model layer |
 | [Querying](#querying) | Relations, field predicates, expressions, joins |
@@ -399,10 +400,86 @@ end
 | "seeds_path" | ""db/seeds.rb"" | Seed file executed by "rake db:seed". |
 | "fixtures_path" | ""test/fixtures"" | Base directory used by "rake db:fixtures:load". Supports "FIXTURES_PATH", "FIXTURES_DIR", and "FIXTURES" filters. |
 | "verify_foreign_keys_for_fixtures" | "false" | When true, verifies loaded fixtures do not leave orphan FK rows; also enabled by "HAKUMI_VERIFY_FIXTURE_FKS=1". |
+| "drift_policy" | ":raise" | Boot behavior on schema drift or pending migrations: ":raise" (default), ":warn" (log and continue), or ":ignore" (silent). Overridden to ":warn" when "HAKUMI_ALLOW_SCHEMA_DRIFT=1" is set. |
+| "singularizer" | built-in | A proc that converts a plural table name to singular (used by codegen, scaffold, and migration DSL). Override for irregular words: "config.singularizer = ->(w) { overrides[w] \|\| HakumiORM::Inflector.singularize(w) }". |
 
 All generated methods ("find", "where", "save!", associations, etc.) default to "HakumiORM.adapter", so you never pass the adapter manually.
 
 Generated records include "HakumiORM::FormModel::Default", so "to_model", "model_name", "to_key", and "errors" are available for form builders out of the box.
+
+## Singularizer
+
+HakumiORM converts plural table names to singular for generated file names, class names, and association methods. For example, the `users` table produces `UserRecord`, `user/record.rb`, and a `user` association method on related tables.
+
+The built-in inflector (`HakumiORM::Inflector`) covers common English rules.
+
+**Suffix rules** (applied in order):
+
+| Ending | Rule | Example |
+|---|---|---|
+| `-ies` | → `-y` | `categories` → `category` |
+| `-ves` | → `-f` | `leaves` → `leaf` |
+| `-ses`, `-xes`, `-zes`, `-ches`, `-shes` | drop `-es` | `buses` → `bus` |
+| `-s` (not `-ss`, `-us`, `-is`) | drop `-s` | `users` → `user` |
+| anything else | unchanged | `person` → `person` |
+
+**Uncountable words** (always returned as-is, checked before suffix rules):
+
+`data`, `deer`, `equipment`, `fish`, `information`, `jeans`, `metadata`, `money`, `moose`, `news`, `police`, `rice`, `series`, `sheep`, `species`
+
+**Irregular pairs** (checked before suffix rules):
+
+| Plural | Singular |
+|---|---|
+| `people` | `person` |
+| `men` | `man` |
+| `children` | `child` |
+| `mice` | `mouse` |
+
+For tables with irregular names, supply a custom proc via `singularizer`:
+
+```ruby
+HakumiORM.configure do |config|
+  config.singularizer = ->(word) {
+    case word
+    when "people"   then "person"
+    when "criteria" then "criterion"
+    when "media"    then "medium"
+    when "mice"     then "mouse"
+    else HakumiORM::Inflector.singularize(word)   # built-in fallback
+    end
+  }
+end
+```
+
+The proc receives the **table name as a string** and must return the singular form. Calling `HakumiORM::Inflector.singularize(word)` as the fallback means you only need to list the exceptions.
+
+The singularizer is used by:
+
+- **Code generation** — directory names, class names, association method names
+- **Scaffold generator** (`rake db:scaffold[table]`) — model and contract file names
+- **Migration DSL** — `t.references(:people)` derives column name `person_id`; `remove_foreign_key :posts, :people` derives the constraint name
+
+A minimal override for a single table:
+
+```ruby
+HakumiORM.configure do |config|
+  config.singularizer = ->(word) {
+    word == "people" ? "person" : HakumiORM::Inflector.singularize(word)
+  }
+end
+```
+
+Or delegate entirely to an external inflection library:
+
+```ruby
+require "dry/inflector"
+inflector = Dry::Inflector.new
+
+HakumiORM.configure do |config|
+  config.singularizer = ->(word) { inflector.singularize(word) }
+end
+```
 
 ## Code Generation
 
@@ -504,7 +581,7 @@ User.exists?(UserSchema::EMAIL.eq("alice@example.com"))
 | Method | Description |
 |---|---|
 | "where(expr)" | Add a WHERE condition. Multiple calls are ANDed. |
-| "where_raw(sql, binds)" | Add a raw SQL WHERE fragment with "?" bind placeholders. |
+| "where_raw(sql, binds)" | Add a raw SQL WHERE fragment with "?" bind placeholders. **Never use string interpolation or concatenation** in the first argument — always pass a literal with binds. |
 | "where_not(expr)" | Add a negated WHERE condition. |
 | "or(relation)" | Combine with another relation via OR. |
 | "order(clause)" | Add ORDER BY via an "OrderClause" (e.g., "UserSchema::NAME.asc"). |
@@ -1566,9 +1643,19 @@ HakumiORM::PendingMigrationError: 2 pending migration(s): 20260301000001, 202603
   Run 'rake db:migrate' to apply.
 ```
 
-Environment variable bypass:
+**Drift policy:**
 
-- "HAKUMI_ALLOW_SCHEMA_DRIFT=1" -- skip fingerprint check (emergency only, logs warning instead of raising)
+Control the boot behavior per environment via "drift_policy":
+
+```ruby
+HakumiORM.configure do |config|
+  config.drift_policy = :warn   # log and continue (useful in staging)
+  # config.drift_policy = :ignore  # silent (useful in tests with an in-memory DB)
+  # config.drift_policy = :raise   # default -- hard fail at boot
+end
+```
+
+The "HAKUMI_ALLOW_SCHEMA_DRIFT=1" environment variable always overrides "drift_policy" to ":warn" regardless of what is configured (emergency escape hatch only).
 
 **"db:check" (CI and manual):**
 

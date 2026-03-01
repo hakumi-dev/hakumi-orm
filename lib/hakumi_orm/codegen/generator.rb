@@ -436,12 +436,7 @@ module HakumiORM
 
       sig { params(word: String).returns(String) }
       def singularize(word)
-        return "#{word.delete_suffix("ies")}y" if word.end_with?("ies")
-        return "#{word.delete_suffix("ves")}f" if word.end_with?("ves")
-        return word.delete_suffix("es") if word.end_with?("ses", "xes", "zes", "ches", "shes")
-        return word.delete_suffix("s") if word.end_with?("s") && !word.end_with?("ss", "us", "is")
-
-        word
+        HakumiORM.singularize(word)
       end
     end
   end

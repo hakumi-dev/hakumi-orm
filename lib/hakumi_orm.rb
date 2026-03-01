@@ -91,6 +91,7 @@ require_relative "hakumi_orm/schema_drift/issues"
 require_relative "hakumi_orm/schema_drift/reporter"
 require_relative "hakumi_orm/pending_migration_error"
 
+require_relative "hakumi_orm/inflector"
 require_relative "hakumi_orm/adapter_registry"
 require_relative "hakumi_orm/database_config"
 require_relative "hakumi_orm/database_url_parser"
@@ -126,6 +127,11 @@ module HakumiORM
     sig { params(blk: T.proc.params(config: Configuration).void).void }
     def configure(&blk)
       blk.call(config)
+    end
+
+    sig { params(word: String).returns(String) }
+    def singularize(word)
+      config.singularizer.call(word)
     end
 
     sig { returns(Ports::AdapterFactoryPort) }

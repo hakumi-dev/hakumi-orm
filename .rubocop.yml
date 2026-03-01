@@ -20,6 +20,7 @@ Metrics/MethodLength:
   Max: 40
   Exclude:
     - "lib/hakumi_orm/sql_compiler.rb"
+    - "lib/hakumi_orm/configuration.rb"
 
 Metrics/AbcSize:
   Max: 30

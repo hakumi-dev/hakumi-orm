@@ -83,6 +83,9 @@ module HakumiORM
     sig { returns(Symbol) }
     attr_accessor :drift_policy
 
+    sig { returns(T.proc.params(arg0: String).returns(String)) }
+    attr_accessor :singularizer
+
     sig { returns(T::Hash[String, String]) }
     attr_accessor :connection_options
 
@@ -119,6 +122,10 @@ module HakumiORM
       @verify_foreign_keys_for_fixtures = T.let(false, T::Boolean)
       @schema_fingerprint = T.let(nil, T.nilable(String))
       @drift_policy = T.let(:raise, Symbol)
+      @singularizer = T.let(
+        ->(word) { HakumiORM::Inflector.singularize(word) },
+        T.proc.params(arg0: String).returns(String)
+      )
       @connection_options = T.let({}, T::Hash[String, String])
       @form_model_adapter = T.let(HakumiORM::FormModel::NoopAdapter, FormModelAdapter)
       connect_adapter = T.let(
