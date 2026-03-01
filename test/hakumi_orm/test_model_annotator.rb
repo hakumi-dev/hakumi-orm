@@ -735,12 +735,14 @@ class TestModelAnnotator < HakumiORM::TestCase
     Context.new(
       table: table,
       dialect: @dialect,
-      has_many: has_many,
-      has_one: has_one,
-      belongs_to: belongs_to,
-      has_many_through: has_many_through,
-      custom_has_many: custom_has_many,
-      custom_has_one: custom_has_one,
+      associations: Annotator::AssociationSets.new(
+        has_many: has_many,
+        has_one: has_one,
+        belongs_to: belongs_to,
+        has_many_through: has_many_through,
+        custom_has_many: custom_has_many,
+        custom_has_one: custom_has_one
+      ),
       enum_predicates: enum_predicates
     )
   end

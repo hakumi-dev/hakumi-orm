@@ -26,6 +26,7 @@ Metrics/AbcSize:
   Exclude:
     - "lib/hakumi_orm/sql_compiler.rb"
     - "lib/hakumi_orm/codegen/generator.rb"
+    - "lib/hakumi_orm/codegen/generator_options.rb"
     - "lib/hakumi_orm/relation.rb"
     - "lib/hakumi_orm/configuration.rb"
 
@@ -59,7 +60,13 @@ Metrics/ParameterLists:
     - "lib/hakumi_orm/migration.rb"
     - "lib/hakumi_orm/migration/table_definition.rb"
     - "lib/hakumi_orm/migration/sql_generator.rb"
+    - "lib/hakumi_orm/migration/column_definition.rb"
     - "lib/hakumi_orm/codegen/association_builder.rb"
+    - "lib/hakumi_orm/codegen/column_info.rb"
+    - "lib/hakumi_orm/codegen/custom_association.rb"
+    - "lib/hakumi_orm/codegen/generator_options.rb"
+    - "lib/hakumi_orm/codegen/model_annotator.rb"
+    - "lib/hakumi_orm/database_config.rb"
     - "test/**/*"
 
 Metrics/CollectionLiteralLength:
@@ -113,6 +120,9 @@ Style/StringLiterals:
 
 Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
+
+Sorbet/ForbidTStruct:
+  Enabled: true
 
 # All blk.call sites receive the block via forwarding (&blk) or store it as a Proc.
 # The Proc is already allocated before blk.call, so yield saves nothing.

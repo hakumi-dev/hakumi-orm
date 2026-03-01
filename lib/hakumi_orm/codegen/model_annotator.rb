@@ -15,16 +15,77 @@ module HakumiORM
       AssocHash = T.type_alias { T::Hash[Symbol, T.any(String, T::Boolean)] }
 
       # Internal class for HakumiORM.
-      class Context < T::Struct
-        const :table, TableInfo
-        const :dialect, Dialect::Base
-        const :has_many, T::Array[AssocHash]
-        const :has_one, T::Array[AssocHash]
-        const :belongs_to, T::Array[BelongsToEntry]
-        const :has_many_through, T::Array[AssocHash]
-        const :custom_has_many, T::Array[AssocHash]
-        const :custom_has_one, T::Array[AssocHash]
-        const :enum_predicates, T::Array[EnumValue], default: []
+      class AssociationSets
+        extend T::Sig
+
+        sig { returns(T::Array[AssocHash]) }
+        attr_reader :has_many
+
+        sig { returns(T::Array[AssocHash]) }
+        attr_reader :has_one
+
+        sig { returns(T::Array[BelongsToEntry]) }
+        attr_reader :belongs_to
+
+        sig { returns(T::Array[AssocHash]) }
+        attr_reader :has_many_through
+
+        sig { returns(T::Array[AssocHash]) }
+        attr_reader :custom_has_many
+
+        sig { returns(T::Array[AssocHash]) }
+        attr_reader :custom_has_one
+
+        sig do
+          params(
+            has_many: T::Array[AssocHash],
+            has_one: T::Array[AssocHash],
+            belongs_to: T::Array[BelongsToEntry],
+            has_many_through: T::Array[AssocHash],
+            custom_has_many: T::Array[AssocHash],
+            custom_has_one: T::Array[AssocHash]
+          ).void
+        end
+        def initialize(
+          has_many: [],
+          has_one: [],
+          belongs_to: [],
+          has_many_through: [],
+          custom_has_many: [],
+          custom_has_one: []
+        )
+          @has_many = T.let(has_many, T::Array[AssocHash])
+          @has_one = T.let(has_one, T::Array[AssocHash])
+          @belongs_to = T.let(belongs_to, T::Array[BelongsToEntry])
+          @has_many_through = T.let(has_many_through, T::Array[AssocHash])
+          @custom_has_many = T.let(custom_has_many, T::Array[AssocHash])
+          @custom_has_one = T.let(custom_has_one, T::Array[AssocHash])
+        end
+      end
+
+      # Context carries the association and schema metadata needed to build annotations.
+      class Context
+        extend T::Sig
+
+        sig { returns(TableInfo) }
+        attr_reader :table
+
+        sig { returns(Dialect::Base) }
+        attr_reader :dialect
+
+        sig { returns(AssociationSets) }
+        attr_reader :associations
+
+        sig { returns(T::Array[EnumValue]) }
+        attr_reader :enum_predicates
+
+        sig { params(table: TableInfo, dialect: Dialect::Base, associations: AssociationSets, enum_predicates: T::Array[EnumValue]).void }
+        def initialize(table:, dialect:, associations:, enum_predicates: [])
+          @table = T.let(table, TableInfo)
+          @dialect = T.let(dialect, Dialect::Base)
+          @associations = T.let(associations, AssociationSets)
+          @enum_predicates = T.let(enum_predicates, T::Array[EnumValue])
+        end
       end
 
       sig { params(model_path: String, ctx: Context).void }
@@ -189,13 +250,14 @@ module HakumiORM
       def self.collect_assoc_entries(ctx)
         entries = T.let([], T::Array[AssocEntry])
         tn = ctx.table.name
+        sets = ctx.associations
 
-        append_fk_entries(entries, "has_many", ctx.has_many, tn)
-        append_fk_entries(entries, "has_one", ctx.has_one, tn)
-        append_belongs_to_entries(entries, ctx.belongs_to, tn)
-        append_through_entries(entries, ctx.has_many_through)
-        ctx.custom_has_many.each { |a| entries << custom_assoc_entry("has_many", a, tn) }
-        ctx.custom_has_one.each { |a| entries << custom_assoc_entry("has_one", a, tn) }
+        append_fk_entries(entries, "has_many", sets.has_many, tn)
+        append_fk_entries(entries, "has_one", sets.has_one, tn)
+        append_belongs_to_entries(entries, sets.belongs_to, tn)
+        append_through_entries(entries, sets.has_many_through)
+        sets.custom_has_many.each { |a| entries << custom_assoc_entry("has_many", a, tn) }
+        sets.custom_has_one.each { |a| entries << custom_assoc_entry("has_one", a, tn) }
         entries
       end
 
@@ -241,15 +303,19 @@ module HakumiORM
         ho_map = generator.__send__(:compute_has_one)
         through_map = generator.__send__(:compute_has_many_through)
 
-        Context.new(
-          table: table,
-          dialect: generator.instance_variable_get(:@dialect),
+        sets = AssociationSets.new(
           has_many: generator.__send__(:build_has_many_assocs, table, hm_map),
           has_one: generator.__send__(:build_has_one_assocs, table, ho_map),
           belongs_to: generator.__send__(:build_belongs_to_assocs, table),
           has_many_through: generator.__send__(:build_has_many_through_assocs, table, through_map),
           custom_has_many: generator.__send__(:build_custom_has_many, table, custom_assocs),
-          custom_has_one: generator.__send__(:build_custom_has_one, table, custom_assocs),
+          custom_has_one: generator.__send__(:build_custom_has_one, table, custom_assocs)
+        )
+
+        Context.new(
+          table: table,
+          dialect: generator.instance_variable_get(:@dialect),
+          associations: sets,
           enum_predicates: generator.__send__(:build_enum_predicates, table)
         )
       end
@@ -258,13 +324,14 @@ module HakumiORM
       def self.build_assoc_lines_for_cli(ctx)
         lines = T.let([], T::Array[String])
         tn = ctx.table.name
+        sets = ctx.associations
 
-        append_cli_fk(lines, ctx.has_many, "has_many", tn)
-        append_cli_fk(lines, ctx.has_one, "has_one", tn)
-        append_cli_belongs_to(lines, ctx.belongs_to, tn)
-        append_cli_through(lines, ctx.has_many_through)
-        append_cli_custom(lines, ctx.custom_has_many, "has_many", tn)
-        append_cli_custom(lines, ctx.custom_has_one, "has_one", tn)
+        append_cli_fk(lines, sets.has_many, "has_many", tn)
+        append_cli_fk(lines, sets.has_one, "has_one", tn)
+        append_cli_belongs_to(lines, sets.belongs_to, tn)
+        append_cli_through(lines, sets.has_many_through)
+        append_cli_custom(lines, sets.custom_has_many, "has_many", tn)
+        append_cli_custom(lines, sets.custom_has_one, "has_one", tn)
 
         lines
       end

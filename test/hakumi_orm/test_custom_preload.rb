@@ -3,10 +3,17 @@
 
 require "test_helper"
 
-class PreloadCall < T::Struct
-  const :name, Symbol
-  const :record_count, Integer
-  const :adapter, HakumiORM::Adapter::Base
+class PreloadCall
+  extend T::Sig
+
+  attr_reader :name, :record_count, :adapter
+
+  sig { params(name: Symbol, record_count: Integer, adapter: HakumiORM::Adapter::Base).void }
+  def initialize(name:, record_count:, adapter:)
+    @name = T.let(name, Symbol)
+    @record_count = T.let(record_count, Integer)
+    @adapter = T.let(adapter, HakumiORM::Adapter::Base)
+  end
 end
 
 class TrackingRelation < UserRelation

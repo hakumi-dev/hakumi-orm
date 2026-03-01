@@ -4,12 +4,40 @@
 module HakumiORM
   module Codegen
     # Internal class for HakumiORM.
-    class TypeRegistryEntry < T::Struct
-      const :name, Symbol
-      const :ruby_type, String
-      const :cast_expression, T.proc.params(raw_expr: String, nullable: T::Boolean).returns(String)
-      const :field_class, String
-      const :bind_class, String
+    class TypeRegistryEntry
+      extend T::Sig
+
+      sig { returns(Symbol) }
+      attr_reader :name
+
+      sig { returns(String) }
+      attr_reader :ruby_type
+
+      sig { returns(T.proc.params(raw_expr: String, nullable: T::Boolean).returns(String)) }
+      attr_reader :cast_expression
+
+      sig { returns(String) }
+      attr_reader :field_class
+
+      sig { returns(String) }
+      attr_reader :bind_class
+
+      sig do
+        params(
+          name: Symbol,
+          ruby_type: String,
+          cast_expression: T.proc.params(raw_expr: String, nullable: T::Boolean).returns(String),
+          field_class: String,
+          bind_class: String
+        ).void
+      end
+      def initialize(name:, ruby_type:, cast_expression:, field_class:, bind_class:)
+        @name = T.let(name, Symbol)
+        @ruby_type = T.let(ruby_type, String)
+        @cast_expression = T.let(cast_expression, T.proc.params(raw_expr: String, nullable: T::Boolean).returns(String))
+        @field_class = T.let(field_class, String)
+        @bind_class = T.let(bind_class, String)
+      end
     end
 
     # Internal module for HakumiORM.

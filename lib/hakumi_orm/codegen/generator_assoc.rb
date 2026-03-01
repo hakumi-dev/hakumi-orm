@@ -29,13 +29,16 @@ module HakumiORM
           next unless @file_writer.exist?(model_path)
 
           ctx = ModelAnnotator::Context.new(
-            table: table, dialect: @dialect,
-            has_many: build_has_many_assocs(table, has_many_map),
-            has_one: build_has_one_assocs(table, has_one_map),
-            belongs_to: build_belongs_to_assocs(table),
-            has_many_through: build_has_many_through_assocs(table, through_map),
-            custom_has_many: build_custom_has_many(table, @custom_associations),
-            custom_has_one: build_custom_has_one(table, @custom_associations),
+            table: table,
+            dialect: @dialect,
+            associations: ModelAnnotator::AssociationSets.new(
+              has_many: build_has_many_assocs(table, has_many_map),
+              has_one: build_has_one_assocs(table, has_one_map),
+              belongs_to: build_belongs_to_assocs(table),
+              has_many_through: build_has_many_through_assocs(table, through_map),
+              custom_has_many: build_custom_has_many(table, @custom_associations),
+              custom_has_one: build_custom_has_one(table, @custom_associations)
+            ),
             enum_predicates: build_enum_predicates(table)
           )
           ModelAnnotator.annotate!(model_path, ctx)
