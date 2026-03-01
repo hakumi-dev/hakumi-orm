@@ -1,0 +1,37 @@
+rules:
+  # Detects a variable or expression passed directly as the SQL argument to
+  # where_raw. Plain string literals are excluded because they cannot carry
+  # user-supplied data by themselves.
+  - id: hakumi-where-raw-variable-sql
+    message: >
+      SQL injection risk: `where_raw` received a dynamic SQL argument.
+      Use a string literal with `?` placeholders and typed bind values instead.
+      Example: `where_raw("col = ?", [HakumiORM::StringBind.new(value)])`
+    severity: ERROR
+    languages: [ruby]
+    patterns:
+      - pattern: $OBJ.where_raw($SQL, ...)
+      - pattern-not: $OBJ.where_raw("...", ...)
+
+  # Detects string concatenation in the SQL argument to where_raw.
+  - id: hakumi-where-raw-concatenation
+    message: >
+      SQL injection risk: `where_raw` received a concatenated SQL string.
+      Use a string literal with `?` placeholders and typed bind values instead.
+      Example: `where_raw("col = ?", [HakumiORM::StringBind.new(value)])`
+    severity: ERROR
+    languages: [ruby]
+    pattern: $OBJ.where_raw($A + $B, ...)
+
+  # Detects Ruby string interpolation (`#{}`) in the SQL argument to where_raw.
+  # This is a source-level check using pattern-regex because interpolated strings
+  # are distinct dstr nodes in the Ruby AST and may not be caught by the
+  # variable rule above.
+  - id: hakumi-where-raw-interpolation
+    message: >
+      SQL injection risk: `where_raw` received an interpolated SQL string.
+      Use a string literal with `?` placeholders and typed bind values instead.
+      Example: `where_raw("col = ?", [HakumiORM::StringBind.new(value)])`
+    severity: ERROR
+    languages: [ruby]
+    pattern-regex: '\.where_raw\s*\(\s*"[^"]*#\{'

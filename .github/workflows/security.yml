@@ -42,4 +42,4 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m pip install --upgrade semgrep
-      - run: semgrep scan --config p/ruby --error --metrics=off --exclude test --exclude vendor
+      - run: semgrep scan --config p/ruby --config .semgrep/rules.yml --error --metrics=off --exclude test --exclude vendor

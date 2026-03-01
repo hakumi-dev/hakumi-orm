@@ -16,4 +16,4 @@ if [ -z "${SEMGREP_BIN}" ]; then
   exit 127
 fi
 
-"${SEMGREP_BIN}" scan --config p/ruby --error --metrics=off --exclude test --exclude vendor
+"${SEMGREP_BIN}" scan --config p/ruby --config .semgrep/rules.yml --error --metrics=off --exclude test --exclude vendor
