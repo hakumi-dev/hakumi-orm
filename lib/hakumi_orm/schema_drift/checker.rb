@@ -12,19 +12,7 @@ module HakumiORM
 
     sig { params(config: Configuration, adapter: Adapter::Base).returns(T::Hash[String, Codegen::TableInfo]) }
     def self.read_schema(config, adapter)
-      case config.adapter_name
-      when :postgresql
-        Codegen::SchemaReader.new(adapter).read_tables(schema: "public")
-      when :mysql
-        schema = config.database
-        raise HakumiORM::Error, "config.database is required for MySQL codegen" unless schema
-
-        Codegen::MysqlSchemaReader.new(adapter).read_tables(schema: schema)
-      when :sqlite
-        Codegen::SqliteSchemaReader.new(adapter).read_tables
-      else
-        raise HakumiORM::Error, "Unknown adapter_name: #{config.adapter_name}"
-      end
+      Application::SchemaIntrospection.read_tables(config, adapter)
     end
 
     sig { params(adapter: Adapter::Base, internal_tables: T::Array[String]).void }

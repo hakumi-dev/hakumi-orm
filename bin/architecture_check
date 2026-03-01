@@ -1,0 +1,249 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "optparse"
+require "pathname"
+require "tsort"
+
+ROOT = Pathname.new(__dir__).join("..").expand_path
+LIB_ROOT = ROOT.join("lib/hakumi_orm")
+
+options = {
+  profile: "current",
+  write_mermaid: nil,
+  strict: true
+}
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: bin/architecture_check [--profile current|target] [--write-mermaid path] [--no-strict]"
+
+  opts.on("--profile NAME", "Rule profile: current (default) or target") do |value|
+    options[:profile] = value
+  end
+
+  opts.on("--write-mermaid PATH", "Write aggregated layer graph in Mermaid format") do |value|
+    options[:write_mermaid] = value
+  end
+
+  opts.on("--no-strict", "Always exit 0 (report-only mode)") do
+    options[:strict] = false
+  end
+end.parse!
+
+unless %w[current target].include?(options[:profile])
+  warn "Invalid --profile '#{options[:profile]}'. Use current|target."
+  exit 2
+end
+
+LAYER_RULES = {
+  "current" => {
+    "input" => Set["input", "application", "domain", "infrastructure", "shared"],
+    "application" => Set["application", "domain", "infrastructure", "shared"],
+    "domain" => Set["domain", "shared"],
+    "infrastructure" => Set["infrastructure", "domain", "shared"],
+    "shared" => Set["shared"]
+  },
+  "target" => {
+    "input" => Set["input", "application", "shared"],
+    "application" => Set["application", "domain", "shared"],
+    "domain" => Set["domain", "shared"],
+    "infrastructure" => Set["infrastructure", "shared"],
+    "shared" => Set["shared"]
+  }
+}.freeze
+
+RULES = LAYER_RULES.fetch(options[:profile])
+
+# Ordered by precedence (more specific first)
+LAYER_PATTERNS = [
+  ["input", [%r{\Aframework/}, /\Arailtie\.rb\z/, /\Atasks\.rb\z/, /\Atasks_compat\.rb\z/, /\Ahakumi_orm\.rb\z/]],
+  ["infrastructure", [%r{\Aadapter/}, /\Aadapter\.rb\z/]],
+  ["application", [
+    %r{\Aapplication/},
+    /\Aconfiguration\.rb\z/,
+    /\Aconfiguration_adapter_factory\.rb\z/,
+    /\Aconfiguration_schema_guards\.rb\z/,
+    /\Aadapter_registry\.rb\z/,
+    /\Adatabase_config\.rb\z/,
+    /\Adatabase_config_builder\.rb\z/,
+    /\Adatabase_url_parser\.rb\z/,
+    /\Atask_commands\.rb\z/,
+    /\Atask_output\.rb\z/,
+    /\Asetup_generator\.rb\z/,
+    /\Ascaffold_generator\.rb\z/,
+    /\Atest_fixtures\.rb\z/,
+    /\Amigration\.rb\z/,
+    %r{\Amigration/},
+    /\Acodegen\.rb\z/,
+    %r{\Acodegen/},
+    %r{\Aschema_drift/}
+  ]],
+  ["domain", [
+    /\Aassignment\.rb\z/,
+    /\Abind\.rb\z/,
+    /\Acast\.rb\z/,
+    /\Acompiled_query\.rb\z/,
+    /\Adialect\.rb\z/,
+    %r{\Adialect/},
+    /\Aexpr\.rb\z/,
+    /\Afield\.rb\z/,
+    %r{\Afield/},
+    /\Afield_ref\.rb\z/,
+    /\Aform_model\.rb\z/,
+    /\Aform_model_adapter\.rb\z/,
+    %r{\Aform_model/},
+    /\Ajoin_clause\.rb\z/,
+    /\Aloggable\.rb\z/,
+    /\Aorder_clause\.rb\z/,
+    /\Apreload_node\.rb\z/,
+    /\Arecord_runtime\.rb\z/,
+    /\Arelation\.rb\z/,
+    /\Arelation_/,
+    /\Asql_compiler\.rb\z/,
+    /\Asql_compiler_expr\.rb\z/,
+    %r{\Avalidation/},
+    /\Aerrors\.rb\z/,
+    /\Apending_migration_error\.rb\z/,
+    /\Astale_object_error\.rb\z/,
+    /\Avalidation_error\.rb\z/
+  ]],
+  ["shared", [/\Ajson\.rb\z/, /\Abyte_time\.rb\z/, /\Aversion\.rb\z/, %r{\Aports/}]]
+].freeze
+
+def layer_for(rel)
+  LAYER_PATTERNS.each do |layer, patterns|
+    return layer if patterns.any? { |rx| rel.match?(rx) }
+  end
+  "shared"
+end
+
+def parse_require_edges(path)
+  edges = []
+  File.readlines(path, chomp: true).each_with_index do |line, idx|
+    m = line.match(/^\s*require_relative\s+["']([^"']+)["']/)
+    next unless m
+
+    target = File.expand_path("#{m[1]}.rb", File.dirname(path))
+    next unless File.exist?(target)
+    next unless target.start_with?(LIB_ROOT.to_s)
+
+    edges << [path, target, idx + 1]
+  end
+  edges
+end
+
+files = Dir.glob(LIB_ROOT.join("**/*.rb")).sort
+edges = files.flat_map { |f| parse_require_edges(f) }
+
+layer_edges = Hash.new(0)
+violations = []
+
+edges.each do |from, to, lineno|
+  from_rel = from.delete_prefix("#{LIB_ROOT}/")
+  to_rel = to.delete_prefix("#{LIB_ROOT}/")
+  from_layer = layer_for(from_rel)
+  to_layer = layer_for(to_rel)
+
+  layer_edges[[from_layer, to_layer]] += 1
+
+  next if RULES.fetch(from_layer).include?(to_layer)
+
+  violations << {
+    from: from_rel,
+    to: to_rel,
+    line: lineno,
+    from_layer: from_layer,
+    to_layer: to_layer
+  }
+end
+
+# File-level cycle detection
+class Graph
+  include TSort
+
+  def initialize(edges)
+    @nodes = Set.new
+    @children = Hash.new { |h, k| h[k] = Set.new }
+    edges.each do |from, to, _line|
+      next if from == to
+
+      @nodes << from
+      @nodes << to
+      @children[from] << to
+    end
+  end
+
+  def tsort_each_node(&block)
+    @nodes.each(&block)
+  end
+
+  def tsort_each_child(node, &block)
+    @children[node].each(&block)
+  end
+end
+
+graph = Graph.new(edges)
+file_cycles = graph.strongly_connected_components.select { |scc| scc.size > 1 }
+
+puts "Architecture Check (profile=#{options[:profile]})"
+puts "- files: #{files.size}"
+puts "- require_relative edges: #{edges.size}"
+puts "- layer violations: #{violations.size}"
+puts "- file cycles: #{file_cycles.size}"
+puts
+
+puts "Layer edges:"
+%w[input application domain infrastructure shared].each do |from_layer|
+  row = %w[input application domain infrastructure shared].map do |to_layer|
+    count = layer_edges[[from_layer, to_layer]]
+    "#{to_layer}=#{count}"
+  end
+  puts "- #{from_layer}: #{row.join(", ")}"
+end
+puts
+
+unless violations.empty?
+  puts "Violations:"
+  violations.sort_by { |v| [v[:from_layer], v[:from], v[:line]] }.each do |v|
+    puts "- #{v[:from]}:#{v[:line]} (#{v[:from_layer]} -> #{v[:to_layer]}) requires #{v[:to]}"
+  end
+  puts
+end
+
+unless file_cycles.empty?
+  puts "Cycles (file-level SCCs):"
+  file_cycles.each do |scc|
+    rel = scc.map { |f| f.delete_prefix("#{LIB_ROOT}/") }.sort
+    puts "- #{rel.join(" -> ")}"
+  end
+  puts
+end
+
+if options[:write_mermaid]
+  mmd_path = Pathname.new(options[:write_mermaid]).expand_path(ROOT)
+  mmd_path.dirname.mkpath
+  File.open(mmd_path, "w") do |f|
+    f.puts "flowchart LR"
+    f.puts "  input[\"Input\"]"
+    f.puts "  application[\"Application\"]"
+    f.puts "  domain[\"Domain\"]"
+    f.puts "  infrastructure[\"Infrastructure\"]"
+    f.puts "  shared[\"Shared\"]"
+
+    layer_edges.sort_by { |(from_layer, to_layer), _| [from_layer, to_layer] }.each do |(from_layer, to_layer), count|
+      next if count.zero?
+
+      f.puts "  #{from_layer} -->|#{count}| #{to_layer}"
+    end
+
+    violations.each do |v|
+      f.puts "  linkStyle default stroke:#555"
+      f.puts "  %% violation: #{v[:from]}:#{v[:line]} #{v[:from_layer]} -> #{v[:to_layer]}"
+    end
+  end
+  puts "Wrote Mermaid: #{mmd_path}"
+end
+
+exit_code = violations.empty? && file_cycles.empty? ? 0 : 1
+exit 0 unless options[:strict]
+exit exit_code

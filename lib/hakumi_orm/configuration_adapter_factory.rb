@@ -41,19 +41,14 @@ module HakumiORM
 
     sig { params(db_config: DatabaseConfig).returns(Adapter::Base) }
     def connect_from_config(db_config)
+      factory = HakumiORM.adapter_factory_port
       case db_config.adapter_name
       when :postgresql
-        require_relative "adapter/postgresql_result"
-        require_relative "adapter/postgresql"
-        Adapter::Postgresql.connect(pg_params(db_config))
+        T.cast(factory.connect_postgresql(pg_params(db_config)), Adapter::Base)
       when :mysql
-        require_relative "adapter/mysql_result"
-        require_relative "adapter/mysql"
-        Adapter::Mysql.connect(mysql_params(db_config))
+        T.cast(factory.connect_mysql(mysql_params(db_config)), Adapter::Base)
       when :sqlite
-        require_relative "adapter/sqlite_result"
-        require_relative "adapter/sqlite"
-        Adapter::Sqlite.connect(db_config.database)
+        T.cast(factory.connect_sqlite(db_config.database), Adapter::Base)
       else
         raise HakumiORM::Error, "Adapter #{db_config.adapter_name.inspect} is not yet implemented"
       end

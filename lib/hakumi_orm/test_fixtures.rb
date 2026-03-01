@@ -117,7 +117,7 @@ module HakumiORM
       adapter = config.adapter
       raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
 
-      tables = HakumiORM::SchemaDriftChecker.read_schema(config, adapter)
+      tables = HakumiORM::Application::SchemaIntrospection.read_tables(config, adapter)
       loader = HakumiORM::Fixtures::Loader.new(adapter: adapter, tables: tables)
 
       self.class.fixture_paths.each_with_object({}) do |path, merged|

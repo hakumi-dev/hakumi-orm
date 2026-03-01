@@ -49,6 +49,9 @@ require_relative "hakumi_orm/dialect/sqlite"
 require_relative "hakumi_orm/sql_compiler"
 require_relative "hakumi_orm/sql_log_formatter"
 
+require_relative "hakumi_orm/ports"
+require_relative "hakumi_orm/ports/adapter_factory_port"
+require_relative "hakumi_orm/ports/schema_introspection_port"
 require_relative "hakumi_orm/adapter"
 require_relative "hakumi_orm/adapter/timeout_error"
 require_relative "hakumi_orm/adapter/connection_pool"
@@ -92,6 +95,8 @@ require_relative "hakumi_orm/database_config_builder"
 require_relative "hakumi_orm/configuration"
 require_relative "hakumi_orm/configuration_schema_guards"
 require_relative "hakumi_orm/configuration_adapter_factory"
+require_relative "hakumi_orm/application"
+require_relative "hakumi_orm/application/schema_introspection"
 require_relative "hakumi_orm/scaffold_generator"
 require_relative "hakumi_orm/schema_drift/checker"
 require_relative "hakumi_orm/setup_generator"
@@ -117,6 +122,25 @@ module HakumiORM
     def configure(&blk)
       blk.call(config)
     end
+
+    sig { returns(Ports::AdapterFactoryPort) }
+    def adapter_factory_port
+      @adapter_factory_port ||= T.let(Adapter::FactoryGateway.new, T.nilable(Ports::AdapterFactoryPort))
+    end
+
+    sig { params(adapter_factory_port: Ports::AdapterFactoryPort).void }
+    attr_writer :adapter_factory_port
+
+    sig { returns(Ports::SchemaIntrospectionPort) }
+    def schema_introspection_port
+      @schema_introspection_port ||= T.let(
+        Adapter::SchemaIntrospectionGateway.new,
+        T.nilable(Ports::SchemaIntrospectionPort)
+      )
+    end
+
+    sig { params(schema_introspection_port: Ports::SchemaIntrospectionPort).void }
+    attr_writer :schema_introspection_port
 
     sig { params(name: T.nilable(Symbol)).returns(Adapter::Base) }
     def adapter(name = nil)
@@ -151,6 +175,8 @@ module HakumiORM
     def reset_config!
       config.close_named_adapters!
       @config = T.let(nil, T.nilable(Configuration))
+      @adapter_factory_port = T.let(nil, T.nilable(Ports::AdapterFactoryPort))
+      @schema_introspection_port = T.let(nil, T.nilable(Ports::SchemaIntrospectionPort))
       Thread.current[:hakumi_adapter_name] = nil
     end
 

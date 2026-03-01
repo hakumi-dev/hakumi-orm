@@ -240,7 +240,7 @@ module HakumiORM
     end
 
     def read_schema(config, adapter)
-      HakumiORM::SchemaDriftChecker.read_schema(config, adapter)
+      HakumiORM::Application::SchemaIntrospection.read_tables(config, adapter)
     end
   end
 end

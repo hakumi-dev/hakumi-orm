@@ -18,11 +18,23 @@ bundle exec ruby bin/security_audit
 
 echo ""
 echo "==> Semgrep"
-bin/semgrep_ci
+if command -v semgrep >/dev/null 2>&1 || [ -x ".venv-semgrep/bin/semgrep" ]; then
+  bin/semgrep_ci
+else
+  echo "Semgrep skipped: semgrep is not installed in this environment."
+fi
 
 echo ""
 echo "==> Sorbet"
 bundle exec srb tc
+
+echo ""
+echo "==> Architecture boundaries (current)"
+bundle exec ruby bin/architecture_check --profile current
+
+echo ""
+echo "==> Architecture boundaries (target)"
+bundle exec ruby bin/architecture_check --profile target --write-mermaid docs/architecture_layers_target.mmd
 
 echo ""
 echo "==> Tests"
