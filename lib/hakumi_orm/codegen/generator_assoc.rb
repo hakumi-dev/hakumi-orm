@@ -28,6 +28,7 @@ module HakumiORM
           next unless model_path
           next unless @file_writer.exist?(model_path)
 
+          hook = @table_hooks[table.name]
           ctx = ModelAnnotator::Context.new(
             table: table,
             dialect: @dialect,
@@ -39,7 +40,8 @@ module HakumiORM
               custom_has_many: build_custom_has_many(table, @custom_associations),
               custom_has_one: build_custom_has_one(table, @custom_associations)
             ),
-            enum_predicates: build_enum_predicates(table)
+            enum_predicates: build_enum_predicates(table),
+            extra_lines: hook&.annotation_lines || []
           )
           ModelAnnotator.annotate!(model_path, ctx)
           annotate_variants!(singular, ctx)

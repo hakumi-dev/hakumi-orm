@@ -1020,6 +1020,39 @@ bundle exec rake db:associations            # all models
 bundle exec rake db:associations[users]     # single model
 ```
 
+### Per-Table Generation Hooks
+
+Register per-table hooks in your definitions file to control code generation:
+
+```ruby
+# db/definitions.rb
+
+# Skip generating code for a table entirely
+HakumiORM.on_table("legacy_imports", skip: true)
+
+# Inject extra annotation lines into the schema comment block
+HakumiORM.on_table("audit_events", annotation_lines: [
+  "Read-only after insert. Never update or delete rows.",
+  "Retention: 90 days, then archived by the cleanup job."
+])
+```
+
+`skip: true` prevents ALL generated files for that table (schema, record, contract, relation). The table is still read from the database schema but no output files are written.
+
+`annotation_lines` adds the lines to the `# == Schema Information ==` block in the model annotation, after the associations section:
+
+```ruby
+# == Schema Information ==
+# ...
+# Associations:
+#   ...
+#
+# Read-only after insert. Never update or delete rows.
+# Retention: 90 days, then archived by the cleanup job.
+#
+# == End Schema Information ==
+```
+
 ## Contracts and Lifecycle Hooks
 
 Each model has a Contract that controls validation and post-write side effects. Contracts are generated once in "contracts_dir" and never overwritten.
@@ -1140,6 +1173,42 @@ Important behavior:
 
 - Any error added during validation stops the SQL write and raises "ValidationError".
 - "after_*" hooks run only after successful SQL.
+
+### Custom Validators
+
+Register reusable rule classes alongside the built-ins:
+
+```ruby
+class StrongPasswordValidator
+  include HakumiORM::Validation::Validators::Base
+
+  def validate(context, rule)
+    value = context.value
+    return unless value.is_a?(String)
+    return if value.length >= 12 && value.match?(/[0-9]/) && value.match?(/[A-Z]/)
+
+    context.add_error(rule: rule, type: :weak_password, default_message: "is too weak")
+  end
+end
+
+HakumiORM.configure do |config|
+  # ...
+  HakumiORM::Validation::Validators::Registry.register(:strong_password, StrongPasswordValidator.new)
+end
+```
+
+Use it in any contract exactly like a built-in:
+
+```ruby
+validates :password, strong_password: {}
+validates :password, strong_password: { message: "must be at least 12 chars with a digit and uppercase" }
+```
+
+Notes:
+
+- `register` raises `ArgumentError` if the same key is already registered.
+- `Registry.reset!` restores the registry to built-ins only. Call it in test teardown for isolation.
+- Unknown kwargs that are not registered are silently ignored by `validates`.
 
 ## Record Variants
 
@@ -1475,18 +1544,22 @@ end
 
 "cast_expression" is a lambda that produces Ruby source code. It runs once during "rake db:generate" and the string it returns is written directly into the generated file.
 
-```ruby
-HakumiORM::Codegen::TypeRegistry.register(
-  name: :money,
-  ruby_type: "Money",
-  cast_expression: lambda { |raw_expr, nullable|
-    nullable ? "((_hv = #{raw_expr}).nil? ? nil : Money.from_decimal(_hv))" : "Money.from_decimal(#{raw_expr})"
-  },
-  field_class: "::MoneyField",
-  bind_class: "::HakumiORM::DecimalBind"
-)
+Registration must happen **inside** the "HakumiORM.configure" block. Calls made after the block closes raise "HakumiORM::Error".
 
-HakumiORM::Codegen::TypeRegistry.map_pg_type("money_col", :money)
+```ruby
+HakumiORM.configure do |config|
+  HakumiORM::Codegen::TypeRegistry.register(
+    name: :money,
+    ruby_type: "Money",
+    cast_expression: lambda { |raw_expr, nullable|
+      nullable ? "((_hv = #{raw_expr}).nil? ? nil : Money.from_decimal(_hv))" : "Money.from_decimal(#{raw_expr})"
+    },
+    field_class: "::MoneyField",
+    bind_class: "::HakumiORM::DecimalBind"
+  )
+
+  HakumiORM::Codegen::TypeRegistry.map_pg_type("money_col", :money)
+end
 ```
 
 #### Full round-trip
@@ -1722,6 +1795,35 @@ stats = HakumiORM.adapter.pool_stats
 |---|---|---|
 | "size" | "5" | Maximum number of connections in the pool |
 | "timeout" | "5.0" | Seconds to wait for a connection before raising "TimeoutError" |
+| "health_check" | "false" | When true, each connection is tested with "alive?" before use; dead connections are silently replaced |
+
+### Pool Health Checks
+
+Enable on-checkout health checks to proactively evict dead connections:
+
+```ruby
+HakumiORM.configure do |c|
+  c.pool_size = 10
+  c.health_check = true   # test each connection before handing it out
+end
+```
+
+When `health_check: true`:
+
+- Each idle connection popped from the pool is checked via `alive?` before being given to the caller.
+- If the check fails, the connection is discarded (fires `:discard` event) and a new one is created.
+- The `alive?` call happens outside the pool mutex, so MySQL pings do not block other waiting threads.
+
+For manual/scheduled reaping of all stale idle connections, call `health_check!` directly:
+
+```ruby
+pool = HakumiORM.adapter   # ConnectionPool instance
+
+# Reap all dead idle connections; returns count of connections discarded.
+pool.health_check!
+```
+
+This is useful in long-running processes (background jobs, sidekiq workers) where connections may go stale between bursts of activity.
 
 ### Pool Instrumentation
 
@@ -1753,6 +1855,7 @@ Available events:
 | ":discard" | "{}" | A dead connection was evicted |
 
 Notes:
+
 - Callbacks are called outside the pool mutex — they are safe to use for DB operations or blocking I/O.
 - Exceptions inside callbacks are swallowed so a misbehaving subscriber never crashes the pool.
 - Reentrant calls within the same thread (nested transactions) fire checkout/checkin only once, for the outermost call.

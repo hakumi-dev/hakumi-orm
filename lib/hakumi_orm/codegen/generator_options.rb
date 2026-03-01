@@ -44,6 +44,9 @@ module HakumiORM
       sig { returns(T.nilable(String)) }
       attr_reader :schema_fingerprint
 
+      sig { returns(T::Hash[String, TableHook]) }
+      attr_reader :table_hooks
+
       sig do
         params(
           dialect: T.nilable(Dialect::Base),
@@ -57,7 +60,8 @@ module HakumiORM
           custom_associations: T::Hash[String, T::Array[CustomAssociation]],
           user_enums: T::Hash[String, T::Array[EnumDefinition]],
           internal_tables: T::Array[String],
-          schema_fingerprint: T.nilable(String)
+          schema_fingerprint: T.nilable(String),
+          table_hooks: T::Hash[String, TableHook]
         ).void
       end
       def initialize(
@@ -72,7 +76,8 @@ module HakumiORM
         custom_associations: {},
         user_enums: {},
         internal_tables: [],
-        schema_fingerprint: nil
+        schema_fingerprint: nil,
+        table_hooks: {}
       )
         @dialect = T.let(dialect, T.nilable(Dialect::Base))
         @output_dir = T.let(output_dir, T.nilable(String))
@@ -92,6 +97,7 @@ module HakumiORM
         )
         @internal_tables = T.let(internal_tables.dup.freeze, T::Array[String])
         @schema_fingerprint = T.let(schema_fingerprint, T.nilable(String))
+        @table_hooks = T.let(table_hooks.dup.freeze, T::Hash[String, TableHook])
       end
     end
   end

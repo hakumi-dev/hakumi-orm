@@ -55,6 +55,9 @@ module HakumiORM
           ).void
         end
         def register(name:, ruby_type:, cast_expression:, field_class:, bind_class:)
+          unless HakumiORM.type_registry_open?
+            raise HakumiORM::Error, "TypeRegistry.register must be called inside a HakumiORM.configure { ... } block"
+          end
           raise ArgumentError, "Type #{name.inspect} is already registered" if registry.key?(name)
 
           registry[name] = TypeRegistryEntry.new(
@@ -78,6 +81,10 @@ module HakumiORM
 
         sig { params(pg_type: String, name: Symbol).void }
         def map_pg_type(pg_type, name)
+          unless HakumiORM.type_registry_open?
+            raise HakumiORM::Error, "TypeRegistry.map_pg_type must be called inside a HakumiORM.configure { ... } block"
+          end
+
           pg_map[pg_type] = name
         end
 
@@ -93,6 +100,7 @@ module HakumiORM
         def reset!
           registry.clear
           pg_map.clear
+          HakumiORM.open_type_registry!
         end
 
         private

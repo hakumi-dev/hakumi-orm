@@ -41,6 +41,8 @@ Metrics/ClassLength:
 
 Metrics/ModuleLength:
   Max: 220
+  Exclude:
+    - "lib/hakumi_orm/validation/contract_dsl.rb"
 
 Metrics/BlockLength:
   Exclude:

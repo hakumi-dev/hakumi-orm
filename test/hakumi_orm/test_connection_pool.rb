@@ -360,4 +360,113 @@ class TestConnectionPool < HakumiORM::TestCase
     blocker << :done
     t.join
   end
+
+  # --- Health checks ---
+
+  test "health_check! returns 0 when all idle connections are alive" do
+    discarded = @pool.health_check!
+
+    assert_equal 0, discarded
+    assert_equal 1, @pool.total_connections
+  end
+
+  test "health_check! discards dead idle connections and returns count" do
+    dead = HakumiORM::Test::MockAdapter.new
+    dead.define_singleton_method(:alive?) { false }
+    @pool.instance_variable_get(:@available) << dead
+
+    discarded = @pool.health_check!
+
+    assert_equal 1, discarded
+  end
+
+  test "health_check! reduces total_connections by discarded count" do
+    dead = HakumiORM::Test::MockAdapter.new
+    dead.define_singleton_method(:alive?) { false }
+    @pool.instance_variable_get(:@available) << dead
+    original_total = @pool.total_connections
+
+    @pool.health_check!
+
+    assert_equal original_total - 1, @pool.total_connections
+  end
+
+  test "health_check! fires :discard event for each dead connection" do
+    discards = []
+    @pool.subscribe(:discard) { discards << :fired }
+
+    dead = HakumiORM::Test::MockAdapter.new
+    dead.define_singleton_method(:alive?) { false }
+    @pool.instance_variable_get(:@available) << dead
+
+    @pool.health_check!
+
+    assert_equal 1, discards.size
+  end
+
+  test "health_check! keeps live connections in the pool" do
+    original = @pool.total_connections
+    @pool.health_check!
+
+    assert_equal original, @pool.total_connections
+    assert_equal original, @pool.available_connections
+  end
+
+  test "health_check! with multiple dead connections discards all of them" do
+    2.times do
+      dead = HakumiORM::Test::MockAdapter.new
+      dead.define_singleton_method(:alive?) { false }
+      @pool.instance_variable_get(:@available) << dead
+    end
+
+    discarded = @pool.health_check!
+
+    assert_equal 2, discarded
+  end
+
+  test "with health_check: true, dead connection on checkout is skipped and a new one is created" do
+    call_count = 0
+    pool = HakumiORM::Adapter::ConnectionPool.new(size: 3, timeout: 1.0, health_check: true) do
+      call_count += 1
+      HakumiORM::Test::MockAdapter.new
+    end
+
+    dead = pool.instance_variable_get(:@available).first
+    dead.define_singleton_method(:alive?) { false }
+
+    pool.exec("SELECT 1")
+
+    assert call_count >= 2, "expected a new connection to be created after discarding the dead one"
+  end
+
+  test "with health_check: true, discard event fires for dead checkout connections" do
+    pool = HakumiORM::Adapter::ConnectionPool.new(size: 3, timeout: 1.0, health_check: true) do
+      HakumiORM::Test::MockAdapter.new
+    end
+
+    discards = []
+    pool.subscribe(:discard) { discards << :fired }
+
+    dead = pool.instance_variable_get(:@available).first
+    dead.define_singleton_method(:alive?) { false }
+
+    pool.exec("SELECT 1")
+
+    assert_equal 1, discards.size
+  end
+
+  test "with health_check: false (default), dead connection on checkout is not checked proactively" do
+    pool = HakumiORM::Adapter::ConnectionPool.new(size: 3, timeout: 1.0) do
+      HakumiORM::Test::MockAdapter.new
+    end
+
+    dead = pool.instance_variable_get(:@available).first
+    dead.define_singleton_method(:alive?) { false }
+
+    # Without health_check, the dead conn is handed out; query succeeds because
+    # exec_params is not overridden to fail
+    result = pool.exec("SELECT 1")
+
+    assert_equal 0, result.row_count
+  end
 end

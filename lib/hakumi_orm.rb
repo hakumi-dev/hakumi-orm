@@ -126,7 +126,26 @@ module HakumiORM
 
     sig { params(blk: T.proc.params(config: Configuration).void).void }
     def configure(&blk)
+      open_type_registry!
       blk.call(config)
+    ensure
+      close_type_registry!
+    end
+
+    sig { returns(T::Boolean) }
+    def type_registry_open?
+      current = T.let(@type_registry_open, T.nilable(T::Boolean))
+      current != false
+    end
+
+    sig { void }
+    def open_type_registry!
+      @type_registry_open = T.let(nil, T.nilable(T::Boolean))
+    end
+
+    sig { void }
+    def close_type_registry!
+      @type_registry_open = T.let(false, T.nilable(T::Boolean))
     end
 
     sig { params(word: String).returns(String) }
@@ -219,6 +238,7 @@ module HakumiORM
       @task_output_port = T.let(nil, T.nilable(Ports::TaskOutputPort))
       @fixtures_loader_port = T.let(nil, T.nilable(Ports::FixturesLoaderPort))
       Thread.current[:hakumi_adapter_name] = nil
+      open_type_registry!
     end
 
     sig { params(table_name: String, blk: T.proc.params(builder: Codegen::AssociationBuilder).void).void }
@@ -258,6 +278,25 @@ module HakumiORM
     def drain_enums!
       result = @_enum_registry || {}
       @_enum_registry = T.let(nil, T.nilable(T::Hash[String, T::Array[Codegen::EnumDefinition]]))
+      result
+    end
+
+    sig { params(table_name: String, skip: T::Boolean, annotation_lines: T::Array[String]).void }
+    def on_table(table_name, skip: false, annotation_lines: [])
+      hook = Codegen::TableHook.new(skip: skip, annotation_lines: annotation_lines)
+      hook_registry = (@_table_hook_registry ||= T.let({}, T.nilable(T::Hash[String, Codegen::TableHook])))
+      hook_registry[table_name] = hook
+    end
+
+    sig { void }
+    def clear_table_hooks!
+      @_table_hook_registry = T.let({}, T.nilable(T::Hash[String, Codegen::TableHook]))
+    end
+
+    sig { returns(T::Hash[String, Codegen::TableHook]) }
+    def drain_table_hooks!
+      result = @_table_hook_registry || {}
+      @_table_hook_registry = T.let(nil, T.nilable(T::Hash[String, Codegen::TableHook]))
       result
     end
 

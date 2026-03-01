@@ -15,6 +15,11 @@ module HakumiORM
           .freeze,
         T::Hash[Symbol, Symbol]
       )
+      BUILT_IN_VALIDATOR_KEYS = T.let(
+        %i[presence blank absence length format numericality inclusion exclusion
+           comparison on allow_nil allow_blank if unless message].freeze,
+        T::Array[Symbol]
+      )
 
       sig { params(attribute: Symbol, kwargs: T::Hash[Symbol, Object]).void.checked(:never) }
       def validates(attribute, **kwargs)
@@ -22,6 +27,7 @@ module HakumiORM
         context = T.cast(normalized[:on], Symbol)
         validate_context!(context)
         add_validation_rules(attribute, normalized)
+        add_custom_validator_rules(attribute, kwargs, normalized)
       end
 
       sig { params(method_name: Symbol, kwargs: T::Hash[Symbol, Object]).void.checked(:never) }
@@ -128,6 +134,26 @@ module HakumiORM
       sig { params(attribute: Symbol, kind: Symbol, options: HakumiORM::Validation::RulePayload).void }
       def add_validation_rule(attribute, kind, options)
         validation_rules << options.merge(attribute: attribute, kind: kind)
+      end
+
+      sig { params(attribute: Symbol, kwargs: T::Hash[Symbol, Object], normalized: HakumiORM::Validation::RulePayload).void }
+      def add_custom_validator_rules(attribute, kwargs, normalized)
+        common = {
+          allow_nil: T.cast(normalized[:allow_nil], T::Boolean),
+          allow_blank: T.cast(normalized[:allow_blank], T::Boolean),
+          if: normalized[:if],
+          unless: normalized[:unless],
+          message: normalized[:message],
+          on: T.cast(normalized[:on], Symbol)
+        }
+        kwargs.each do |kind, raw_opts|
+          next if BUILT_IN_VALIDATOR_KEYS.include?(kind)
+          next unless HakumiORM::Validation::Validators::Registry.registered?(kind)
+
+          parsed = T.let({}, HakumiORM::Validation::RulePayload)
+          parsed = raw_opts if raw_opts.is_a?(Hash)
+          add_validation_rule(attribute, kind, common.merge(parsed))
+        end
       end
 
       sig { params(method_name: Symbol, context: Symbol, kwargs: T::Hash[Symbol, Object]).void }

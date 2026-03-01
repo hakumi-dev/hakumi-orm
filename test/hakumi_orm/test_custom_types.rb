@@ -130,4 +130,77 @@ class TestCustomTypes < HakumiORM::TestCase
 
     refute HakumiORM::Codegen::TypeRegistry.registered?(:money)
   end
+
+  # --- Registration window ---
+
+  test "register inside configure block succeeds" do
+    HakumiORM.configure do |_config|
+      HakumiORM::Codegen::TypeRegistry.register(
+        name: :money,
+        ruby_type: "Money",
+        cast_expression: ->(_raw_expr, _nullable) { "Money.new(raw)" },
+        field_class: "::MyApp::MoneyField",
+        bind_class: "::MyApp::MoneyBind"
+      )
+    end
+
+    assert HakumiORM::Codegen::TypeRegistry.registered?(:money)
+  end
+
+  test "register after configure block closes raises" do
+    HakumiORM.configure { |_config| }
+
+    err = assert_raises(HakumiORM::Error) do
+      HakumiORM::Codegen::TypeRegistry.register(
+        name: :money,
+        ruby_type: "Money",
+        cast_expression: ->(_raw_expr, _nullable) { "Money.new(raw)" },
+        field_class: "::MyApp::MoneyField",
+        bind_class: "::MyApp::MoneyBind"
+      )
+    end
+
+    assert_includes err.message, "configure"
+  end
+
+  test "map_pg_type after configure block closes raises" do
+    HakumiORM.configure { |_config| }
+
+    err = assert_raises(HakumiORM::Error) do
+      HakumiORM::Codegen::TypeRegistry.map_pg_type("money_col", :money)
+    end
+
+    assert_includes err.message, "configure"
+  end
+
+  test "reset! re-opens the registration window" do
+    HakumiORM.configure { |_config| }
+    HakumiORM::Codegen::TypeRegistry.reset!
+
+    HakumiORM::Codegen::TypeRegistry.register(
+      name: :money,
+      ruby_type: "Money",
+      cast_expression: ->(_raw_expr, _nullable) { "Money.new(raw)" },
+      field_class: "::MyApp::MoneyField",
+      bind_class: "::MyApp::MoneyBind"
+    )
+
+    assert HakumiORM::Codegen::TypeRegistry.registered?(:money)
+  end
+
+  test "re-entering configure re-opens the window" do
+    HakumiORM.configure { |_config| }
+
+    HakumiORM.configure do |_config|
+      HakumiORM::Codegen::TypeRegistry.register(
+        name: :money,
+        ruby_type: "Money",
+        cast_expression: ->(_raw_expr, _nullable) { "Money.new(raw)" },
+        field_class: "::MyApp::MoneyField",
+        bind_class: "::MyApp::MoneyBind"
+      )
+    end
+
+    assert HakumiORM::Codegen::TypeRegistry.registered?(:money)
+  end
 end

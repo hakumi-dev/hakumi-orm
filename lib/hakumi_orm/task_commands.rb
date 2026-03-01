@@ -54,6 +54,7 @@ module HakumiORM
       defs = HakumiORM::Codegen::DefinitionLoader.load(config.definitions_path)
       custom_assocs = defs[:associations]
       user_enums = defs[:enums]
+      table_hooks = defs[:table_hooks]
 
       user_tables = tables.except(*INTERNAL_TABLES)
       canonical = HakumiORM::Migration::SchemaFingerprint.build_canonical(user_tables)
@@ -68,7 +69,8 @@ module HakumiORM
         custom_associations: custom_assocs,
         user_enums: user_enums,
         internal_tables: INTERNAL_TABLES,
-        schema_fingerprint: fingerprint
+        schema_fingerprint: fingerprint,
+        table_hooks: table_hooks
       )
       generator = HakumiORM::Codegen::Generator.new(tables, opts)
       generator.generate!

@@ -15,12 +15,14 @@ module HakumiORM
         params(
           size: Integer,
           timeout: Float,
+          health_check: T::Boolean,
           connector: T.proc.returns(Base)
         ).void
       end
-      def initialize(size: 5, timeout: 5.0, &connector)
+      def initialize(size: 5, timeout: 5.0, health_check: false, &connector)
         @size = T.let(size, Integer)
         @timeout = T.let(timeout, Float)
+        @health_check = T.let(health_check, T::Boolean)
         @connector = T.let(connector, T.proc.returns(Base))
         @available = T.let([], T::Array[Base])
         @in_use = T.let({}, T::Hash[Integer, Base])
@@ -163,6 +165,39 @@ module HakumiORM
         @mutex.synchronize { @subscribers[event]&.delete(id) }
       end
 
+      # Checks all idle connections for liveness and discards dead ones.
+      # Returns the number of connections discarded.
+      # Safe to call from any thread; alive? is invoked outside the pool mutex.
+      sig { returns(Integer) }
+      def health_check!
+        snapshot = @mutex.synchronize { @available.dup.tap { @available.clear } }
+        live = T.let([], T::Array[Base])
+
+        snapshot.each do |conn|
+          if conn.alive?
+            live << conn
+          else
+            begin
+              conn.close
+            rescue StandardError
+              nil
+            end
+          end
+        end
+
+        discarded = snapshot.size - live.size
+
+        @mutex.synchronize do
+          @available.concat(live)
+          @total -= discarded
+          @dead += discarded
+          @cond.signal if discarded.positive?
+        end
+
+        discarded.times { instrument(:discard, {}) }
+        discarded
+      end
+
       private
 
       sig { returns(Base) }
@@ -225,6 +260,20 @@ module HakumiORM
       def checkout(tid)
         deadline = Time.now.to_f + @timeout
 
+        loop do
+          conn = pop_or_wait(tid, deadline)
+          return conn unless @health_check && !conn.alive?
+
+          discard(tid)
+          instrument(:discard, {})
+        end
+      end
+
+      # Pops a connection from the available list (or creates one), registers it
+      # in @in_use under tid, and returns it. Blocks until a slot is available or
+      # the deadline is reached, in which case TimeoutError is raised.
+      sig { params(tid: Integer, deadline: Float).returns(Base) }
+      def pop_or_wait(tid, deadline)
         @mutex.synchronize do
           loop do
             conn = @available.pop

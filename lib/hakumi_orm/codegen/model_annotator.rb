@@ -79,12 +79,24 @@ module HakumiORM
         sig { returns(T::Array[EnumValue]) }
         attr_reader :enum_predicates
 
-        sig { params(table: TableInfo, dialect: Dialect::Base, associations: AssociationSets, enum_predicates: T::Array[EnumValue]).void }
-        def initialize(table:, dialect:, associations:, enum_predicates: [])
+        sig { returns(T::Array[String]) }
+        attr_reader :extra_lines
+
+        sig do
+          params(
+            table: TableInfo,
+            dialect: Dialect::Base,
+            associations: AssociationSets,
+            enum_predicates: T::Array[EnumValue],
+            extra_lines: T::Array[String]
+          ).void
+        end
+        def initialize(table:, dialect:, associations:, enum_predicates: [], extra_lines: [])
           @table = T.let(table, TableInfo)
           @dialect = T.let(dialect, Dialect::Base)
           @associations = T.let(associations, AssociationSets)
           @enum_predicates = T.let(enum_predicates, T::Array[EnumValue])
+          @extra_lines = T.let(extra_lines, T::Array[String])
         end
       end
 
@@ -105,6 +117,7 @@ module HakumiORM
         append_columns(lines, table, ctx.dialect)
         append_enums(lines, ctx.enum_predicates)
         append_associations(lines, ctx)
+        append_extra_lines(lines, ctx.extra_lines)
 
         lines << "#"
         lines << MARKER_END
@@ -227,6 +240,14 @@ module HakumiORM
       sig { params(hash: EnumValue, key: Symbol).returns(String) }
       def self.str(hash, key)
         T.cast(hash.fetch(key), String)
+      end
+
+      sig { params(lines: T::Array[String], extra_lines: T::Array[String]).void }
+      def self.append_extra_lines(lines, extra_lines)
+        return if extra_lines.empty?
+
+        lines << "#"
+        extra_lines.each { |line| lines << "# #{line}" }
       end
 
       sig { params(lines: T::Array[String], ctx: Context).void }

@@ -35,6 +35,7 @@ module HakumiORM
         @user_enums = T.let(options.user_enums, T::Hash[String, T::Array[EnumDefinition]])
         @internal_tables = T.let(options.internal_tables.to_set, T::Set[String])
         @schema_fingerprint = T.let(options.schema_fingerprint, T.nilable(String))
+        @table_hooks = T.let(options.table_hooks, T::Hash[String, TableHook])
         @integer_backed_enums = T.let(Set.new, T::Set[String])
         @generation_plan = T.let(
           GenerationPlan.new(
@@ -67,6 +68,8 @@ module HakumiORM
         generate_enum_files!(enum_types) unless enum_types.empty?
 
         @tables.each_value do |table|
+          next if @table_hooks[table.name]&.skip
+
           singular = singularize(table.name)
           table_dir = @generation_plan.table_dir(singular)
           @file_writer.mkdir_p(table_dir)

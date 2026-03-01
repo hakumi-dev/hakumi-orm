@@ -14,5 +14,11 @@ module HakumiORM
       method_name = "test_#{name.gsub(/\s+/, "_")}"
       define_method(method_name, &blk)
     end
+
+    def teardown
+      HakumiORM.open_type_registry!
+      HakumiORM::Validation::Validators::Registry.reset!
+      super
+    end
   end
 end

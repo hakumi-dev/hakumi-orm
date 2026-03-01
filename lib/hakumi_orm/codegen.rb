@@ -25,6 +25,7 @@ require_relative "codegen/enum_builder"
 require_relative "codegen/enum_loader"
 require_relative "codegen/definition_loader"
 
+require_relative "codegen/table_hook"
 require_relative "codegen/generator_options"
 require_relative "codegen/generation_plan"
 require_relative "codegen/template_renderer"
