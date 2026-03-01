@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "zlib"
+require_relative "types"
 
 module HakumiORM
   module Fixtures
@@ -18,14 +19,14 @@ module HakumiORM
         params(
           table: Codegen::TableInfo,
           fixture_label: String,
-          row: Loader::FixtureRow,
-          rows_by_table: Loader::LoadedFixtures
-        ).returns(T::Array[Loader::FixtureRow])
+          row: Types::FixtureRow,
+          rows_by_table: Types::LoadedFixtures
+        ).returns(T::Array[Types::FixtureRow])
       end
       def expand_row_fk_references(table:, fixture_label:, row:, rows_by_table:)
-        expanded = T.let([row.dup], T::Array[Loader::FixtureRow])
+        expanded = T.let([row.dup], T::Array[Types::FixtureRow])
         table.foreign_keys.each do |fk|
-          next_rows = T.let([], T::Array[Loader::FixtureRow])
+          next_rows = T.let([], T::Array[Types::FixtureRow])
           expanded.each do |current|
             map_association_label_to_fk!(current, fk)
             labels = label_list_for_reference(current[fk.column_name])
@@ -86,8 +87,8 @@ module HakumiORM
         params(
           table: Codegen::TableInfo,
           fixture_label: String,
-          rows: T::Array[Loader::FixtureRow]
-        ).returns(T::Array[Loader::FixtureRow])
+          rows: T::Array[Types::FixtureRow]
+        ).returns(T::Array[Types::FixtureRow])
       end
       def adjust_auto_primary_keys_for_expansion(table, fixture_label, rows)
         pk = table.primary_key
@@ -114,7 +115,7 @@ module HakumiORM
         end
       end
 
-      sig { params(row: Loader::FixtureRow, fk: Codegen::ForeignKeyInfo).void }
+      sig { params(row: Types::FixtureRow, fk: Codegen::ForeignKeyInfo).void }
       def map_association_label_to_fk!(row, fk)
         return unless fk.column_name.end_with?("_id")
 
@@ -125,7 +126,7 @@ module HakumiORM
         row[fk.column_name] = row.delete(assoc_key)
       end
 
-      sig { params(value: Loader::FixtureValue).returns(T.nilable(T::Array[String])) }
+      sig { params(value: Types::FixtureValue).returns(T.nilable(T::Array[String])) }
       def label_list_for_reference(value)
         case value
         when String
@@ -150,8 +151,8 @@ module HakumiORM
         params(
           fk: Codegen::ForeignKeyInfo,
           label: String,
-          rows_by_table: Loader::LoadedFixtures
-        ).returns(Loader::FixtureValue)
+          rows_by_table: Types::LoadedFixtures
+        ).returns(Types::FixtureValue)
       end
       def resolve_reference_value(fk, label, rows_by_table)
         foreign_rows = rows_by_table[fk.foreign_table]

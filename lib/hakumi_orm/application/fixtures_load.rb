@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require_relative "../internal"
+require_relative "../fixtures/types"
 
 module HakumiORM
   module Application
@@ -35,7 +36,7 @@ module HakumiORM
           config: Configuration,
           adapter: Adapter::Base,
           request: Request
-        ).returns(Internal::FixturesLoader::LoadedFixtures)
+        ).returns(Fixtures::Types::LoadedFixtures)
       end
       def self.load_with_data!(config:, adapter:, request:)
         loader = build_loader(config: config, adapter: adapter, verify_foreign_keys: request[:verify_foreign_keys])
@@ -51,7 +52,7 @@ module HakumiORM
           config: Configuration,
           adapter: Adapter::Base,
           request: Request
-        ).returns(Internal::FixturesLoader::LoadPlan)
+        ).returns(Fixtures::Types::LoadPlan)
       end
       def self.plan_load!(config:, adapter:, request:)
         loader = build_loader(config: config, adapter: adapter, verify_foreign_keys: request[:verify_foreign_keys])

@@ -7,6 +7,7 @@ require "date"
 require "bigdecimal"
 require "json"
 require "zlib"
+require_relative "types"
 require_relative "integrity_verifier"
 require_relative "reference_resolver"
 module HakumiORM
@@ -15,30 +16,6 @@ module HakumiORM
     class Loader
       extend T::Sig
       extend T::Helpers
-
-      FixtureScalar = T.type_alias do
-        T.nilable(T.any(String, Integer, Float, BigDecimal, Date, Time, T::Boolean, Symbol))
-      end
-
-      FixtureValue = T.type_alias do
-        T.any(
-          FixtureScalar,
-          T::Array[FixtureScalar],
-          T::Hash[String, FixtureScalar],
-          T::Hash[Symbol, FixtureScalar]
-        )
-      end
-      FixtureRow = T.type_alias { T::Hash[String, FixtureValue] }
-      FixtureRowSet = T.type_alias { T::Hash[String, FixtureRow] }
-      LoadedFixtures = T.type_alias { T::Hash[String, FixtureRowSet] }
-      LoadPlan = T.type_alias do
-        {
-          table_count: Integer,
-          row_count: Integer,
-          table_rows: T::Hash[String, Integer]
-        }
-      end
-
       sig do
         params(
           adapter: Adapter::Base,
@@ -75,7 +52,7 @@ module HakumiORM
           base_path: String,
           fixtures_dir: T.nilable(String),
           only_names: T.nilable(T::Array[String])
-        ).returns(LoadedFixtures)
+        ).returns(Types::LoadedFixtures)
       end
       def load_with_data!(base_path:, fixtures_dir: nil, only_names: nil)
         rows_by_table = collect_fixture_rows(base_path: base_path, fixtures_dir: fixtures_dir, only_names: only_names)
@@ -88,7 +65,7 @@ module HakumiORM
           base_path: String,
           fixtures_dir: T.nilable(String),
           only_names: T.nilable(T::Array[String])
-        ).returns(LoadPlan)
+        ).returns(Types::LoadPlan)
       end
       def plan_load!(base_path:, fixtures_dir: nil, only_names: nil)
         rows_by_table = collect_fixture_rows(base_path: base_path, fixtures_dir: fixtures_dir, only_names: only_names)
@@ -113,11 +90,11 @@ module HakumiORM
           base_path: String,
           fixtures_dir: T.nilable(String),
           only_names: T.nilable(T::Array[String])
-        ).returns(LoadedFixtures)
+        ).returns(Types::LoadedFixtures)
       end
       def collect_fixture_rows(base_path:, fixtures_dir:, only_names:)
         files = fixture_files(base_path: base_path, fixtures_dir: fixtures_dir, only_names: only_names)
-        rows_by_table = T.let({}, LoadedFixtures)
+        rows_by_table = T.let({}, Types::LoadedFixtures)
         files.each do |file|
           table_name = table_name_for_file(base_path, file, fixtures_dir: fixtures_dir)
           table = @tables[table_name]
@@ -166,7 +143,7 @@ module HakumiORM
         relative.tr("/", "_")
       end
 
-      sig { params(path: String).returns(FixtureRowSet) }
+      sig { params(path: String).returns(Types::FixtureRowSet) }
       def parse_labeled_rows(path)
         src = File.read(path)
         rendered = ERB.new(src).result
@@ -177,7 +154,7 @@ module HakumiORM
         )
         return {} unless parsed.is_a?(Hash)
 
-        rows = T.let({}, FixtureRowSet)
+        rows = T.let({}, Types::FixtureRowSet)
         parsed.each do |label, attrs|
           next unless label.is_a?(String) || label.is_a?(Symbol)
           next if label.to_s.start_with?("_")
@@ -188,23 +165,23 @@ module HakumiORM
         rows
       end
 
-      sig { params(table: Codegen::TableInfo, labeled_rows: FixtureRowSet).returns(FixtureRowSet) }
+      sig { params(table: Codegen::TableInfo, labeled_rows: Types::FixtureRowSet).returns(Types::FixtureRowSet) }
       def parse_labeled_rows_for_table(table, labeled_rows)
-        rows = T.let({}, FixtureRowSet)
+        rows = T.let({}, Types::FixtureRowSet)
         labeled_rows.each do |label, row|
           rows[label] = apply_primary_key_defaults(table, label, row)
         end
         rows
       end
 
-      sig { params(attrs: T::Hash[T.any(String, Symbol), FixtureValue]).returns(FixtureRow) }
+      sig { params(attrs: T::Hash[T.any(String, Symbol), Types::FixtureValue]).returns(Types::FixtureRow) }
       def normalize_row(attrs)
-        row = T.let({}, FixtureRow)
+        row = T.let({}, Types::FixtureRow)
         attrs.each { |k, v| row[k.to_s] = v }
         row
       end
 
-      sig { params(table: Codegen::TableInfo, label: String, row: FixtureRow).returns(FixtureRow) }
+      sig { params(table: Codegen::TableInfo, label: String, row: Types::FixtureRow).returns(Types::FixtureRow) }
       def apply_primary_key_defaults(table, label, row)
         pk = table.primary_key
         return row unless pk
@@ -220,7 +197,7 @@ module HakumiORM
         end
       end
 
-      sig { params(rows_by_table: LoadedFixtures).void }
+      sig { params(rows_by_table: Types::LoadedFixtures).void }
       def insert_fixture_tables!(rows_by_table)
         expanded_rows_by_table(rows_by_table).each do |table_name, rows|
           table = @tables[table_name]
@@ -231,9 +208,9 @@ module HakumiORM
         @integrity_verifier.verify!(rows_by_table.keys) if @verify_foreign_keys
       end
 
-      sig { params(rows_by_table: LoadedFixtures).returns(T::Hash[String, T::Array[FixtureRow]]) }
+      sig { params(rows_by_table: Types::LoadedFixtures).returns(T::Hash[String, T::Array[Types::FixtureRow]]) }
       def expanded_rows_by_table(rows_by_table)
-        expanded = T.let({}, T::Hash[String, T::Array[FixtureRow]])
+        expanded = T.let({}, T::Hash[String, T::Array[Types::FixtureRow]])
         @resolver.insertion_order(rows_by_table.keys).each do |table_name|
           table = @tables[table_name]
           next unless table
@@ -263,7 +240,7 @@ module HakumiORM
         id.zero? ? 1 : id
       end
 
-      sig { params(table: Codegen::TableInfo, rows: T::Array[FixtureRow]).void }
+      sig { params(table: Codegen::TableInfo, rows: T::Array[Types::FixtureRow]).void }
       def replace_table_rows!(table, rows)
         delete_all_sql = "DELETE FROM #{@adapter.dialect.quote_id(table.name)}"
         @adapter.exec(delete_all_sql).close
@@ -272,7 +249,7 @@ module HakumiORM
         rows.each { |row| insert_row!(table, row) }
       end
 
-      sig { params(table: Codegen::TableInfo, row: FixtureRow).void }
+      sig { params(table: Codegen::TableInfo, row: Types::FixtureRow).void }
       def insert_row!(table, row)
         columns, values = row_columns_and_values(table, row)
 
@@ -283,7 +260,7 @@ module HakumiORM
         @adapter.exec_params(sql, values).close
       end
 
-      sig { params(table: Codegen::TableInfo, row: FixtureRow).returns([T::Array[String], T::Array[PGValue]]) }
+      sig { params(table: Codegen::TableInfo, row: Types::FixtureRow).returns([T::Array[String], T::Array[PGValue]]) }
       def row_columns_and_values(table, row)
         columns = T.let([], T::Array[String])
         values = T.let([], T::Array[PGValue])
@@ -307,7 +284,7 @@ module HakumiORM
         markers
       end
 
-      sig { params(column: Codegen::ColumnInfo, value: FixtureValue).returns(PGValue) }
+      sig { params(column: Codegen::ColumnInfo, value: Types::FixtureValue).returns(PGValue) }
       def encode_value(column, value)
         return nil if value.nil?
 
@@ -333,7 +310,7 @@ module HakumiORM
         end
       end
 
-      sig { params(value: FixtureValue).returns(Integer) }
+      sig { params(value: Types::FixtureValue).returns(Integer) }
       def integer_value(value)
         return value if value.is_a?(Integer)
         return value.to_i if value.is_a?(String)
@@ -341,7 +318,7 @@ module HakumiORM
         raise HakumiORM::Error, "Fixture integer value is invalid: #{value.inspect}"
       end
 
-      sig { params(value: FixtureValue).returns(Float) }
+      sig { params(value: Types::FixtureValue).returns(Float) }
       def float_value(value)
         return value if value.is_a?(Float)
         return value.to_f if value.is_a?(Integer) || value.is_a?(String)
@@ -349,7 +326,7 @@ module HakumiORM
         raise HakumiORM::Error, "Fixture float value is invalid: #{value.inspect}"
       end
 
-      sig { params(value: FixtureValue).returns(BigDecimal) }
+      sig { params(value: Types::FixtureValue).returns(BigDecimal) }
       def decimal_value(value)
         return value if value.is_a?(BigDecimal)
         return BigDecimal(value) if value.is_a?(String)
@@ -358,7 +335,7 @@ module HakumiORM
         raise HakumiORM::Error, "Fixture decimal value is invalid: #{value.inspect}"
       end
 
-      sig { params(value: FixtureValue).returns(Date) }
+      sig { params(value: Types::FixtureValue).returns(Date) }
       def date_value(value)
         return value if value.is_a?(Date)
         return Date.parse(value) if value.is_a?(String)
@@ -366,7 +343,7 @@ module HakumiORM
         raise HakumiORM::Error, "Fixture date value is invalid: #{value.inspect}"
       end
 
-      sig { params(value: FixtureValue).returns(Time) }
+      sig { params(value: Types::FixtureValue).returns(Time) }
       def time_value(value)
         return value if value.is_a?(Time)
         return Time.parse(value) if value.is_a?(String)
@@ -374,7 +351,7 @@ module HakumiORM
         raise HakumiORM::Error, "Fixture time value is invalid: #{value.inspect}"
       end
 
-      sig { params(value: FixtureValue).returns(T::Boolean) }
+      sig { params(value: Types::FixtureValue).returns(T::Boolean) }
       def boolean_value(value)
         return value == true if [true, false].include?(value)
         return true if [1, "1", "true"].include?(value)
@@ -383,7 +360,7 @@ module HakumiORM
         raise HakumiORM::Error, "Fixture boolean value is invalid: #{value.inspect}"
       end
 
-      sig { params(value: FixtureValue).returns(Json) }
+      sig { params(value: Types::FixtureValue).returns(Json) }
       def json_value(value)
         return Json.parse(value) if value.is_a?(String)
 
