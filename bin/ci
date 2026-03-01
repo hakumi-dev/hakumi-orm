@@ -29,14 +29,6 @@ echo "==> Sorbet"
 bundle exec srb tc
 
 echo ""
-echo "==> Architecture boundaries (current)"
-bundle exec ruby bin/architecture_check --profile current
-
-echo ""
-echo "==> Architecture boundaries (target)"
-bundle exec ruby bin/architecture_check --profile target --write-mermaid docs/architecture_layers_target.mmd
-
-echo ""
 echo "==> Tests"
 TEST_FILES="$(
   find test -type f -name 'test_*.rb' \

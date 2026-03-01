@@ -1800,6 +1800,8 @@ HakumiORM::Application::FixturesLoad.load!(
 )
 ```
 
+`HakumiORM::Fixtures::*` implementation classes are internal and intentionally not part of the public API contract.
+
 ### Minitest Fixtures
 
 For transactional test fixtures similar to Active Record:

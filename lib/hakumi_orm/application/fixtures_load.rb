@@ -1,7 +1,7 @@
 # typed: strict
 # frozen_string_literal: true
 
-require_relative "../fixtures/loader"
+require_relative "../internal"
 
 module HakumiORM
   module Application
@@ -35,7 +35,7 @@ module HakumiORM
           config: Configuration,
           adapter: Adapter::Base,
           request: Request
-        ).returns(Fixtures::Loader::LoadedFixtures)
+        ).returns(Internal::FixturesLoader::LoadedFixtures)
       end
       def self.load_with_data!(config:, adapter:, request:)
         loader = build_loader(config: config, adapter: adapter, verify_foreign_keys: request[:verify_foreign_keys])
@@ -51,7 +51,7 @@ module HakumiORM
           config: Configuration,
           adapter: Adapter::Base,
           request: Request
-        ).returns(Fixtures::Loader::LoadPlan)
+        ).returns(Internal::FixturesLoader::LoadPlan)
       end
       def self.plan_load!(config:, adapter:, request:)
         loader = build_loader(config: config, adapter: adapter, verify_foreign_keys: request[:verify_foreign_keys])
@@ -63,12 +63,10 @@ module HakumiORM
         SchemaIntrospection.read_tables(config, adapter)
       end
 
-      sig do
-        params(config: Configuration, adapter: Adapter::Base, verify_foreign_keys: T::Boolean).returns(Fixtures::Loader)
-      end
+      sig { params(config: Configuration, adapter: Adapter::Base, verify_foreign_keys: T::Boolean).returns(Internal::FixturesLoader) }
       def self.build_loader(config:, adapter:, verify_foreign_keys:)
         tables = read_tables(config: config, adapter: adapter)
-        Fixtures::Loader.new(
+        Internal::FixturesLoader.new(
           adapter: adapter,
           tables: tables,
           verify_foreign_keys: verify_foreign_keys
