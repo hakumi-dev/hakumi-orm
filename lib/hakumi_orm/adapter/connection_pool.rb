@@ -29,6 +29,11 @@ module HakumiORM
         @dead = T.let(0, Integer)
         @mutex = T.let(Mutex.new, Mutex)
         @cond = T.let(ConditionVariable.new, ConditionVariable)
+        @subscribers = T.let(
+          {},
+          T::Hash[Symbol, T::Hash[Integer, T.proc.params(payload: InstrumentationPayload).void]]
+        )
+        @next_subscriber_id = T.let(0, Integer)
 
         first = connector.call
         @dialect = T.let(first.dialect, Dialect::Base)
@@ -138,6 +143,26 @@ module HakumiORM
         end
       end
 
+      sig do
+        params(
+          event: Symbol,
+          blk: T.proc.params(payload: InstrumentationPayload).void
+        ).returns(Integer)
+      end
+      def subscribe(event, &blk)
+        @mutex.synchronize do
+          @next_subscriber_id += 1
+          id = @next_subscriber_id
+          (@subscribers[event] ||= {})[id] = blk
+          id
+        end
+      end
+
+      sig { params(event: Symbol, id: Integer).void }
+      def unsubscribe(event, id)
+        @mutex.synchronize { @subscribers[event]&.delete(id) }
+      end
+
       private
 
       sig { returns(Base) }
@@ -160,16 +185,40 @@ module HakumiORM
         existing = @mutex.synchronize { @in_use[tid] }
         return blk.call(existing) if existing
 
-        conn = checkout(tid)
+        conn = T.let(nil, T.nilable(Base))
+        start = Time.now.to_f
+
+        begin
+          conn = checkout(tid)
+        rescue TimeoutError
+          instrument(:timeout, { wait_ms: (Time.now.to_f - start) * 1000 })
+          raise
+        end
+
+        instrument(:checkout, { wait_ms: (Time.now.to_f - start) * 1000 })
         blk.call(conn)
       rescue StandardError
         if conn && !conn.alive?
           discard(tid)
+          instrument(:discard, {})
           conn = nil
         end
         raise
       ensure
-        checkin(tid) if conn
+        if conn
+          checkin(tid)
+          instrument(:checkin, {})
+        end
+      end
+
+      sig { params(event: Symbol, payload: InstrumentationPayload).void }
+      def instrument(event, payload)
+        subs = @mutex.synchronize { (@subscribers[event] || {}).values.dup }
+        subs.each do |sub|
+          sub.call(payload)
+        rescue StandardError
+          nil
+        end
       end
 
       sig { params(tid: Integer).returns(Base) }

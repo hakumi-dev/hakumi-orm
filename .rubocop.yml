@@ -30,6 +30,7 @@ Metrics/AbcSize:
     - "lib/hakumi_orm/codegen/generator_options.rb"
     - "lib/hakumi_orm/relation.rb"
     - "lib/hakumi_orm/configuration.rb"
+    - "lib/hakumi_orm/adapter/connection_pool.rb"
 
 Metrics/ClassLength:
   Max: 380

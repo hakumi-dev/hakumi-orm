@@ -1723,6 +1723,40 @@ stats = HakumiORM.adapter.pool_stats
 | "size" | "5" | Maximum number of connections in the pool |
 | "timeout" | "5.0" | Seconds to wait for a connection before raising "TimeoutError" |
 
+### Pool Instrumentation
+
+Subscribe to pool lifecycle events to emit metrics or traces:
+
+```ruby
+pool = HakumiORM.adapter # ConnectionPool instance
+
+# subscribe returns an integer ID used for unsubscribing
+id = pool.subscribe(:checkout) do |event|
+  StatsD.histogram("db.pool.checkout_wait_ms", event[:wait_ms])
+end
+
+pool.subscribe(:checkin)  { |_e| StatsD.increment("db.pool.checkin") }
+pool.subscribe(:timeout)  { |e|  StatsD.increment("db.pool.timeout") }
+pool.subscribe(:discard)  { |_e| StatsD.increment("db.pool.discard") }
+
+# remove a specific subscriber
+pool.unsubscribe(:checkout, id)
+```
+
+Available events:
+
+| Event | Payload keys | When it fires |
+|---|---|---|
+| ":checkout" | "{ wait_ms: Float }" | A connection was successfully checked out |
+| ":checkin" | "{}" | A connection was returned to the pool |
+| ":timeout" | "{ wait_ms: Float }" | Checkout timed out (raises "TimeoutError") |
+| ":discard" | "{}" | A dead connection was evicted |
+
+Notes:
+- Callbacks are called outside the pool mutex — they are safe to use for DB operations or blocking I/O.
+- Exceptions inside callbacks are swallowed so a misbehaving subscriber never crashes the pool.
+- Reentrant calls within the same thread (nested transactions) fire checkout/checkin only once, for the outermost call.
+
 ## Multi-Database Support
 
 Configure named databases for read replicas, analytics, or other secondary databases:

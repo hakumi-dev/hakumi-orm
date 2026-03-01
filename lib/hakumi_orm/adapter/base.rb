@@ -23,6 +23,14 @@ module HakumiORM
           dead: Integer
         }
       end
+
+      # Payload passed to pool instrumentation callbacks.
+      # Keys vary by event:
+      #   :checkout -> { wait_ms: Float }
+      #   :checkin -> {}
+      #   :timeout -> { wait_ms: Float }
+      #   :discard -> {}
+      InstrumentationPayload = T.type_alias { T::Hash[Symbol, T.untyped] }
       PREDICATE_BIND_REGEX = T.let(
         /
           (

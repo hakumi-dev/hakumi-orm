@@ -206,6 +206,125 @@ class TestConnectionPool < HakumiORM::TestCase
     assert_includes err.message, "only be called inside a transaction"
   end
 
+  # --- Instrumentation ---
+
+  test "subscribe returns an integer id" do
+    id = @pool.subscribe(:checkout) { |_e| }
+
+    assert_instance_of Integer, id
+  end
+
+  test "checkout event fires with wait_ms" do
+    events = []
+    @pool.subscribe(:checkout) { |e| events << e }
+
+    @pool.exec("SELECT 1")
+
+    assert_equal 1, events.size
+    assert events.first.key?(:wait_ms)
+    assert_instance_of Float, events.first[:wait_ms]
+  end
+
+  test "checkin event fires after connection is returned" do
+    events = []
+    @pool.subscribe(:checkin) { |e| events << e }
+
+    @pool.exec("SELECT 1")
+
+    assert_equal 1, events.size
+  end
+
+  test "checkout and checkin each fire once per query" do
+    checkouts = []
+    checkins = []
+    @pool.subscribe(:checkout) { |e| checkouts << e }
+    @pool.subscribe(:checkin) { |e| checkins << e }
+
+    @pool.exec("SELECT 1")
+    @pool.exec("SELECT 2")
+
+    assert_equal 2, checkouts.size
+    assert_equal 2, checkins.size
+  end
+
+  test "reentrant calls do not fire checkout/checkin for inner calls" do
+    checkouts = []
+    @pool.subscribe(:checkout) { |e| checkouts << e }
+
+    @pool.transaction do |_conn|
+      @pool.exec("SELECT 1")
+      @pool.exec("SELECT 2")
+    end
+
+    assert_equal 1, checkouts.size
+  end
+
+  test "timeout event fires with wait_ms when pool is exhausted" do
+    tiny_pool = HakumiORM::Adapter::ConnectionPool.new(size: 1, timeout: 0.1) do
+      HakumiORM::Test::MockAdapter.new
+    end
+
+    timeout_events = []
+    tiny_pool.subscribe(:timeout) { |e| timeout_events << e }
+
+    blocker = Queue.new
+    t = Thread.new { tiny_pool.transaction { |_| blocker.pop } }
+    sleep 0.05
+
+    assert_raises(HakumiORM::Adapter::TimeoutError) { tiny_pool.exec("SELECT 1") }
+
+    assert_equal 1, timeout_events.size
+    assert_instance_of Float, timeout_events.first[:wait_ms]
+  ensure
+    blocker << :done
+    t&.join
+  end
+
+  test "discard event fires when dead connection is evicted" do
+    discards = []
+    @pool.subscribe(:discard) { |e| discards << e }
+
+    dead_conn = HakumiORM::Test::MockAdapter.new
+    dead_conn.define_singleton_method(:alive?) { false }
+    dead_conn.define_singleton_method(:exec) { |_sql| raise StandardError, "connection lost" }
+
+    @pool.instance_variable_get(:@available) << dead_conn
+
+    assert_raises(StandardError) { @pool.exec("SELECT 1") }
+
+    assert_equal 1, discards.size
+  end
+
+  test "multiple subscribers for the same event all fire" do
+    calls = []
+    @pool.subscribe(:checkout) { |_e| calls << :first }
+    @pool.subscribe(:checkout) { |_e| calls << :second }
+
+    @pool.exec("SELECT 1")
+
+    assert_includes calls, :first
+    assert_includes calls, :second
+    assert_equal 2, calls.size
+  end
+
+  test "unsubscribe removes the callback" do
+    calls = []
+    id = @pool.subscribe(:checkout) { |_e| calls << :fired }
+
+    @pool.unsubscribe(:checkout, id)
+    @pool.exec("SELECT 1")
+
+    assert_empty calls
+  end
+
+  test "exception in callback does not crash the pool" do
+    @pool.subscribe(:checkout) { |_e| raise "boom" }
+
+    result = @pool.exec("SELECT 1")
+
+    assert_equal 0, result.row_count
+  end
+
   test "timeout raises when pool is exhausted" do
     tiny_pool = HakumiORM::Adapter::ConnectionPool.new(size: 1, timeout: 0.1) do
       HakumiORM::Test::MockAdapter.new
