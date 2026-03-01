@@ -52,6 +52,8 @@ require_relative "hakumi_orm/sql_log_formatter"
 require_relative "hakumi_orm/ports"
 require_relative "hakumi_orm/ports/adapter_factory_port"
 require_relative "hakumi_orm/ports/schema_introspection_port"
+require_relative "hakumi_orm/ports/migration_runner_factory_port"
+require_relative "hakumi_orm/ports/task_output_port"
 require_relative "hakumi_orm/adapter"
 require_relative "hakumi_orm/adapter/timeout_error"
 require_relative "hakumi_orm/adapter/connection_pool"
@@ -142,6 +144,25 @@ module HakumiORM
     sig { params(schema_introspection_port: Ports::SchemaIntrospectionPort).void }
     attr_writer :schema_introspection_port
 
+    sig { returns(Ports::MigrationRunnerFactoryPort) }
+    def migration_runner_factory_port
+      @migration_runner_factory_port ||= T.let(
+        Adapter::MigrationRunnerFactoryGateway.new,
+        T.nilable(Ports::MigrationRunnerFactoryPort)
+      )
+    end
+
+    sig { params(migration_runner_factory_port: Ports::MigrationRunnerFactoryPort).void }
+    attr_writer :migration_runner_factory_port
+
+    sig { returns(Ports::TaskOutputPort) }
+    def task_output_port
+      @task_output_port ||= T.let(Adapter::TaskOutputGateway.new, T.nilable(Ports::TaskOutputPort))
+    end
+
+    sig { params(task_output_port: Ports::TaskOutputPort).void }
+    attr_writer :task_output_port
+
     sig { params(name: T.nilable(Symbol)).returns(Adapter::Base) }
     def adapter(name = nil)
       return config.adapter_for(name) if name
@@ -177,6 +198,8 @@ module HakumiORM
       @config = T.let(nil, T.nilable(Configuration))
       @adapter_factory_port = T.let(nil, T.nilable(Ports::AdapterFactoryPort))
       @schema_introspection_port = T.let(nil, T.nilable(Ports::SchemaIntrospectionPort))
+      @migration_runner_factory_port = T.let(nil, T.nilable(Ports::MigrationRunnerFactoryPort))
+      @task_output_port = T.let(nil, T.nilable(Ports::TaskOutputPort))
       Thread.current[:hakumi_adapter_name] = nil
     end
 
