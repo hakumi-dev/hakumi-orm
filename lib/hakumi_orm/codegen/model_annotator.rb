@@ -237,20 +237,20 @@ module HakumiORM
         ).returns(Context)
       end
       def self.build_cli_context(generator, table, custom_assocs)
-        hm_map = generator.send(:compute_has_many)
-        ho_map = generator.send(:compute_has_one)
-        through_map = generator.send(:compute_has_many_through)
+        hm_map = generator.__send__(:compute_has_many)
+        ho_map = generator.__send__(:compute_has_one)
+        through_map = generator.__send__(:compute_has_many_through)
 
         Context.new(
           table: table,
           dialect: generator.instance_variable_get(:@dialect),
-          has_many: generator.send(:build_has_many_assocs, table, hm_map),
-          has_one: generator.send(:build_has_one_assocs, table, ho_map),
-          belongs_to: generator.send(:build_belongs_to_assocs, table),
-          has_many_through: generator.send(:build_has_many_through_assocs, table, through_map),
-          custom_has_many: generator.send(:build_custom_has_many, table, custom_assocs),
-          custom_has_one: generator.send(:build_custom_has_one, table, custom_assocs),
-          enum_predicates: generator.send(:build_enum_predicates, table)
+          has_many: generator.__send__(:build_has_many_assocs, table, hm_map),
+          has_one: generator.__send__(:build_has_one_assocs, table, ho_map),
+          belongs_to: generator.__send__(:build_belongs_to_assocs, table),
+          has_many_through: generator.__send__(:build_has_many_through_assocs, table, through_map),
+          custom_has_many: generator.__send__(:build_custom_has_many, table, custom_assocs),
+          custom_has_one: generator.__send__(:build_custom_has_one, table, custom_assocs),
+          enum_predicates: generator.__send__(:build_enum_predicates, table)
         )
       end
 

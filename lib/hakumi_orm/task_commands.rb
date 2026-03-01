@@ -230,7 +230,7 @@ module HakumiORM
         next if filter_table && table.name != filter_table
 
         ctx = HakumiORM::Codegen::ModelAnnotator.build_cli_context(generator, table, custom_assocs)
-        lines = HakumiORM::Codegen::ModelAnnotator.send(:build_assoc_lines_for_cli, ctx)
+        lines = HakumiORM::Codegen::ModelAnnotator.build_assoc_lines_for_cli(ctx)
         next if lines.empty?
 
         output_port.associations_for_table(table.name, lines)

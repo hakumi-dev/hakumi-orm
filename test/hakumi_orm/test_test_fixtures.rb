@@ -21,7 +21,7 @@ class TestTestFixtures < HakumiORM::TestCase
     HakumiORM.config.database = @original_database
   end
 
-  test "fixture accessors and fixture helper return labeled rows" do
+  test "fixture helper returns labeled rows" do
     Dir.mktmpdir do |dir|
       adapter, fixtures_dir = setup_sqlite_with_fixtures!(dir)
 
@@ -36,7 +36,7 @@ class TestTestFixtures < HakumiORM::TestCase
       instance = test_case.new(:noop)
       instance.before_setup
 
-      assert_equal "Alice", instance.users(:alice)["name"]
+      assert_equal "Alice", instance.fixture(:users, :alice)["name"]
       assert_equal "Bob", instance.fixture(:users, :bob)["name"]
     ensure
       instance&.after_teardown

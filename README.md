@@ -104,7 +104,7 @@ class User < ApplicationRecord
   has_many :posts
 end
 
-User.columns  # discovered at runtime via method_missing
+User.columns  # discovered at runtime via reflection
 ```
 
 In HakumiORM, every model is generated from the schema as typed, explicit code:
@@ -205,7 +205,7 @@ Associations are generated automatically from foreign keys. "has_many" returns a
 | | ActiveRecord | HakumiORM |
 |---|---|---|
 | Typing | Runtime, mostly untyped | "typed: strict", Sorbet-verified |
-| Column access | "method_missing" / dynamic | Generated "attr_reader" with "sig" |
+| Column access | Reflection / dynamic | Generated "attr_reader" with "sig" |
 | Column names | Strings/symbols, checked at runtime | "Schema::FIELD" constants, checked at compile time |
 | Query DSL | Strings / hash conditions | "Field[T]" objects with type-safe operations |
 | Raw SQL escape | "where("sql ?", val)" | "where_raw("sql ?", [bind])" with typed binds |
@@ -1815,7 +1815,7 @@ class ActiveSupport::TestCase
 end
 ```
 
-"use_transactional_tests" defaults to true. You can access rows with "users(:alice)" or "fixture(:users, :alice)".
+"use_transactional_tests" defaults to true. Access rows with "fixture(:users, :alice)".
 When a fixture row omits an integer primary key, HakumiORM assigns a deterministic id from the fixture label.
 Foreign key labels are supported (`user: alice` / `user_id: alice`) and join rows can expand labels (`user: alice,bob` or YAML array).
 Set "HAKUMI_FIXTURES_DRY_RUN=1" to analyze table/row counts without writing fixture rows.

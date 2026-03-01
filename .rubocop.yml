@@ -83,6 +83,11 @@ Naming/MethodParameterName:
     - id
     - qn
 
+Naming/MethodName:
+  ForbiddenPatterns:
+    - !ruby/regexp /\Amethod_missing\z/
+    - !ruby/regexp /\Arespond_to_missing\?\z/
+
 # Sorbet requires named block params in sigs; anonymous forwarding is incompatible
 Naming/BlockForwarding:
   EnforcedStyle: explicit
@@ -114,6 +119,17 @@ Style/StringLiteralsInInterpolation:
 # connector.call / @connector.call are stored Procs (not blocks), which yield can't replace.
 Performance/RedundantBlockCall:
   Enabled: false
+
+Style/Send:
+  Enabled: true
+  Exclude:
+    - "test/**/*"
+
+Performance/OpenStruct:
+  Enabled: true
+
+Style/TopLevelMethodDefinition:
+  Enabled: true
 
 Layout/LineLength:
   Max: 140

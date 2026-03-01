@@ -12,7 +12,7 @@ module HakumiORM
       T.any(Fixtures::Types::FixtureRowSet, Fixtures::Types::FixtureRow, T::Array[Fixtures::Types::FixtureRow])
     end
 
-    sig { params(base: Module).void }
+    sig { params(base: T.class_of(Object)).void }
     def self.included(base)
       base.extend(ClassMethods)
       base.instance_variable_set(:@fixture_paths, ["test/fixtures"]) unless base.instance_variable_defined?(:@fixture_paths)
@@ -100,17 +100,8 @@ module HakumiORM
 
       sig { params(fixture_set_names: T.nilable(T::Array[String])).void }
       def setup_fixture_accessors(fixture_set_names = nil)
-        names = fixture_set_names || fixture_table_names
-        mod = T.cast(self, Module)
-        names.each do |name|
-          method_name = name.tr("/", "_")
-          mod.class_eval do
-            define_method(method_name) do |*fixture_names|
-              T.bind(self, HakumiORM::TestFixtures)
-              fixture(name, fixture_names)
-            end
-          end
-        end
+        _ = fixture_set_names
+        # No dynamic accessor methods; call fixture(:table, :label) explicitly.
       end
     end
 
@@ -139,15 +130,17 @@ module HakumiORM
       rows = (loaded || {})[table]
       Kernel.raise StandardError, "No fixture set named '#{fixture_set_name}'" unless rows
 
-      names =
+      names = T.let(
         case fixture_names
         when nil then []
         when Array then fixture_names.map(&:to_s)
         else [fixture_names.to_s]
-        end
+        end,
+        T::Array[String]
+      )
 
       return rows if names.empty?
-      return rows.fetch(names.first) if names.length == 1
+      return rows.fetch(names.fetch(0)) if names.length == 1
 
       names.map { |name| rows.fetch(name) }
     end

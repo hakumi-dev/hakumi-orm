@@ -193,7 +193,7 @@ module HakumiORM
         raw = T.cast(normalized[kind], T.nilable(T::Hash[Symbol, Object]))
         return unless raw
 
-        parsed = T.cast(send(parser, raw), HakumiORM::Validation::RulePayload)
+        parsed = T.cast(__send__(parser, raw), HakumiORM::Validation::RulePayload)
         add_validation_rule(attribute, kind, common_options.merge(parsed))
       end
 
