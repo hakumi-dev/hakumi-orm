@@ -1,7 +1,7 @@
 # typed: false
 # frozen_string_literal: true
 
-require_relative "fixtures/loader"
+require_relative "application/fixtures_load"
 
 module HakumiORM
   # Minitest integration inspired by ActiveRecord::TestFixtures.
@@ -117,11 +117,17 @@ module HakumiORM
       adapter = config.adapter
       raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
 
-      tables = HakumiORM::Application::SchemaIntrospection.read_tables(config, adapter)
-      loader = HakumiORM::Fixtures::Loader.new(adapter: adapter, tables: tables)
-
       self.class.fixture_paths.each_with_object({}) do |path, merged|
-        data = loader.load_with_data!(base_path: path, only_names: names)
+        data = HakumiORM::Application::FixturesLoad.load_with_data!(
+          config: config,
+          adapter: adapter,
+          request: {
+            base_path: path,
+            fixtures_dir: nil,
+            only_names: names,
+            verify_foreign_keys: false
+          }
+        )
         data.each { |table_name, rows| merged[table_name] = rows }
       end
     end

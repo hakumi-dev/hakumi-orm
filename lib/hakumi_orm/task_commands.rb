@@ -3,7 +3,6 @@
 
 require "digest"
 require_relative "task_output"
-require_relative "fixtures/loader"
 
 module HakumiORM
   # Implements the behavior behind rake tasks and CLI task entrypoints.
@@ -121,7 +120,7 @@ module HakumiORM
       adapter = config.adapter
       return unless adapter
 
-      checker = HakumiORM::SchemaDriftChecker.new(adapter, internal_tables: INTERNAL_TABLES)
+      checker = HakumiORM::SchemaDriftChecker.new(config: config, adapter: adapter, internal_tables: INTERNAL_TABLES)
       checker.update_fingerprint!
 
       if ENV.key?("HAKUMI_SKIP_GENERATE")
@@ -138,7 +137,7 @@ module HakumiORM
       raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
 
       require "hakumi_orm/codegen"
-      checker = HakumiORM::SchemaDriftChecker.new(adapter, internal_tables: INTERNAL_TABLES)
+      checker = HakumiORM::SchemaDriftChecker.new(config: config, adapter: adapter, internal_tables: INTERNAL_TABLES)
       messages = checker.check
 
       if messages.empty?
@@ -170,18 +169,12 @@ module HakumiORM
       raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
 
       opts = fixtures_options(config)
-      tables = read_schema(config, adapter)
-      loader = HakumiORM::Fixtures::Loader.new(
-        adapter: adapter,
-        tables: tables,
-        verify_foreign_keys: opts[:verify_fks]
-      )
       absolute = File.expand_path(opts[:fixtures_path], Dir.pwd)
       if opts[:dry_run]
-        plan = loader.plan_load!(
-          base_path: opts[:fixtures_path],
-          fixtures_dir: opts[:fixtures_dir],
-          only_names: opts[:only]
+        plan = HakumiORM::Application::FixturesLoad.plan_load!(
+          config: config,
+          adapter: adapter,
+          request: fixtures_request(opts)
         )
         output_port.fixtures_dry_run(
           path: absolute,
@@ -192,10 +185,10 @@ module HakumiORM
         return
       end
 
-      loaded_count = loader.load!(
-        base_path: opts[:fixtures_path],
-        fixtures_dir: opts[:fixtures_dir],
-        only_names: opts[:only]
+      loaded_count = HakumiORM::Application::FixturesLoad.load!(
+        config: config,
+        adapter: adapter,
+        request: fixtures_request(opts)
       )
       output_port.fixtures_loaded(path: absolute, table_count: loaded_count)
     end
@@ -209,6 +202,15 @@ module HakumiORM
         only: only,
         dry_run: ENV["HAKUMI_FIXTURES_DRY_RUN"] == "1",
         verify_fks: config.verify_foreign_keys_for_fixtures || ENV["HAKUMI_VERIFY_FIXTURE_FKS"] == "1"
+      }
+    end
+
+    def fixtures_request(opts)
+      {
+        base_path: opts[:fixtures_path],
+        fixtures_dir: opts[:fixtures_dir],
+        only_names: opts[:only],
+        verify_foreign_keys: opts[:verify_fks]
       }
     end
 

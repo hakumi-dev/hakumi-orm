@@ -15,8 +15,9 @@ module HakumiORM
       Application::SchemaIntrospection.read_tables(config, adapter)
     end
 
-    sig { params(adapter: Adapter::Base, internal_tables: T::Array[String]).void }
-    def initialize(adapter, internal_tables: [])
+    sig { params(config: Configuration, adapter: Adapter::Base, internal_tables: T::Array[String]).void }
+    def initialize(config:, adapter:, internal_tables: [])
+      @config = T.let(config, Configuration)
       @adapter = T.let(adapter, Adapter::Base)
       @internal_tables = T.let(internal_tables, T::Array[String])
     end
@@ -46,8 +47,7 @@ module HakumiORM
 
     sig { returns(T.nilable(SchemaDrift::PendingMigrationsIssue)) }
     def pending_migrations_issue
-      config = HakumiORM.config
-      pending = Migration::SchemaFingerprint.pending_migrations(@adapter, config.migrations_path)
+      pending = Migration::SchemaFingerprint.pending_migrations(@adapter, @config.migrations_path)
       return nil if pending.empty?
 
       SchemaDrift::PendingMigrationsIssue.new(versions: pending)
@@ -72,8 +72,7 @@ module HakumiORM
 
     sig { returns([String, String]) }
     def compute_live
-      config = HakumiORM.config
-      tables = read_schema(config)
+      tables = read_schema(@config)
       skip = @internal_tables.to_set
       user_tables = T.let({}, T::Hash[String, Codegen::TableInfo])
       tables.each { |name, info| user_tables[name] = info unless skip.include?(name) }

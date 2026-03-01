@@ -1780,6 +1780,26 @@ bundle exec rake db:associations       # list all associations (FK + custom + th
 bundle exec rake db:associations[name] # list associations for one model
 ```
 
+### Public Operations API
+
+For Ruby callers (outside Rake), use application operations as the public orchestration layer:
+
+```ruby
+config = HakumiORM.config
+adapter = HakumiORM.adapter
+
+HakumiORM::Application::FixturesLoad.load!(
+  config: config,
+  adapter: adapter,
+  request: {
+    base_path: "test/fixtures",
+    fixtures_dir: nil,
+    only_names: %w[users posts],
+    verify_foreign_keys: false
+  }
+)
+```
+
 ### Minitest Fixtures
 
 For transactional test fixtures similar to Active Record:
