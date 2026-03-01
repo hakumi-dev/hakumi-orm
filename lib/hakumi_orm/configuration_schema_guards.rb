@@ -16,7 +16,8 @@ module HakumiORM
       actual = Migration::SchemaFingerprint.read_from_db(adapter)
       return unless actual
 
-      Migration::SchemaFingerprint.check!(expected, actual)
+      policy = Migration::SchemaFingerprint.drift_allowed? ? :warn : @drift_policy
+      Migration::SchemaFingerprint.check!(expected, actual, policy: policy)
     end
 
     sig { params(adapter: Adapter::Base).void }
@@ -26,7 +27,15 @@ module HakumiORM
       pending = Migration::SchemaFingerprint.pending_migrations(adapter, @migrations_path)
       return if pending.empty?
 
-      raise PendingMigrationError, pending
+      policy = Migration::SchemaFingerprint.drift_allowed? ? :warn : @drift_policy
+      case policy
+      when :warn
+        HakumiORM.config.logger&.warn("HakumiORM: Pending migrations detected but bypassed: #{pending.join(", ")}.")
+      when :ignore
+        nil
+      else
+        raise PendingMigrationError, pending
+      end
     end
   end
 end

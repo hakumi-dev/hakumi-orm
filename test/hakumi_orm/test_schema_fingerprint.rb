@@ -574,6 +574,156 @@ class TestSchemaFingerprint < HakumiORM::TestCase
     ENV.delete("HAKUMI_ALLOW_SCHEMA_DRIFT")
   end
 
+  test "drift_policy defaults to :raise" do
+    config = HakumiORM::Configuration.new
+
+    assert_equal :raise, config.drift_policy
+  end
+
+  test "check! with policy: :warn logs instead of raising" do
+    log_output = StringIO.new
+    HakumiORM.config.logger = Logger.new(log_output)
+
+    HakumiORM::Migration::SchemaFingerprint.check!("abc", "xyz", policy: :warn)
+
+    assert_includes log_output.string, "Schema drift"
+  ensure
+    HakumiORM.config.logger = nil
+  end
+
+  test "check! with policy: :ignore does nothing on mismatch" do
+    HakumiORM::Migration::SchemaFingerprint.check!("abc", "xyz", policy: :ignore)
+  end
+
+  test "check! with policy: :raise raises SchemaDriftError on mismatch" do
+    assert_raises(HakumiORM::SchemaDriftError) do
+      HakumiORM::Migration::SchemaFingerprint.check!("abc", "xyz", policy: :raise)
+    end
+  end
+
+  test "boot fingerprint check with drift_policy :warn logs instead of raising" do
+    log_output = StringIO.new
+    HakumiORM.config.logger = Logger.new(log_output)
+
+    adapter = HakumiORM::Test::MockAdapter.new
+    adapter.stub_result("SELECT fingerprint FROM hakumi_schema_meta", [["stored_fp"]])
+
+    config = HakumiORM::Configuration.new
+    config.schema_fingerprint = "different_fp"
+    config.drift_policy = :warn
+
+    config.send(:verify_schema_fingerprint!, adapter)
+
+    assert_includes log_output.string, "Schema drift"
+  ensure
+    HakumiORM.config.logger = nil
+  end
+
+  test "boot fingerprint check with drift_policy :ignore silently passes on mismatch" do
+    adapter = HakumiORM::Test::MockAdapter.new
+    adapter.stub_result("SELECT fingerprint FROM hakumi_schema_meta", [["stored_fp"]])
+
+    config = HakumiORM::Configuration.new
+    config.schema_fingerprint = "different_fp"
+    config.drift_policy = :ignore
+
+    config.send(:verify_schema_fingerprint!, adapter)
+  end
+
+  test "boot fingerprint check with drift_policy :raise raises on mismatch" do
+    adapter = HakumiORM::Test::MockAdapter.new
+    adapter.stub_result("SELECT fingerprint FROM hakumi_schema_meta", [["stored_fp"]])
+
+    config = HakumiORM::Configuration.new
+    config.schema_fingerprint = "different_fp"
+    config.drift_policy = :raise
+
+    assert_raises(HakumiORM::SchemaDriftError) do
+      config.send(:verify_schema_fingerprint!, adapter)
+    end
+  end
+
+  test "HAKUMI_ALLOW_SCHEMA_DRIFT overrides drift_policy :raise to warn for fingerprint check" do
+    log_output = StringIO.new
+    HakumiORM.config.logger = Logger.new(log_output)
+    ENV["HAKUMI_ALLOW_SCHEMA_DRIFT"] = "1"
+
+    adapter = HakumiORM::Test::MockAdapter.new
+    adapter.stub_result("SELECT fingerprint FROM hakumi_schema_meta", [["stored_fp"]])
+
+    config = HakumiORM::Configuration.new
+    config.schema_fingerprint = "different_fp"
+    config.drift_policy = :raise
+
+    config.send(:verify_schema_fingerprint!, adapter)
+
+    assert_includes log_output.string, "Schema drift"
+  ensure
+    ENV.delete("HAKUMI_ALLOW_SCHEMA_DRIFT")
+    HakumiORM.config.logger = nil
+  end
+
+  test "boot pending migration check with drift_policy :warn logs instead of raising" do
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "20240101000000_create_users.rb"), "")
+
+      log_output = StringIO.new
+      HakumiORM.config.logger = Logger.new(log_output)
+
+      adapter = HakumiORM::Test::MockAdapter.new
+
+      config = HakumiORM::Configuration.new
+      config.schema_fingerprint = "some_fp"
+      config.migrations_path = dir
+      config.drift_policy = :warn
+
+      config.send(:verify_no_pending_migrations!, adapter)
+
+      assert_includes log_output.string, "Pending migrations"
+    end
+  ensure
+    HakumiORM.config.logger = nil
+  end
+
+  test "boot pending migration check with drift_policy :ignore silently passes" do
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "20240101000000_create_users.rb"), "")
+
+      adapter = HakumiORM::Test::MockAdapter.new
+
+      config = HakumiORM::Configuration.new
+      config.schema_fingerprint = "some_fp"
+      config.migrations_path = dir
+      config.drift_policy = :ignore
+
+      config.send(:verify_no_pending_migrations!, adapter)
+    end
+  end
+
+  test "HAKUMI_ALLOW_SCHEMA_DRIFT overrides drift_policy :raise to warn for pending migrations" do
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "20240101000000_create_users.rb"), "")
+
+      log_output = StringIO.new
+      HakumiORM.config.logger = Logger.new(log_output)
+      ENV["HAKUMI_ALLOW_SCHEMA_DRIFT"] = "1"
+
+      adapter = HakumiORM::Test::MockAdapter.new
+
+      config = HakumiORM::Configuration.new
+      config.schema_fingerprint = "some_fp"
+      config.migrations_path = dir
+      config.drift_policy = :raise
+
+      config.send(:verify_no_pending_migrations!, adapter)
+
+      assert_includes log_output.string, "Pending migrations"
+    end
+  ensure
+    ENV.delete("HAKUMI_ALLOW_SCHEMA_DRIFT")
+    HakumiORM.config.logger = nil
+  end
+
   private
 
   def col(name, type: "varchar", nullable: true)

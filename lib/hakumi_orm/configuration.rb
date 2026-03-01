@@ -80,6 +80,9 @@ module HakumiORM
     sig { returns(T.nilable(String)) }
     attr_accessor :schema_fingerprint
 
+    sig { returns(Symbol) }
+    attr_accessor :drift_policy
+
     sig { returns(T::Hash[String, String]) }
     attr_accessor :connection_options
 
@@ -115,6 +118,7 @@ module HakumiORM
       @fixtures_path = T.let("test/fixtures", String)
       @verify_foreign_keys_for_fixtures = T.let(false, T::Boolean)
       @schema_fingerprint = T.let(nil, T.nilable(String))
+      @drift_policy = T.let(:raise, Symbol)
       @connection_options = T.let({}, T::Hash[String, String])
       @form_model_adapter = T.let(HakumiORM::FormModel::NoopAdapter, FormModelAdapter)
       connect_adapter = T.let(

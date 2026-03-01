@@ -13,17 +13,19 @@ module HakumiORM
       DRIFT_ENV_VAR = "HAKUMI_ALLOW_SCHEMA_DRIFT"
       GENERATOR_VERSION = "1"
 
-      sig { params(expected: String, actual: String).void }
-      def self.check!(expected, actual)
+      sig { params(expected: String, actual: String, policy: T.nilable(Symbol)).void }
+      def self.check!(expected, actual, policy: nil)
         return if expected == actual
 
-        if drift_allowed?
-          logger = HakumiORM.config.logger
-          logger&.warn("HakumiORM: Schema drift detected but bypassed via #{DRIFT_ENV_VAR}.")
-          return
+        effective = policy || (drift_allowed? ? :warn : :raise)
+        case effective
+        when :warn
+          HakumiORM.config.logger&.warn("HakumiORM: Schema drift detected but bypassed via #{DRIFT_ENV_VAR}.")
+        when :ignore
+          nil
+        else
+          raise SchemaDriftError.new(expected, actual)
         end
-
-        raise SchemaDriftError.new(expected, actual)
       end
 
       sig { returns(T::Boolean) }
