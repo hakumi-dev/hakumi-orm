@@ -50,8 +50,7 @@
 | [Multi-Database Support](#multi-database-support) | Named databases, replicas, block switching |
 | [Query Logging](#query-logging) | SQL logging with bind params and timing |
 | [Rake Tasks](#rake-tasks) | All available rake commands |
-| [Low-Level Reference](#low-level-reference) | Type casting, CompiledQuery |
-| [Architecture](#architecture) | Source tree and module layout |
+| [Technical Reference](#technical-reference) | Internal docs and architecture links |
 | [Development](#development) | Setup, CI, testing |
 
 ---
@@ -1821,85 +1820,11 @@ When a fixture row omits an integer primary key, HakumiORM assigns a determinist
 Foreign key labels are supported (`user: alice` / `user_id: alice`) and join rows can expand labels (`user: alice,bob` or YAML array).
 Set "HAKUMI_FIXTURES_DRY_RUN=1" to analyze table/row counts without writing fixture rows.
 
-## Low-Level Reference
+## Technical Reference
 
-### Type Casting
+Detailed internals and low-level API reference live in:
 
-Raw PostgreSQL strings are converted to Ruby types through a strict "Cast" module:
-
-```ruby
-HakumiORM::Cast.integer("42")                         # => 42
-HakumiORM::Cast.boolean("t")                          # => true
-HakumiORM::Cast.timestamp("2024-01-15 09:30:00.123456") # => Time
-HakumiORM::Cast.decimal("99999.00001")                # => BigDecimal
-```
-
-Nullable columns use "get_value" (returns "T.nilable(String)"), non-nullable columns use "fetch_value" (returns "String", raises on unexpected NULL).
-
-### CompiledQuery
-
-The result of "to_sql". Contains the raw SQL and bind parameters without executing.
-
-| Method | Returns | Description |
-|---|---|---|
-| "sql" | "String" | The parameterized SQL string (e.g., "SELECT ... WHERE "age" > $1") |
-| "binds" | "T::Array[Bind]" | Array of typed bind objects |
-| "pg_params" | "T::Array[PGValue]" | Array of raw values suitable for "PG::Connection#exec_params" |
-
-## Architecture
-
-All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: strict". One class per file, except "sealed!" hierarchies ("Bind", "Expr") where all subclasses are co-located for exhaustive "T.absurd" checks.
-
-```
-lib/hakumi_orm/
-├── adapter/              # Database adapters (PostgreSQL, MySQL, SQLite)
-│   ├── base.rb           #   Abstract base, transaction/savepoint support
-│   ├── result.rb         #   Abstract result interface
-│   ├── postgresql.rb     #   PG::Connection wrapper
-│   ├── mysql.rb          #   Mysql2::Client wrapper
-│   ├── sqlite.rb         #   SQLite3::Database wrapper
-│   ├── connection_pool.rb#   Thread-safe pool (reentrant, configurable)
-│   └── timeout_error.rb  #   Pool timeout error
-├── dialect/              # SQL dialect abstraction
-│   ├── postgresql.rb     #   $1/$2 markers, double-quote quoting
-│   ├── mysql.rb          #   ? markers, backtick quoting
-│   └── sqlite.rb         #   ? markers, double-quote quoting
-├── field/                # Typed field constants (one per file)
-│   ├── comparable_field.rb#  gt/gte/lt/lte/between
-│   ├── text_field.rb     #   like/ilike
-│   ├── int_field.rb, float_field.rb, decimal_field.rb, ...
-│   ├── json_field.rb     #   JSON/JSONB field
-│   ├── enum_field.rb     #   PG native enums (StrBind)
-│   ├── int_enum_field.rb #   User-defined enums (IntBind)
-│   └── *_array_field.rb  #   Array fields (int, str, float, bool)
-├── codegen/              # Code generation from live schema
-│   ├── generator.rb      #   ERB template engine
-│   ├── schema_reader.rb  #   PostgreSQL schema reader
-│   ├── mysql_schema_reader.rb  # MySQL schema reader
-│   ├── sqlite_schema_reader.rb # SQLite schema reader
-│   ├── type_registry.rb  #   Custom type registration
-│   └── type_maps/        #   DB type → HakumiType per dialect
-├── loggable.rb           # Sorbet interface for loggers (::Logger includes it at boot)
-├── bind.rb               # Sealed bind hierarchy (13 subclasses, includes array binds)
-├── expr.rb               # Sealed expression tree (6 subclasses)
-├── sql_compiler.rb       # Expr → parameterized SQL
-├── relation.rb           # Fluent query builder
-└── ...
-```
-
-See ["lib/hakumi_orm/README.md"](lib/hakumi_orm/README.md) for a full reference of every module, class, and public API.
-
-Architecture artifacts:
-
-- `docs/architecture_full.mmd`: full file-level dependency graph (`require_relative` edges).
-- `docs/architecture_flow.mmd`: canonical sequential view (`Input -> Application -> Domain -> Infrastructure -> Output`).
-- `docs/ARCHITECTURE_POLICY.md`: boundary rules and release checklist.
-
-Regenerate diagrams with:
-
-```bash
-./bin/generate_architecture_diagrams
-```
+- ["lib/hakumi_orm/README.md"](lib/hakumi_orm/README.md)
 
 ## Development
 

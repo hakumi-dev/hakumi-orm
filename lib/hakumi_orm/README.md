@@ -27,6 +27,7 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "setup_generator.rb" | "SetupGenerator" | Creates initial project structure. "new(root:, framework:)" accepts ":rails", ":sinatra", or ":standalone". "run!" creates directories ("db/migrate", "db/schema"), writes "db/definitions.rb", and creates config initializer. Rails adds "app/models", "app/contracts", writes to "config/initializers/hakumi/orm.rb". Standalone/Sinatra writes to "config/hakumi/orm.rb" with "require" and Rakefile instructions. Namespaced under "hakumi/" to coexist with other Hakumi packages. Idempotent: skips existing files/dirs. Returns "{ created:, skipped: }". |
 | "tasks.rb" | "Tasks" | Rake task DSL and wiring for HakumiORM. "require "hakumi_orm/tasks"" adds: "db:install" (setup generator), "db:generate" (generate + annotate), "db:migrate", "db:prepare", "db:rollback[N]", "db:migrate:status", "db:version", "db:migration[name]", "db:type[name]", "db:associations" (list all associations), "db:scaffold[table]", "db:check", "db:seed", and "db:fixtures:load" (supports "HAKUMI_FIXTURES_DRY_RUN=1"). Mostly delegates command logic to "TaskCommands" and formatting to "TaskOutput", keeping task blocks focused on requires, argument validation, and routing. |
 | "task_commands.rb" | "TaskCommands" | Task command/orchestration helpers used by Rake tasks. Depends on explicit ports ("task_output_port", "migration_runner_factory_port") and application operations (for fixtures/schema read), so task orchestration is decoupled from concrete internals. |
+| "task_commands_support.rb" | "TaskCommands" (support extension) | Extracted support methods for task orchestration: fixture option/request shaping, schema read helper, output port accessor, and configured-adapter guard. |
 | "application/fixtures_load.rb" | "Application::FixturesLoad" | Public application operation for fixtures. Exposes "load!", "load_with_data!", and "plan_load!" using config + adapter inputs through `HakumiORM.fixtures_loader_port` (port/gateway boundary), while keeping concrete fixture implementation internal. |
 | "internal.rb" | "Internal" | Internal namespace aliases for non-public implementation classes. Use these aliases from internal code; avoid exposing implementation constants directly under public namespaces. |
 | "task_output.rb" | "TaskOutput" | CLI output and formatting helpers used by tasks and task commands. Centralizes install/migrate/rollback/status/check/scaffold messages so command logic is not mixed with printing details. |
@@ -97,6 +98,7 @@ All source code lives under "lib/hakumi_orm/". Every file is Sorbet "typed: stri
 | "adapter/sqlite.rb" | "Adapter::Sqlite" | SQLite implementation wrapping "SQLite3::Database". Uses "bind_each" helper to bind parameters individually (avoids splat). |
 | "adapter/sqlite_result.rb" | "Adapter::SqliteResult" | SQLite result wrapper. |
 | "adapter/connection_pool.rb" | "Adapter::ConnectionPool" | Thread-safe connection pool. Creates connections lazily up to "size". Reentrant: nested calls within the same thread reuse the same connection. Timeout raises "Adapter::TimeoutError". Dead connection eviction: on query error, checks "conn.alive?" and discards dead connections via "discard" (closes, decrements "@total", signals waiting threads). Overrides "prepare_exec" to guarantee prepare + execute run on the same physical connection within a single checkout. Overrides "after_commit"/"after_rollback" to forward to the thread's checked-out connection via "checked_out_connection!". Implements "Adapter::Base" — works anywhere a single adapter is expected, no code changes needed. |
+| "adapter/fixtures_loader_gateway.rb" | "Adapter::FixturesLoaderGateway" | Infrastructure implementation of `Ports::FixturesLoaderPort`. Builds internal fixture loader with schema introspection and exposes typed `load!`, `load_with_data!`, and `plan_load!` operations. |
 | "adapter/timeout_error.rb" | "Adapter::TimeoutError < Error" | Raised when the connection pool times out waiting for an available connection. |
 
 ## Dialect Layer
@@ -171,13 +173,18 @@ lib/
     ├── adapter/
     │   ├── base.rb
     │   ├── connection_pool.rb
+    │   ├── factory_gateway.rb
+    │   ├── fixtures_loader_gateway.rb
+    │   ├── migration_runner_factory_gateway.rb
     │   ├── mysql.rb
     │   ├── mysql_result.rb
     │   ├── postgresql.rb
     │   ├── postgresql_result.rb
     │   ├── result.rb
+    │   ├── schema_introspection_gateway.rb
     │   ├── sqlite.rb
     │   ├── sqlite_result.rb
+    │   ├── task_output_gateway.rb
     │   └── timeout_error.rb
     ├── assignment.rb
     ├── bind.rb
@@ -265,6 +272,13 @@ lib/
     ├── json.rb
     ├── loggable.rb
     ├── order_clause.rb
+    ├── ports.rb
+    ├── ports/
+    │   ├── adapter_factory_port.rb
+    │   ├── fixtures_loader_port.rb
+    │   ├── migration_runner_factory_port.rb
+    │   ├── schema_introspection_port.rb
+    │   └── task_output_port.rb
     ├── preload_node.rb
     ├── relation_preloader.rb
     ├── relation_executor.rb
@@ -296,6 +310,7 @@ lib/
     ├── setup_generator.rb
     ├── stale_object_error.rb
     ├── task_commands.rb
+    ├── task_commands_support.rb
     ├── task_output.rb
     ├── tasks.rb
     ├── validation_error.rb
