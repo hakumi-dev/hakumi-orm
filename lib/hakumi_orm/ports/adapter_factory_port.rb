@@ -10,13 +10,13 @@ module HakumiORM
 
       interface!
 
-      sig { abstract.params(params: T::Hash[Symbol, T.any(String, Integer)]).returns(T.anything) }
+      sig { abstract.params(params: T::Hash[Symbol, T.any(String, Integer)]).returns(Adapter::Base) }
       def connect_postgresql(params); end
 
-      sig { abstract.params(params: T::Hash[Symbol, T.any(String, Integer)]).returns(T.anything) }
+      sig { abstract.params(params: T::Hash[Symbol, T.any(String, Integer)]).returns(Adapter::Base) }
       def connect_mysql(params); end
 
-      sig { abstract.params(database: String).returns(T.anything) }
+      sig { abstract.params(database: String).returns(Adapter::Base) }
       def connect_sqlite(database); end
     end
   end

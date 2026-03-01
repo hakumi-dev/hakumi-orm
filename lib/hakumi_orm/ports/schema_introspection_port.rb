@@ -12,8 +12,8 @@ module HakumiORM
 
       sig do
         abstract
-          .params(config: T.anything, adapter: T.anything)
-          .returns(T::Hash[String, T.anything])
+          .params(config: Configuration, adapter: Adapter::Base)
+          .returns(T::Hash[String, Codegen::TableInfo])
       end
       def read_tables(config:, adapter:); end
     end

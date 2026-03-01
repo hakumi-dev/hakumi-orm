@@ -9,12 +9,12 @@ module HakumiORM
 
       extend T::Sig
 
-      sig { override.params(config: T.anything, adapter: T.anything).returns(T::Hash[String, T.anything]) }
+      sig { override.params(config: Configuration, adapter: Adapter::Base).returns(T::Hash[String, Codegen::TableInfo]) }
       def read_tables(config:, adapter:)
         require "hakumi_orm/codegen"
 
-        typed_config = T.cast(config, Configuration)
-        typed_adapter = T.cast(adapter, Adapter::Base)
+        typed_config = config
+        typed_adapter = adapter
 
         case typed_config.adapter_name
         when :postgresql
