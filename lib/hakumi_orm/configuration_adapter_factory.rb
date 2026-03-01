@@ -42,16 +42,26 @@ module HakumiORM
     sig { params(db_config: DatabaseConfig).returns(Adapter::Base) }
     def connect_from_config(db_config)
       factory = HakumiORM.adapter_factory_port
-      case db_config.adapter_name
-      when :postgresql
-        T.cast(factory.connect_postgresql(pg_params(db_config)), Adapter::Base)
-      when :mysql
-        T.cast(factory.connect_mysql(mysql_params(db_config)), Adapter::Base)
-      when :sqlite
-        T.cast(factory.connect_sqlite(db_config.database), Adapter::Base)
-      else
-        raise HakumiORM::Error, "Adapter #{db_config.adapter_name.inspect} is not yet implemented"
-      end
+      adapter = case db_config.adapter_name
+                when :postgresql
+                  T.cast(factory.connect_postgresql(pg_params(db_config)), Adapter::Base)
+                when :mysql
+                  T.cast(factory.connect_mysql(mysql_params(db_config)), Adapter::Base)
+                when :sqlite
+                  T.cast(factory.connect_sqlite(db_config.database), Adapter::Base)
+                else
+                  raise HakumiORM::Error, "Adapter #{db_config.adapter_name.inspect} is not yet implemented"
+                end
+      adapter.assign_log_config(
+        Adapter::Base::LogConfig.new(
+          logger: logger,
+          pretty_sql_logs: pretty_sql_logs,
+          colorize_sql_logs: colorize_sql_logs,
+          log_filter_parameters: log_filter_parameters,
+          log_filter_mask: log_filter_mask
+        )
+      )
+      adapter
     end
 
     sig { params(db_config: DatabaseConfig).returns(T::Hash[Symbol, T.any(String, Integer)]) }

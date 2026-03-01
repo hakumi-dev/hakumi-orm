@@ -118,6 +118,49 @@ module HakumiORM
       CallbackList = T.type_alias { T::Array[T.proc.void] }
       TxFrame = T.type_alias { { after_commit: CallbackList, after_rollback: CallbackList } }
 
+      # Logging configuration injected at adapter-creation time.
+      # Breaks the upward dependency on the global HakumiORM.config singleton.
+      class LogConfig
+        extend T::Sig
+
+        sig { returns(T.nilable(Loggable)) }
+        attr_reader :logger
+
+        sig { returns(T::Boolean) }
+        attr_reader :pretty_sql_logs
+
+        sig { returns(T::Boolean) }
+        attr_reader :colorize_sql_logs
+
+        sig { returns(T::Array[String]) }
+        attr_reader :log_filter_parameters
+
+        sig { returns(String) }
+        attr_reader :log_filter_mask
+
+        sig do
+          params(
+            logger: T.nilable(Loggable),
+            pretty_sql_logs: T::Boolean,
+            colorize_sql_logs: T::Boolean,
+            log_filter_parameters: T::Array[String],
+            log_filter_mask: String
+          ).void
+        end
+        def initialize(logger:, pretty_sql_logs:, colorize_sql_logs:, log_filter_parameters:, log_filter_mask:)
+          @logger = T.let(logger, T.nilable(Loggable))
+          @pretty_sql_logs = T.let(pretty_sql_logs, T::Boolean)
+          @colorize_sql_logs = T.let(colorize_sql_logs, T::Boolean)
+          @log_filter_parameters = T.let(log_filter_parameters, T::Array[String])
+          @log_filter_mask = T.let(log_filter_mask, String)
+        end
+      end
+
+      sig { params(log_config: LogConfig).void }
+      def assign_log_config(log_config)
+        @log_config = T.let(log_config, T.nilable(LogConfig))
+      end
+
       private
 
       sig { returns(TxFrame) }
@@ -140,7 +183,8 @@ module HakumiORM
 
       sig { returns(T.nilable(Float)) }
       def log_query_start
-        return nil unless HakumiORM.config.logger
+        @log_config = T.let(@log_config, T.nilable(LogConfig))
+        return nil unless @log_config&.logger
 
         T.cast(Process.clock_gettime(Process::CLOCK_MONOTONIC), Float)
       end
@@ -149,7 +193,11 @@ module HakumiORM
       def log_query_done(sql, params, start, note: nil)
         return unless start
 
-        log = HakumiORM.config.logger
+        @log_config = T.let(@log_config, T.nilable(LogConfig))
+        cfg = @log_config
+        return unless cfg
+
+        log = cfg.logger
         return unless log
 
         note ||= "TRANSACTION" if transaction_control_sql?(sql)
@@ -158,15 +206,14 @@ module HakumiORM
           T.cast(((T.cast(Process.clock_gettime(Process::CLOCK_MONOTONIC), Float) - start) * 1000).round(2), Float),
           Float
         )
-        config = HakumiORM.config
         log.debug do
-          if config.pretty_sql_logs
+          if cfg.pretty_sql_logs
             SqlLogFormatter.format(
               elapsed_ms: elapsed,
               sql: sql,
               params: safe_params,
               note: note,
-              colorize: config.colorize_sql_logs
+              colorize: cfg.colorize_sql_logs
             )
           else
             suffix = note ? " [#{note}]" : ""
@@ -184,12 +231,18 @@ module HakumiORM
         return params if params.empty?
         return params unless sensitive_bind_reference?(sql)
 
-        T.let(Array.new(params.length, HakumiORM.config.log_filter_mask), T::Array[DBValue])
+        @log_config = T.let(@log_config, T.nilable(LogConfig))
+        cfg = @log_config
+        return params unless cfg
+
+        T.let(Array.new(params.length, cfg.log_filter_mask), T::Array[DBValue])
       end
 
       sig { params(sql: String).returns(T::Boolean) }
       def sensitive_bind_reference?(sql)
-        patterns = HakumiORM.config.log_filter_parameters
+        @log_config = T.let(@log_config, T.nilable(LogConfig))
+        patterns = @log_config&.log_filter_parameters
+        return false unless patterns
         return false if patterns.empty?
 
         lowered = sql.downcase

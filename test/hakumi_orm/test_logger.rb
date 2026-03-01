@@ -26,6 +26,23 @@ class TestLogger < HakumiORM::TestCase
     HakumiORM.config.log_filter_mask = @prev_log_filter_mask
   end
 
+  private
+
+  # Propagates the current HakumiORM.config logging settings to @adapter.
+  # Call this after changing any config.logger / config.log_filter_* values
+  # and before running queries that should produce log output.
+  def sync_log_config!
+    @adapter.assign_log_config(
+      HakumiORM::Adapter::Base::LogConfig.new(
+        logger: HakumiORM.config.logger,
+        pretty_sql_logs: HakumiORM.config.pretty_sql_logs,
+        colorize_sql_logs: HakumiORM.config.colorize_sql_logs,
+        log_filter_parameters: HakumiORM.config.log_filter_parameters,
+        log_filter_mask: HakumiORM.config.log_filter_mask
+      )
+    )
+  end
+
   test "logger is nil by default" do
     HakumiORM.reset_config!
 
@@ -45,6 +62,7 @@ class TestLogger < HakumiORM::TestCase
   test "exec_params logs SQL with timing when logger is set" do
     io = StringIO.new
     HakumiORM.config.logger = Logger.new(io)
+    sync_log_config!
 
     UserRelation.new.where(UserSchema::ACTIVE.eq(true)).to_a(adapter: @adapter)
 
@@ -64,6 +82,7 @@ class TestLogger < HakumiORM::TestCase
   test "count logs SQL through exec_prepared path" do
     io = StringIO.new
     HakumiORM.config.logger = Logger.new(io)
+    sync_log_config!
     @adapter.stub_result("COUNT(*)", [["5"]])
 
     UserRelation.new.count(adapter: @adapter)
@@ -74,6 +93,7 @@ class TestLogger < HakumiORM::TestCase
   test "logger includes bind params" do
     io = StringIO.new
     HakumiORM.config.logger = Logger.new(io)
+    sync_log_config!
 
     UserRelation.new.where(UserSchema::AGE.gt(18)).to_a(adapter: @adapter)
 
@@ -114,6 +134,7 @@ class TestLogger < HakumiORM::TestCase
     old_stdout = $stdout
     $stdout = StringIO.new
     HakumiORM.config.log_level = :debug
+    sync_log_config!
 
     UserRelation.new.to_a(adapter: @adapter)
 
@@ -125,6 +146,7 @@ class TestLogger < HakumiORM::TestCase
   test "accepts any object implementing Loggable" do
     custom = CustomLogger.new
     HakumiORM.config.logger = custom
+    sync_log_config!
 
     UserRelation.new.to_a(adapter: @adapter)
 
@@ -136,6 +158,7 @@ class TestLogger < HakumiORM::TestCase
     HakumiORM.config.logger = Logger.new(io)
     HakumiORM.config.pretty_sql_logs = true
     HakumiORM.config.colorize_sql_logs = false
+    sync_log_config!
 
     UserRelation.new.where(UserSchema::ACTIVE.eq(true)).to_a(adapter: @adapter)
 
@@ -176,6 +199,7 @@ class TestLogger < HakumiORM::TestCase
     io = StringIO.new
     HakumiORM.config.logger = Logger.new(io)
     HakumiORM.config.log_filter_parameters = ["email"]
+    sync_log_config!
 
     UserRelation.new.where(UserSchema::EMAIL.eq("secret@example.com")).to_a(adapter: @adapter)
 
@@ -190,6 +214,7 @@ class TestLogger < HakumiORM::TestCase
     HakumiORM.config.logger = Logger.new(io)
     HakumiORM.config.log_filter_parameters = ["email"]
     HakumiORM.config.log_filter_mask = "[HIDDEN]"
+    sync_log_config!
 
     UserRelation.new.where(UserSchema::EMAIL.eq("secret@example.com")).to_a(adapter: @adapter)
 
@@ -203,6 +228,7 @@ class TestLogger < HakumiORM::TestCase
     io = StringIO.new
     HakumiORM.config.logger = Logger.new(io)
     HakumiORM.config.log_filter_parameters = ["email"]
+    sync_log_config!
 
     @adapter.exec_params(
       'INSERT INTO "users" ("email", "name") VALUES ($1, $2)',
@@ -220,6 +246,7 @@ class TestLogger < HakumiORM::TestCase
     io = StringIO.new
     HakumiORM.config.logger = Logger.new(io)
     HakumiORM.config.pretty_sql_logs = false
+    sync_log_config!
 
     @adapter.transaction do
       @adapter.exec("SELECT 1")
