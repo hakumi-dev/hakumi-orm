@@ -1,7 +1,6 @@
 # typed: strict
 # frozen_string_literal: true
 
-require_relative "../internal"
 require_relative "../fixtures/types"
 
 module HakumiORM
@@ -27,8 +26,7 @@ module HakumiORM
         ).returns(Integer)
       end
       def self.load!(config:, adapter:, request:)
-        loader = build_loader(config: config, adapter: adapter, verify_foreign_keys: request[:verify_foreign_keys])
-        loader.load!(base_path: request[:base_path], fixtures_dir: request[:fixtures_dir], only_names: request[:only_names])
+        HakumiORM.fixtures_loader_port.load!(config: config, adapter: adapter, request: request)
       end
 
       sig do
@@ -39,12 +37,7 @@ module HakumiORM
         ).returns(Fixtures::Types::LoadedFixtures)
       end
       def self.load_with_data!(config:, adapter:, request:)
-        loader = build_loader(config: config, adapter: adapter, verify_foreign_keys: request[:verify_foreign_keys])
-        loader.load_with_data!(
-          base_path: request[:base_path],
-          fixtures_dir: request[:fixtures_dir],
-          only_names: request[:only_names]
-        )
+        HakumiORM.fixtures_loader_port.load_with_data!(config: config, adapter: adapter, request: request)
       end
 
       sig do
@@ -55,25 +48,13 @@ module HakumiORM
         ).returns(Fixtures::Types::LoadPlan)
       end
       def self.plan_load!(config:, adapter:, request:)
-        loader = build_loader(config: config, adapter: adapter, verify_foreign_keys: request[:verify_foreign_keys])
-        loader.plan_load!(base_path: request[:base_path], fixtures_dir: request[:fixtures_dir], only_names: request[:only_names])
+        HakumiORM.fixtures_loader_port.plan_load!(config: config, adapter: adapter, request: request)
       end
 
       sig { params(config: Configuration, adapter: Adapter::Base).returns(T::Hash[String, Codegen::TableInfo]) }
       def self.read_tables(config:, adapter:)
         SchemaIntrospection.read_tables(config, adapter)
       end
-
-      sig { params(config: Configuration, adapter: Adapter::Base, verify_foreign_keys: T::Boolean).returns(Internal::FixturesLoader) }
-      def self.build_loader(config:, adapter:, verify_foreign_keys:)
-        tables = read_tables(config: config, adapter: adapter)
-        Internal::FixturesLoader.new(
-          adapter: adapter,
-          tables: tables,
-          verify_foreign_keys: verify_foreign_keys
-        )
-      end
-      private_class_method :build_loader
     end
   end
 end

@@ -1,4 +1,4 @@
-# typed: false
+# typed: strict
 # frozen_string_literal: true
 
 require "rake"
@@ -9,14 +9,17 @@ require_relative "tasks_compat"
 module HakumiORM
   # Defines canonical rake tasks under the db namespace.
   module Tasks
+    extend T::Sig
     extend Rake::DSL
 
-    def self.safe_define_task(task_name)
+    sig { params(task_name: String, blk: T.proc.void).void }
+    def self.safe_define_task(task_name, &blk)
       return if Rake::Task.task_defined?(task_name)
 
-      yield
+      blk.call
     end
 
+    sig { returns(String) }
     def self.task_prefix = "db:"
 
     namespace :db do
@@ -154,4 +157,4 @@ module HakumiORM
   end
 end
 
-HakumiORM::TasksCompat.define!(HakumiORM::Tasks)
+HakumiORM::TasksCompat.define!

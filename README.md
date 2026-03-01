@@ -1889,6 +1889,18 @@ lib/hakumi_orm/
 
 See ["lib/hakumi_orm/README.md"](lib/hakumi_orm/README.md) for a full reference of every module, class, and public API.
 
+Architecture artifacts:
+
+- `docs/architecture_full.mmd`: full file-level dependency graph (`require_relative` edges).
+- `docs/architecture_flow.mmd`: canonical sequential view (`Input -> Application -> Domain -> Infrastructure -> Output`).
+- `docs/ARCHITECTURE_POLICY.md`: boundary rules and release checklist.
+
+Regenerate diagrams with:
+
+```bash
+./bin/generate_architecture_diagrams
+```
+
 ## Development
 
 ```bash

@@ -23,7 +23,7 @@ module HakumiORM
         class_name = name.split("_").map(&:capitalize).join
 
         content = <<~RUBY
-          # typed: false
+          # typed: strict
           # frozen_string_literal: true
 
           class #{class_name} < HakumiORM::Migration

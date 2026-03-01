@@ -19,7 +19,7 @@ module HakumiORM
       sig { abstract.params(name: String, output_dir: String).void }
       def custom_type_scaffolded(name:, output_dir:); end
 
-      sig { abstract.params(applied: T::Array[T.anything], version: String).void }
+      sig { abstract.params(applied: T::Array[Migration::FileInfo], version: String).void }
       def migrate_result(applied:, version:); end
 
       sig { abstract.params(count: Integer, version: String).void }

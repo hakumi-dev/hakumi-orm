@@ -1,4 +1,4 @@
-# typed: false
+# typed: strict
 # frozen_string_literal: true
 
 require_relative "application/fixtures_load"
@@ -6,26 +6,83 @@ require_relative "application/fixtures_load"
 module HakumiORM
   # Minitest integration inspired by ActiveRecord::TestFixtures.
   module TestFixtures
+    extend T::Sig
+    include Kernel
+    FixtureFetch = T.type_alias do
+      T.any(Fixtures::Types::FixtureRowSet, Fixtures::Types::FixtureRow, T::Array[Fixtures::Types::FixtureRow])
+    end
+
+    sig { params(base: Module).void }
     def self.included(base)
       base.extend(ClassMethods)
-      base.class_eval do
-        class << self
-          attr_accessor :fixture_paths, :fixture_table_names, :use_transactional_tests, :pre_loaded_fixtures
-        end
-
-        self.fixture_paths ||= ["test/fixtures"]
-        self.fixture_table_names ||= []
-        self.use_transactional_tests = true if use_transactional_tests.nil?
-        self.pre_loaded_fixtures = false if pre_loaded_fixtures.nil?
-      end
+      base.instance_variable_set(:@fixture_paths, ["test/fixtures"]) unless base.instance_variable_defined?(:@fixture_paths)
+      base.instance_variable_set(:@fixture_table_names, []) unless base.instance_variable_defined?(:@fixture_table_names)
+      base.instance_variable_set(:@use_transactional_tests, true) unless base.instance_variable_defined?(:@use_transactional_tests)
+      base.instance_variable_set(:@pre_loaded_fixtures, false) unless base.instance_variable_defined?(:@pre_loaded_fixtures)
     end
 
     # Class-level fixture declaration and accessor generation.
     module ClassMethods
+      extend T::Sig
+      include Kernel
+
+      sig { returns(T::Array[String]) }
+      def fixture_paths
+        value = instance_variable_get(:@fixture_paths)
+        return [] unless value
+
+        T.cast(value, T::Array[String])
+      end
+
+      sig { params(value: T::Array[String]).void }
+      def fixture_paths=(value)
+        instance_variable_set(:@fixture_paths, value)
+      end
+
+      sig { returns(T::Array[String]) }
+      def fixture_table_names
+        value = instance_variable_get(:@fixture_table_names)
+        return [] unless value
+
+        T.cast(value, T::Array[String])
+      end
+
+      sig { params(value: T::Array[String]).void }
+      def fixture_table_names=(value)
+        instance_variable_set(:@fixture_table_names, value)
+      end
+
+      sig { returns(T.nilable(T::Boolean)) }
+      def use_transactional_tests
+        value = instance_variable_get(:@use_transactional_tests)
+        return nil if value.nil?
+
+        T.cast(value, T::Boolean)
+      end
+
+      sig { params(value: T::Boolean).void }
+      def use_transactional_tests=(value)
+        instance_variable_set(:@use_transactional_tests, value)
+      end
+
+      sig { returns(T.nilable(T::Boolean)) }
+      def pre_loaded_fixtures
+        value = instance_variable_get(:@pre_loaded_fixtures)
+        return nil if value.nil?
+
+        T.cast(value, T::Boolean)
+      end
+
+      sig { params(value: T::Boolean).void }
+      def pre_loaded_fixtures=(value)
+        instance_variable_set(:@pre_loaded_fixtures, value)
+      end
+
+      sig { params(fixture_set_names: T.any(String, Symbol)).void }
       def fixtures(*fixture_set_names)
         names =
           if fixture_set_names.first == :all
-            raise StandardError, "No fixture path found. Please set #{self}.fixture_paths." if fixture_paths.nil? || fixture_paths.empty?
+            Kernel.raise StandardError, "No fixture path found. Please set #{self}.fixture_paths." if fixture_paths.empty?
 
             fixture_paths.flat_map do |path|
               root = File.expand_path(path, Dir.pwd)
@@ -41,56 +98,86 @@ module HakumiORM
         setup_fixture_accessors(names)
       end
 
-      def setup_fixture_accessors(fixture_set_names = fixture_table_names)
-        fixture_set_names.each do |name|
+      sig { params(fixture_set_names: T.nilable(T::Array[String])).void }
+      def setup_fixture_accessors(fixture_set_names = nil)
+        names = fixture_set_names || fixture_table_names
+        mod = T.cast(self, Module)
+        names.each do |name|
           method_name = name.tr("/", "_")
-          define_method(method_name) do |*fixture_names|
-            fixture(name, *fixture_names)
+          mod.class_eval do
+            define_method(method_name) do |*fixture_names|
+              T.bind(self, HakumiORM::TestFixtures)
+              fixture(name, fixture_names)
+            end
           end
         end
       end
     end
 
+    sig { void }
     def before_setup
       setup_fixtures
       super
     end
 
+    sig { void }
     def after_teardown
       super
     ensure
       teardown_fixtures
     end
 
-    def fixture(fixture_set_name, *fixture_names)
+    sig do
+      params(
+        fixture_set_name: T.any(String, Symbol),
+        fixture_names: T.nilable(T.any(String, Symbol, T::Array[T.any(String, Symbol)]))
+      ).returns(FixtureFetch)
+    end
+    def fixture(fixture_set_name, fixture_names = nil)
       table = fixture_set_name.to_s.tr("/", "_")
-      rows = (@loaded_fixtures || {})[table]
-      raise StandardError, "No fixture set named '#{fixture_set_name}'" unless rows
+      loaded = @loaded_fixtures
+      rows = (loaded || {})[table]
+      Kernel.raise StandardError, "No fixture set named '#{fixture_set_name}'" unless rows
 
-      return rows if fixture_names.empty?
-      return rows.fetch(fixture_names.first.to_s) if fixture_names.length == 1
+      names =
+        case fixture_names
+        when nil then []
+        when Array then fixture_names.map(&:to_s)
+        else [fixture_names.to_s]
+        end
 
-      fixture_names.map { |name| rows.fetch(name.to_s) }
+      return rows if names.empty?
+      return rows.fetch(names.first) if names.length == 1
+
+      names.map { |name| rows.fetch(name) }
     end
 
     private
 
+    sig { void }
     def setup_fixtures
-      raise "pre_loaded_fixtures requires use_transactional_tests" if self.class.pre_loaded_fixtures && !self.class.use_transactional_tests
+      @fixture_tx_open = T.let(false, T.nilable(T::Boolean))
+      pre_loaded = T.cast(self.class.instance_variable_get(:@pre_loaded_fixtures), T.nilable(T::Boolean)) == true
+      transactional = T.cast(self.class.instance_variable_get(:@use_transactional_tests), T.nilable(T::Boolean)) == true
+      Kernel.raise "pre_loaded_fixtures requires use_transactional_tests" if pre_loaded && !transactional
 
-      @loaded_fixtures =
-        if self.class.pre_loaded_fixtures
-          self.class.instance_variable_get(:@_hakumi_loaded_fixtures) || load_fixtures_once!
+      @loaded_fixtures = T.let(
+        if pre_loaded
+          cache = self.class.instance_variable_get(:@_hakumi_loaded_fixtures)
+          cache ? T.cast(cache, Fixtures::Types::LoadedFixtures) : load_fixtures_once!
         else
           load_fixtures_data!
-        end
+        end,
+        T.nilable(Fixtures::Types::LoadedFixtures)
+      )
 
-      return unless self.class.use_transactional_tests
+      return unless transactional
 
-      @fixture_tx_open = true
+      @fixture_tx_open = T.let(true, T.nilable(T::Boolean))
       HakumiORM.adapter.exec("BEGIN").close
     end
 
+    sig { void }
     def teardown_fixtures
       return unless @fixture_tx_open
 
@@ -99,23 +186,25 @@ module HakumiORM
       rescue StandardError
         nil
       ensure
-        @fixture_tx_open = false
+        @fixture_tx_open = T.let(false, T.nilable(T::Boolean))
       end
     end
 
+    sig { returns(Fixtures::Types::LoadedFixtures) }
     def load_fixtures_once!
       data = load_fixtures_data!
       self.class.instance_variable_set(:@_hakumi_loaded_fixtures, data)
       data
     end
 
+    sig { returns(Fixtures::Types::LoadedFixtures) }
     def load_fixtures_data!
       names = self.class.fixture_table_names
       return {} if names.empty?
 
       config = HakumiORM.config
       adapter = config.adapter
-      raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
+      Kernel.raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
 
       self.class.fixture_paths.each_with_object({}) do |path, merged|
         data = HakumiORM::Application::FixturesLoad.load_with_data!(

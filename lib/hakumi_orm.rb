@@ -54,6 +54,7 @@ require_relative "hakumi_orm/ports/adapter_factory_port"
 require_relative "hakumi_orm/ports/schema_introspection_port"
 require_relative "hakumi_orm/ports/migration_runner_factory_port"
 require_relative "hakumi_orm/ports/task_output_port"
+require_relative "hakumi_orm/ports/fixtures_loader_port"
 require_relative "hakumi_orm/adapter"
 require_relative "hakumi_orm/adapter/timeout_error"
 require_relative "hakumi_orm/adapter/connection_pool"
@@ -165,6 +166,14 @@ module HakumiORM
     sig { params(task_output_port: Ports::TaskOutputPort).void }
     attr_writer :task_output_port
 
+    sig { returns(Ports::FixturesLoaderPort) }
+    def fixtures_loader_port
+      @fixtures_loader_port ||= T.let(Adapter::FixturesLoaderGateway.new, T.nilable(Ports::FixturesLoaderPort))
+    end
+
+    sig { params(fixtures_loader_port: Ports::FixturesLoaderPort).void }
+    attr_writer :fixtures_loader_port
+
     sig { params(name: T.nilable(Symbol)).returns(Adapter::Base) }
     def adapter(name = nil)
       return config.adapter_for(name) if name
@@ -202,6 +211,7 @@ module HakumiORM
       @schema_introspection_port = T.let(nil, T.nilable(Ports::SchemaIntrospectionPort))
       @migration_runner_factory_port = T.let(nil, T.nilable(Ports::MigrationRunnerFactoryPort))
       @task_output_port = T.let(nil, T.nilable(Ports::TaskOutputPort))
+      @fixtures_loader_port = T.let(nil, T.nilable(Ports::FixturesLoaderPort))
       Thread.current[:hakumi_adapter_name] = nil
     end
 

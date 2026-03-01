@@ -32,7 +32,7 @@ class TestMigrationGenerator < HakumiORM::TestCase
     assert_includes content, "class CreateUsers < HakumiORM::Migration"
     assert_includes content, "def up"
     assert_includes content, "def down"
-    assert_includes content, "# typed: false"
+    assert_includes content, "# typed: strict"
     assert_includes content, "# frozen_string_literal: true"
   end
 

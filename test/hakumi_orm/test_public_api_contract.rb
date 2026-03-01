@@ -13,6 +13,7 @@ class TestPublicApiContract < Minitest::Test
   def test_public_orchestration_does_not_reference_internal_fixture_loader_directly
     root = File.expand_path("../..", __dir__)
     public_files = [
+      File.join(root, "lib/hakumi_orm/application/fixtures_load.rb"),
       File.join(root, "lib/hakumi_orm/task_commands.rb"),
       File.join(root, "lib/hakumi_orm/test_fixtures.rb")
     ]
@@ -20,6 +21,7 @@ class TestPublicApiContract < Minitest::Test
     public_files.each do |path|
       content = File.read(path)
       refute_match(/HakumiORM::Fixtures::Loader/, content, "direct loader usage leaked in #{path}")
+      refute_match(/HakumiORM::Internal::FixturesLoader/, content, "internal loader usage leaked in #{path}")
     end
   end
 

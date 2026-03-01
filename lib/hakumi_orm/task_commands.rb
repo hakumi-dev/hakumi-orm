@@ -1,4 +1,4 @@
-# typed: false
+# typed: strict
 # frozen_string_literal: true
 
 require "digest"
@@ -7,10 +7,23 @@ require_relative "task_output"
 module HakumiORM
   # Implements the behavior behind rake tasks and CLI task entrypoints.
   module TaskCommands
+    extend T::Sig
+    include Kernel
+
     module_function
 
     INTERNAL_TABLES = %w[hakumi_migrations hakumi_schema_meta].freeze
+    FixturesOptions = T.type_alias do
+      {
+        fixtures_path: String,
+        fixtures_dir: T.nilable(String),
+        only: T.nilable(T::Array[String]),
+        dry_run: T::Boolean,
+        verify_fks: T::Boolean
+      }
+    end
 
+    sig { params(root: String).void }
     def run_install(root:)
       framework = HakumiORM::Framework.current || HakumiORM::Framework.detect
       generator = HakumiORM::SetupGenerator.new(root: root, framework: framework)
@@ -18,24 +31,24 @@ module HakumiORM
       output_port.install_result(result)
     end
 
+    sig { params(name: String).void }
     def run_type_scaffold(name:)
-      output_dir = HakumiORM.config.output_dir || "lib/types"
+      output_dir = HakumiORM.config.output_dir
       HakumiORM::Codegen::TypeScaffold.generate(name: name, output_dir: output_dir)
       output_port.custom_type_scaffolded(name: name, output_dir: output_dir)
     end
 
+    sig { returns(Migration::Runner) }
     def build_runner
       config = HakumiORM.config
-      adapter = config.adapter
-      raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
-
+      adapter = configured_adapter!(config)
       HakumiORM.migration_runner_factory_port.build(adapter: adapter, migrations_path: config.migrations_path)
     end
 
+    sig { void }
     def run_generate
       config = HakumiORM.config
-      adapter = config.adapter
-      raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
+      adapter = configured_adapter!(config)
 
       tables = read_schema(config, adapter)
       defs = HakumiORM::Codegen::DefinitionLoader.load(config.definitions_path)
@@ -65,6 +78,7 @@ module HakumiORM
       output_port.generated_tables(count: tables.size, output_dir: config.output_dir)
     end
 
+    sig { params(task_prefix: String).void }
     def run_migrate(task_prefix:)
       runner = build_runner
       applied = runner.migrate!
@@ -73,10 +87,12 @@ module HakumiORM
       post_migrate_fingerprint!(task_prefix: task_prefix)
     end
 
+    sig { params(task_prefix: String).void }
     def run_prepare(task_prefix:)
       run_migrate(task_prefix: task_prefix)
     end
 
+    sig { params(count: Integer, task_prefix: String).void }
     def run_rollback(count:, task_prefix:)
       runner = build_runner
       runner.rollback!(count: count)
@@ -84,22 +100,26 @@ module HakumiORM
       post_migrate_fingerprint!(task_prefix: task_prefix)
     end
 
+    sig { void }
     def show_migration_status
       runner = build_runner
       output_port.migration_status(runner.status)
     end
 
+    sig { void }
     def show_current_version
       runner = build_runner
       output_port.current_version(runner.current_version || "none")
     end
 
+    sig { params(name: String).void }
     def create_migration_file(name:)
       path = HakumiORM.config.migrations_path
       filepath = HakumiORM::Migration::FileGenerator.generate(name: name, path: path)
       output_port.migration_file_created(filepath)
     end
 
+    sig { params(table_name: String).void }
     def run_scaffold(table_name)
       config = HakumiORM.config
       generator = HakumiORM::ScaffoldGenerator.new(table_name, config)
@@ -113,8 +133,9 @@ module HakumiORM
       )
     end
 
+    sig { params(task_prefix: String).void }
     def post_migrate_fingerprint!(task_prefix:)
-      require "hakumi_orm/codegen"
+      Kernel.require "hakumi_orm/codegen"
 
       config = HakumiORM.config
       adapter = config.adapter
@@ -131,12 +152,12 @@ module HakumiORM
       run_generate
     end
 
+    sig { void }
     def run_check
       config = HakumiORM.config
-      adapter = config.adapter
-      raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
+      adapter = configured_adapter!(config)
 
-      require "hakumi_orm/codegen"
+      Kernel.require "hakumi_orm/codegen"
       checker = HakumiORM::SchemaDriftChecker.new(config: config, adapter: adapter, internal_tables: INTERNAL_TABLES)
       messages = checker.check
 
@@ -146,9 +167,10 @@ module HakumiORM
       end
 
       output_port.schema_check_errors(messages)
-      exit 1
+      Kernel.exit 1
     end
 
+    sig { void }
     def run_seed
       config = HakumiORM.config
       ensure_generated_loaded_for_seed!(config)
@@ -159,14 +181,14 @@ module HakumiORM
         return
       end
 
-      load absolute
+      Kernel.load absolute
       output_port.seed_loaded(absolute)
     end
 
+    sig { void }
     def run_fixtures_load
       config = HakumiORM.config
-      adapter = config.adapter
-      raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
+      adapter = configured_adapter!(config)
 
       opts = fixtures_options(config)
       absolute = File.expand_path(opts[:fixtures_path], Dir.pwd)
@@ -193,43 +215,10 @@ module HakumiORM
       output_port.fixtures_loaded(path: absolute, table_count: loaded_count)
     end
 
-    def fixtures_options(config)
-      raw_only = ENV.fetch("FIXTURES", nil)
-      only = raw_only ? raw_only.split(",").map(&:strip).reject(&:empty?) : nil
-      {
-        fixtures_path: ENV.fetch("FIXTURES_PATH", config.fixtures_path),
-        fixtures_dir: ENV.fetch("FIXTURES_DIR", nil),
-        only: only,
-        dry_run: ENV["HAKUMI_FIXTURES_DRY_RUN"] == "1",
-        verify_fks: config.verify_foreign_keys_for_fixtures || ENV["HAKUMI_VERIFY_FIXTURE_FKS"] == "1"
-      }
-    end
-
-    def fixtures_request(opts)
-      {
-        base_path: opts[:fixtures_path],
-        fixtures_dir: opts[:fixtures_dir],
-        only_names: opts[:only],
-        verify_foreign_keys: opts[:verify_fks]
-      }
-    end
-
-    def ensure_generated_loaded_for_seed!(config)
-      manifest = File.expand_path(File.join(config.output_dir, "manifest.rb"), Dir.pwd)
-      require manifest if File.file?(manifest)
-
-      [config.models_dir, config.contracts_dir].compact.each do |dir|
-        root = File.expand_path(dir, Dir.pwd)
-        next unless Dir.exist?(root)
-
-        Dir[File.join(root, "**", "*.rb")].each { |file| require file }
-      end
-    end
-
+    sig { params(filter_table: T.nilable(String)).void }
     def list_associations(filter_table = nil)
       config = HakumiORM.config
-      adapter = config.adapter
-      raise HakumiORM::Error, "No database configured. Set HakumiORM.config.database first." unless adapter
+      adapter = configured_adapter!(config)
 
       tables = read_schema(config, adapter)
       defs = HakumiORM::Codegen::DefinitionLoader.load(config.definitions_path)
@@ -247,13 +236,6 @@ module HakumiORM
         output_port.associations_for_table(table.name, lines)
       end
     end
-
-    def read_schema(config, adapter)
-      HakumiORM::Application::SchemaIntrospection.read_tables(config, adapter)
-    end
-
-    def output_port
-      HakumiORM.task_output_port
-    end
   end
 end
+require_relative "task_commands_support"

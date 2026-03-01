@@ -24,7 +24,7 @@ module HakumiORM
         HakumiORM::TaskOutput.custom_type_scaffolded(name: name, output_dir: output_dir)
       end
 
-      sig { override.params(applied: T::Array[T.anything], version: String).void }
+      sig { override.params(applied: T::Array[Migration::FileInfo], version: String).void }
       def migrate_result(applied:, version:)
         HakumiORM::TaskOutput.migrate_result(applied: applied, version: version)
       end
