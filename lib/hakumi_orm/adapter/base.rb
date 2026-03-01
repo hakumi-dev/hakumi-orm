@@ -304,11 +304,13 @@ module HakumiORM
       def run_savepoint_transaction(depth, &blk)
         sp = "hakumi_sp_#{depth}"
         push_tx_frame
+        # nosemgrep: ruby.lang.security.dangerous-exec.dangerous-exec -- sp is internally generated
         exec("SAVEPOINT #{sp}").close
         @txn_depth = depth + 1
         blk.call(self)
       rescue StandardError
         begin
+          # nosemgrep: ruby.lang.security.dangerous-exec.dangerous-exec -- sp is internally generated
           exec("ROLLBACK TO SAVEPOINT #{sp}").close
         rescue StandardError
           nil
@@ -320,6 +322,7 @@ module HakumiORM
         end
         raise
       else
+        # nosemgrep: ruby.lang.security.dangerous-exec.dangerous-exec -- sp is internally generated
         exec("RELEASE SAVEPOINT #{sp}").close
         frames = @tx_frames
         if frames

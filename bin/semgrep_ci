@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SEMGREP_BIN=""
+if command -v semgrep >/dev/null 2>&1; then
+  SEMGREP_BIN="$(command -v semgrep)"
+elif [ -x ".venv-semgrep/bin/semgrep" ]; then
+  SEMGREP_BIN=".venv-semgrep/bin/semgrep"
+fi
+
+if [ -z "${SEMGREP_BIN}" ]; then
+  echo "semgrep is not installed." >&2
+  echo "Install it with:" >&2
+  echo "  python3 -m venv .venv-semgrep" >&2
+  echo "  .venv-semgrep/bin/pip install --upgrade pip semgrep" >&2
+  exit 127
+fi
+
+"${SEMGREP_BIN}" scan --config p/ruby --error --metrics=off --exclude test --exclude vendor

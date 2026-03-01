@@ -17,6 +17,10 @@ echo "==> Security audit"
 bundle exec ruby bin/security_audit
 
 echo ""
+echo "==> Semgrep"
+bin/semgrep_ci
+
+echo ""
 echo "==> Sorbet"
 bundle exec srb tc
 
