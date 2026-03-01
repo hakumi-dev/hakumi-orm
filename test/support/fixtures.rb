@@ -140,7 +140,7 @@ class UserRecord
 
   sig do
     params(name: String, email: String, age: T.nilable(Integer), active: T::Boolean,
-           adapter: HakumiORM::Adapter::Base).returns(T::Array[[String, HakumiORM::PGValue]])
+           adapter: HakumiORM::Adapter::Base).returns(T::Array[[String, HakumiORM::DBValue]])
   end
   def update_dirty_pairs(name, email, age, active, adapter)
     pairs = []
@@ -151,7 +151,7 @@ class UserRecord
     pairs
   end
 
-  sig { params(pairs: T::Array[[String, HakumiORM::PGValue]], adapter: HakumiORM::Adapter::Base).returns(UserRecord) }
+  sig { params(pairs: T::Array[[String, HakumiORM::DBValue]], adapter: HakumiORM::Adapter::Base).returns(UserRecord) }
   def exec_update(pairs, adapter)
     sets = pairs.each_with_index.map { |(col, _), i| "#{col}#{i + 1}" }.join(", ")
     binds = pairs.map(&:last)

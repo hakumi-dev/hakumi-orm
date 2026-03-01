@@ -34,7 +34,7 @@ module HakumiORM
         new(conn)
       end
 
-      sig { override.params(sql: String, params: T::Array[PGValue]).returns(PostgresqlResult) }
+      sig { override.params(sql: String, params: T::Array[DBValue]).returns(PostgresqlResult) }
       def exec_params(sql, params)
         if params.empty?
           start = log_query_start
@@ -66,7 +66,7 @@ module HakumiORM
         @prepared[name] = true
       end
 
-      sig { override.params(name: String, params: T::Array[PGValue]).returns(PostgresqlResult) }
+      sig { override.params(name: String, params: T::Array[DBValue]).returns(PostgresqlResult) }
       def exec_prepared(name, params)
         start = log_query_start
         result = PostgresqlResult.new(@pg_conn.exec_prepared(name, params))

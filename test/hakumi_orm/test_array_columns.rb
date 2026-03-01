@@ -39,54 +39,54 @@ class TestArrayColumns < HakumiORM::TestCase
   test "IntArrayBind serializes to PG array literal" do
     bind = HakumiORM::IntArrayBind.new([1, 2, 3])
 
-    assert_equal "{1,2,3}", bind.pg_value
+    assert_equal "{1,2,3}", bind.serialize
   end
 
   test "IntArrayBind handles empty array" do
     bind = HakumiORM::IntArrayBind.new([])
 
-    assert_equal "{}", bind.pg_value
+    assert_equal "{}", bind.serialize
   end
 
   test "StrArrayBind always quotes non-NULL values" do
     bind = HakumiORM::StrArrayBind.new(["hello, world", "foo"])
 
-    assert_equal '{"hello, world","foo"}', bind.pg_value
+    assert_equal '{"hello, world","foo"}', bind.serialize
   end
 
   test "StrArrayBind handles empty array" do
     bind = HakumiORM::StrArrayBind.new([])
 
-    assert_equal "{}", bind.pg_value
+    assert_equal "{}", bind.serialize
   end
 
   test "StrArrayBind handles values with curly braces" do
     bind = HakumiORM::StrArrayBind.new(["{nested}", "normal"])
 
-    assert_equal '{"{nested}","normal"}', bind.pg_value
+    assert_equal '{"{nested}","normal"}', bind.serialize
   end
 
   test "StrArrayBind handles values with newlines and tabs" do
     bind = HakumiORM::StrArrayBind.new(%W[line1\nline2 tab\there])
 
-    assert_equal "{\"line1\nline2\",\"tab\there\"}", bind.pg_value
+    assert_equal "{\"line1\nline2\",\"tab\there\"}", bind.serialize
   end
 
   test "StrArrayBind handles NULL elements" do
     bind = HakumiORM::StrArrayBind.new(["a", nil, "b"])
 
-    assert_equal '{"a",NULL,"b"}', bind.pg_value
+    assert_equal '{"a",NULL,"b"}', bind.serialize
   end
 
   test "StrArrayBind escapes all quotes and backslashes" do
     bind = HakumiORM::StrArrayBind.new(['a"b"c', 'x\\y\\z'])
 
-    assert_equal '{"a\\"b\\"c","x\\\\y\\\\z"}', bind.pg_value
+    assert_equal '{"a\\"b\\"c","x\\\\y\\\\z"}', bind.serialize
   end
 
   test "StrArrayBind escaped values round-trip through Cast" do
     values = ['a"b"c', 'x\\y\\z', nil]
-    encoded = HakumiORM::StrArrayBind.new(values).pg_value
+    encoded = HakumiORM::StrArrayBind.new(values).serialize
 
     assert_equal values, HakumiORM::Cast.to_str_array(encoded)
   end
@@ -94,7 +94,7 @@ class TestArrayColumns < HakumiORM::TestCase
   test "FloatArrayBind serializes to PG array literal" do
     bind = HakumiORM::FloatArrayBind.new([1.5, 2.7])
 
-    assert_equal "{1.5,2.7}", bind.pg_value
+    assert_equal "{1.5,2.7}", bind.serialize
   end
 
   test "IntArrayField supports eq predicate" do
@@ -198,6 +198,6 @@ class TestArrayColumns < HakumiORM::TestCase
 
     assert_includes compiled.sql, '"t"."tags" = $1'
     assert_equal 1, compiled.binds.length
-    assert_equal "{1,2,3}", compiled.binds[0].pg_value
+    assert_equal "{1,2,3}", compiled.binds[0].serialize
   end
 end

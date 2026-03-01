@@ -130,7 +130,7 @@ class TestField < HakumiORM::TestCase
 
     assert_instance_of HakumiORM::StrBind, pred.binds[0]
     assert_equal :eq, pred.op
-    assert_equal "draft", pred.binds[0].pg_value
+    assert_equal "draft", pred.binds[0].serialize
   end
 
   test "EnumField neq produces correct bind" do
@@ -138,7 +138,7 @@ class TestField < HakumiORM::TestCase
     pred = field.neq(TestStatusEnum::PUBLISHED)
 
     assert_equal :neq, pred.op
-    assert_equal "published", pred.binds[0].pg_value
+    assert_equal "published", pred.binds[0].serialize
   end
 
   test "EnumField in_list produces multiple StrBinds" do
@@ -147,8 +147,8 @@ class TestField < HakumiORM::TestCase
 
     assert_equal :in, pred.op
     assert_equal 2, pred.binds.length
-    assert_equal "draft", pred.binds[0].pg_value
-    assert_equal "published", pred.binds[1].pg_value
+    assert_equal "draft", pred.binds[0].serialize
+    assert_equal "published", pred.binds[1].serialize
   end
 
   test "EnumField is_null / is_not_null work" do

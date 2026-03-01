@@ -4,9 +4,9 @@
 require "test_helper"
 
 class TestBindPortability < HakumiORM::TestCase
-  test "BoolBind pg_value returns PG-specific t/f" do
-    assert_equal "t", HakumiORM::BoolBind.new(true).pg_value
-    assert_equal "f", HakumiORM::BoolBind.new(false).pg_value
+  test "BoolBind serialize returns PG-specific t/f" do
+    assert_equal "t", HakumiORM::BoolBind.new(true).serialize
+    assert_equal "f", HakumiORM::BoolBind.new(false).serialize
   end
 
   test "Cast.to_boolean handles all adapter boolean formats" do
@@ -18,17 +18,17 @@ class TestBindPortability < HakumiORM::TestCase
     refute HakumiORM::Cast.to_boolean("false")
   end
 
-  test "TimeBind pg_value formats as UTC string" do
+  test "TimeBind serialize formats as UTC string" do
     t = Time.utc(2025, 1, 15, 9, 30, 0)
-    result = HakumiORM::TimeBind.new(t).pg_value
+    result = HakumiORM::TimeBind.new(t).serialize
 
     assert_kind_of String, result
     assert_includes result, "2025-01-15"
   end
 
-  test "DecimalBind pg_value returns string representation" do
+  test "DecimalBind serialize returns string representation" do
     d = BigDecimal("99999.00001")
-    result = HakumiORM::DecimalBind.new(d).pg_value
+    result = HakumiORM::DecimalBind.new(d).serialize
 
     assert_equal "99999.00001", result
   end
@@ -68,6 +68,6 @@ class TestBindPortability < HakumiORM::TestCase
     query = HakumiORM::CompiledQuery.new("SELECT 1", [HakumiORM::BoolBind.new(true)])
 
     assert_equal [1], query.params_for(mysql)
-    assert_equal ["t"], query.pg_params
+    assert_equal ["t"], query.db_params
   end
 end

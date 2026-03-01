@@ -31,7 +31,7 @@ module HakumiORM
         new(db)
       end
 
-      sig { override.params(sql: String, params: T::Array[PGValue]).returns(SqliteResult) }
+      sig { override.params(sql: String, params: T::Array[DBValue]).returns(SqliteResult) }
       def exec_params(sql, params)
         return exec_without_params(sql) if params.empty?
 
@@ -74,7 +74,7 @@ module HakumiORM
         @prepared[name] = @db.prepare(sql)
       end
 
-      sig { override.params(name: String, params: T::Array[PGValue]).returns(SqliteResult) }
+      sig { override.params(name: String, params: T::Array[DBValue]).returns(SqliteResult) }
       def exec_prepared(name, params)
         start = log_query_start
         stmt = @prepared[name]
@@ -100,7 +100,7 @@ module HakumiORM
 
       private
 
-      sig { params(stmt: SQLite3::Statement, params: T::Array[PGValue]).void }
+      sig { params(stmt: SQLite3::Statement, params: T::Array[DBValue]).void }
       def bind_each(stmt, params)
         i = T.let(0, Integer)
         while i < params.length
@@ -124,7 +124,7 @@ module HakumiORM
         stripped.start_with?("SELECT", "WITH")
       end
 
-      sig { params(sql: String, params: T::Array[PGValue]).returns(T::Array[T::Array[CellValue]]) }
+      sig { params(sql: String, params: T::Array[DBValue]).returns(T::Array[T::Array[CellValue]]) }
       def read_rows_via_cached_stmt(sql, params)
         stmt = @auto_read_prepared[sql]
         unless stmt
@@ -151,7 +151,7 @@ module HakumiORM
         @db.prepare(sql)
       end
 
-      sig { params(stmt: SQLite3::Statement, params: T::Array[PGValue]).void }
+      sig { params(stmt: SQLite3::Statement, params: T::Array[DBValue]).void }
       def bind_stmt_params(stmt, params)
         return if params.empty?
 

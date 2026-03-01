@@ -5,7 +5,7 @@ require "bigdecimal"
 require "date"
 
 module HakumiORM
-  PGValue = T.type_alias { T.nilable(T.any(Integer, Float, String, T::Boolean)) }
+  DBValue = T.type_alias { T.nilable(T.any(Integer, Float, String, T::Boolean)) }
 
   # Base value wrapper used to bind typed parameters to SQL statements.
   class Bind
@@ -15,8 +15,8 @@ module HakumiORM
     abstract!
     sealed!
 
-    sig { abstract.returns(PGValue) }
-    def pg_value; end
+    sig { abstract.returns(DBValue) }
+    def serialize; end
   end
 
   # Nullable integer bind.
@@ -31,8 +31,8 @@ module HakumiORM
       @value = T.let(value, T.nilable(Integer))
     end
 
-    sig { override.returns(PGValue) }
-    def pg_value
+    sig { override.returns(DBValue) }
+    def serialize
       @value
     end
   end
@@ -50,7 +50,7 @@ module HakumiORM
     end
 
     sig { override.returns(String) }
-    def pg_value
+    def serialize
       @value
     end
   end
@@ -68,7 +68,7 @@ module HakumiORM
     end
 
     sig { override.returns(Float) }
-    def pg_value
+    def serialize
       @value
     end
   end
@@ -86,7 +86,7 @@ module HakumiORM
     end
 
     sig { override.returns(String) }
-    def pg_value
+    def serialize
       @value.to_s("F")
     end
   end
@@ -104,7 +104,7 @@ module HakumiORM
     end
 
     sig { override.returns(String) }
-    def pg_value
+    def serialize
       @value ? "t" : "f"
     end
   end
@@ -122,7 +122,7 @@ module HakumiORM
     end
 
     sig { override.returns(String) }
-    def pg_value
+    def serialize
       @value.utc.strftime("%Y-%m-%d %H:%M:%S.%6N")
     end
   end
@@ -140,7 +140,7 @@ module HakumiORM
     end
 
     sig { override.returns(String) }
-    def pg_value
+    def serialize
       @value.iso8601
     end
   end
@@ -158,7 +158,7 @@ module HakumiORM
     end
 
     sig { override.returns(String) }
-    def pg_value
+    def serialize
       @value.to_json
     end
   end
@@ -168,7 +168,7 @@ module HakumiORM
     extend T::Sig
 
     sig { override.returns(NilClass) }
-    def pg_value
+    def serialize
       nil
     end
   end
@@ -186,7 +186,7 @@ module HakumiORM
     end
 
     sig { override.returns(String) }
-    def pg_value
+    def serialize
       "{#{@value.map { |v| v.nil? ? "NULL" : v.to_s }.join(",")}}"
     end
   end
@@ -204,7 +204,7 @@ module HakumiORM
     end
 
     sig { override.returns(String) }
-    def pg_value
+    def serialize
       inner = @value.map do |v|
         if v.nil?
           "NULL"
@@ -241,7 +241,7 @@ module HakumiORM
     end
 
     sig { override.returns(String) }
-    def pg_value
+    def serialize
       "{#{@value.map { |v| v.nil? ? "NULL" : v.to_s }.join(",")}}"
     end
   end
@@ -259,7 +259,7 @@ module HakumiORM
     end
 
     sig { override.returns(String) }
-    def pg_value
+    def serialize
       inner = @value.map do |v|
         if v.nil? then "NULL"
         elsif v then "t"

@@ -36,7 +36,7 @@ class TestCustomTypeEndToEnd < HakumiORM::TestCase
     bind = field.to_bind(Money.new(9995))
 
     assert_instance_of HakumiORM::DecimalBind, bind
-    assert_equal "99.95", bind.pg_value
+    assert_equal "99.95", bind.serialize
   end
 
   test "MoneyField eq compiles to parameterized SQL" do
@@ -47,7 +47,7 @@ class TestCustomTypeEndToEnd < HakumiORM::TestCase
 
     assert_includes compiled.sql, '"t"."price" = $1'
     assert_equal 1, compiled.binds.length
-    assert_equal "99.95", compiled.binds[0].pg_value
+    assert_equal "99.95", compiled.binds[0].serialize
   end
 
   test "MoneyField is_null works" do
@@ -94,10 +94,10 @@ class TestCustomTypeEndToEnd < HakumiORM::TestCase
     assert_equal "((_hv = raw).nil? ? nil : Money.from_decimal(_hv))", entry.cast_expression.call("raw", true)
   end
 
-  test "Money round-trip: Ruby -> Bind -> pg_value -> Cast -> Ruby" do
+  test "Money round-trip: Ruby -> Bind -> serialize -> Cast -> Ruby" do
     original = Money.new(9995)
     bind = HakumiORM::DecimalBind.new(original.to_d)
-    pg_wire = bind.pg_value
+    pg_wire = bind.serialize
     restored = Money.from_decimal(pg_wire)
 
     assert_equal original.cents, restored.cents

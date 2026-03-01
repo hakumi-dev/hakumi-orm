@@ -218,7 +218,7 @@ module HakumiORM
 
     sig { params(bind: Bind).returns(T::Boolean) }
     def null_bind?(bind)
-      bind.pg_value.nil?
+      bind.serialize.nil?
     end
   end
 end

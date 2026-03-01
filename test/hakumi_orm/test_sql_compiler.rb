@@ -16,7 +16,7 @@ class TestSqlCompiler < HakumiORM::TestCase
     refute_includes q.sql, "Robert"
     refute_includes q.sql, "DROP"
     assert_includes q.sql, "$1"
-    assert_equal "Robert'); DROP TABLE users;--", q.pg_params[0]
+    assert_equal "Robert'); DROP TABLE users;--", q.db_params[0]
   end
 
   test "select without where produces clean SQL with all columns" do
@@ -36,7 +36,7 @@ class TestSqlCompiler < HakumiORM::TestCase
     q = @compiler.select(table: "users", columns: [UserSchema::ID], where_expr: UserSchema::AGE.eq(25))
 
     assert_includes q.sql, '"users"."age" = $1'
-    assert_equal [25], q.pg_params
+    assert_equal [25], q.db_params
   end
 
   test "select with neq uses <>" do
@@ -51,7 +51,7 @@ class TestSqlCompiler < HakumiORM::TestCase
 
     assert_includes q.sql, "("
     assert_includes q.sql, "AND"
-    assert_equal [18, "%alice%"], q.pg_params
+    assert_equal [18, "%alice%"], q.db_params
   end
 
   test "select with IN produces comma-separated bind markers" do
@@ -59,7 +59,7 @@ class TestSqlCompiler < HakumiORM::TestCase
     q = @compiler.select(table: "users", columns: [UserSchema::ID], where_expr: expr)
 
     assert_includes q.sql, "IN ($1, $2, $3)"
-    assert_equal [18, 21, 25], q.pg_params
+    assert_equal [18, 21, 25], q.db_params
   end
 
   test "select with NOT IN" do
@@ -74,7 +74,7 @@ class TestSqlCompiler < HakumiORM::TestCase
     q = @compiler.select(table: "users", columns: [UserSchema::ID], where_expr: expr)
 
     assert_includes q.sql, "BETWEEN $1 AND $2"
-    assert_equal [18, 65], q.pg_params
+    assert_equal [18, 65], q.db_params
   end
 
   test "IS NULL and IS NOT NULL produce no bind markers" do
@@ -154,7 +154,7 @@ class TestSqlCompiler < HakumiORM::TestCase
     q = @compiler.delete(table: "users", where_expr: UserSchema::ID.eq(1))
 
     assert_equal 'DELETE FROM "users" WHERE "users"."id" = $1', q.sql
-    assert_equal [1], q.pg_params
+    assert_equal [1], q.db_params
   end
 
   test "delete without where deletes all rows" do
@@ -172,7 +172,7 @@ class TestSqlCompiler < HakumiORM::TestCase
 
     assert_includes q.sql, '"name" = $1, "age" = $2'
     assert_includes q.sql, 'WHERE "users"."id" = $3'
-    assert_equal ["Bob", 30, 1], q.pg_params
+    assert_equal ["Bob", 30, 1], q.db_params
   end
 
   test "insert produces correct VALUES clause" do
@@ -181,7 +181,7 @@ class TestSqlCompiler < HakumiORM::TestCase
     q = @compiler.insert(table: "users", columns: cols, values: vals)
 
     assert_includes q.sql, 'INSERT INTO "users" ("name", "email") VALUES ($1, $2)'
-    assert_equal ["Alice", "a@b.com"], q.pg_params
+    assert_equal ["Alice", "a@b.com"], q.db_params
   end
 
   test "insert with RETURNING adds clause" do
@@ -242,7 +242,7 @@ class TestSqlCompiler < HakumiORM::TestCase
     assert_match(/\AWITH "active_users" AS \(/, q.sql)
     assert_includes q.sql, '"users"."active" = $1'
     assert_includes q.sql, '"users"."age" > $2'
-    assert_equal ["t", 30], q.pg_params
+    assert_equal ["t", 30], q.db_params
   end
 
   test "select emits WITH RECURSIVE when any CTE is recursive" do
@@ -282,7 +282,7 @@ class TestSqlCompiler < HakumiORM::TestCase
 
     assert_includes q.sql, "HAVING"
     assert_includes q.sql, "$1"
-    assert_equal [5], q.pg_params
+    assert_equal [5], q.db_params
   end
 
   test "group by comes before order by" do
@@ -353,7 +353,7 @@ class TestSqlCompiler < HakumiORM::TestCase
     q = @compiler.select(table: "users", columns: [UserSchema::ID], where_expr: raw)
 
     assert_includes q.sql, 'LENGTH("users"."name") > $1'
-    assert_equal [10], q.pg_params
+    assert_equal [10], q.db_params
   end
 
   test "raw expr with multiple placeholders assigns sequential markers" do
@@ -365,7 +365,7 @@ class TestSqlCompiler < HakumiORM::TestCase
 
     assert_includes q.sql, "$1"
     assert_includes q.sql, "$2"
-    assert_equal [18, 65], q.pg_params
+    assert_equal [18, 65], q.db_params
   end
 
   test "raw expr combined with normal predicate via AND" do
@@ -375,7 +375,7 @@ class TestSqlCompiler < HakumiORM::TestCase
 
     assert_includes q.sql, "$1"
     assert_includes q.sql, "$2"
-    assert_equal ["t", "^A"], q.pg_params
+    assert_equal ["t", "^A"], q.db_params
   end
 
   test "subquery in produces correct IN (SELECT ...) SQL" do
@@ -412,7 +412,7 @@ class TestSqlCompiler < HakumiORM::TestCase
 
     assert_includes q.sql, "$1"
     assert_includes q.sql, "$2"
-    assert_equal ["t", 21], q.pg_params
+    assert_equal ["t", 21], q.db_params
   end
 
   test "raw expr skips ? inside single-quoted string literal" do

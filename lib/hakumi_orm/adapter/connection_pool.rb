@@ -43,7 +43,7 @@ module HakumiORM
         @total = 1
       end
 
-      sig { override.params(sql: String, params: T::Array[PGValue]).returns(Result) }
+      sig { override.params(sql: String, params: T::Array[DBValue]).returns(Result) }
       def exec_params(sql, params)
         with_connection { |conn| conn.exec_params(sql, params) }
       end
@@ -58,12 +58,12 @@ module HakumiORM
         with_connection { |conn| conn.prepare(name, sql) }
       end
 
-      sig { override.params(name: String, params: T::Array[PGValue]).returns(Result) }
+      sig { override.params(name: String, params: T::Array[DBValue]).returns(Result) }
       def exec_prepared(name, params)
         with_connection { |conn| conn.exec_prepared(name, params) }
       end
 
-      sig { override.params(name: String, sql: String, params: T::Array[PGValue]).returns(Result) }
+      sig { override.params(name: String, sql: String, params: T::Array[DBValue]).returns(Result) }
       def prepare_exec(name, sql, params)
         with_connection do |conn|
           conn.prepare(name, sql)

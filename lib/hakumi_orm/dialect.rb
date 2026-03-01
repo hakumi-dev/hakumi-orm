@@ -60,34 +60,34 @@ module HakumiORM
 
       # -- Encoding: Ruby → DB wire format --
 
-      sig { overridable.params(value: Integer).returns(PGValue) }
+      sig { overridable.params(value: Integer).returns(DBValue) }
       def encode_integer(value) = value
 
-      sig { overridable.params(value: String).returns(PGValue) }
+      sig { overridable.params(value: String).returns(DBValue) }
       def encode_string(value) = value
 
-      sig { overridable.params(value: T::Boolean).returns(PGValue) }
+      sig { overridable.params(value: T::Boolean).returns(DBValue) }
       def encode_boolean(value) = value ? "t" : "f"
 
-      sig { overridable.params(value: Time).returns(PGValue) }
+      sig { overridable.params(value: Time).returns(DBValue) }
       def encode_time(value) = value.utc.strftime("%Y-%m-%d %H:%M:%S.%6N")
 
-      sig { overridable.params(value: Date).returns(PGValue) }
+      sig { overridable.params(value: Date).returns(DBValue) }
       def encode_date(value) = value.iso8601
 
-      sig { overridable.params(value: Float).returns(PGValue) }
+      sig { overridable.params(value: Float).returns(DBValue) }
       def encode_float(value) = value
 
-      sig { overridable.params(value: BigDecimal).returns(PGValue) }
+      sig { overridable.params(value: BigDecimal).returns(DBValue) }
       def encode_decimal(value) = value.to_s("F")
 
-      sig { overridable.params(value: Json).returns(PGValue) }
+      sig { overridable.params(value: Json).returns(DBValue) }
       def encode_json(value) = value.to_json
 
-      sig { overridable.params(value: T::Array[T.nilable(Integer)]).returns(PGValue) }
+      sig { overridable.params(value: T::Array[T.nilable(Integer)]).returns(DBValue) }
       def encode_int_array(value) = "{#{value.map { |v| v.nil? ? "NULL" : v.to_s }.join(",")}}"
 
-      sig { overridable.params(value: T::Array[T.nilable(String)]).returns(PGValue) }
+      sig { overridable.params(value: T::Array[T.nilable(String)]).returns(DBValue) }
       def encode_str_array(value)
         inner = value.map do |v|
           if v.nil?
@@ -99,10 +99,10 @@ module HakumiORM
         "{#{inner.join(",")}}"
       end
 
-      sig { overridable.params(value: T::Array[T.nilable(Float)]).returns(PGValue) }
+      sig { overridable.params(value: T::Array[T.nilable(Float)]).returns(DBValue) }
       def encode_float_array(value) = "{#{value.map { |v| v.nil? ? "NULL" : v.to_s }.join(",")}}"
 
-      sig { overridable.params(value: T::Array[T.nilable(T::Boolean)]).returns(PGValue) }
+      sig { overridable.params(value: T::Array[T.nilable(T::Boolean)]).returns(DBValue) }
       def encode_bool_array(value)
         inner = value.map do |v|
           if v.nil? then "NULL"
@@ -216,7 +216,7 @@ module HakumiORM
 
       # -- Bind dispatch --
 
-      sig { params(bind: Bind).returns(PGValue) }
+      sig { params(bind: Bind).returns(DBValue) }
       def encode_bind(bind)
         case bind
         when IntBind
@@ -238,9 +238,9 @@ module HakumiORM
         end
       end
 
-      EMPTY_PG_PARAMS = T.let([].freeze, T::Array[PGValue])
+      EMPTY_PG_PARAMS = T.let([].freeze, T::Array[DBValue])
 
-      sig { params(binds: T::Array[Bind]).returns(T::Array[PGValue]) }
+      sig { params(binds: T::Array[Bind]).returns(T::Array[DBValue]) }
       def encode_binds(binds)
         return EMPTY_PG_PARAMS if binds.empty?
 

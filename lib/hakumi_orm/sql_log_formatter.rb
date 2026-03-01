@@ -28,7 +28,7 @@ module HakumiORM
       params(
         elapsed_ms: Float,
         sql: String,
-        params: T::Array[PGValue],
+        params: T::Array[DBValue],
         note: T.nilable(String),
         colorize: T::Boolean
       ).returns(String)

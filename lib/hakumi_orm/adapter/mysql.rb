@@ -33,7 +33,7 @@ module HakumiORM
         new(client)
       end
 
-      sig { override.params(sql: String, params: T::Array[PGValue]).returns(MysqlResult) }
+      sig { override.params(sql: String, params: T::Array[DBValue]).returns(MysqlResult) }
       def exec_params(sql, params)
         if params.empty?
           start = log_query_start
@@ -72,7 +72,7 @@ module HakumiORM
         @prepared[name] = @client.prepare(sql)
       end
 
-      sig { override.params(name: String, params: T::Array[PGValue]).returns(MysqlResult) }
+      sig { override.params(name: String, params: T::Array[DBValue]).returns(MysqlResult) }
       def exec_prepared(name, params)
         start = log_query_start
         stmt = @prepared[name]
@@ -134,7 +134,7 @@ module HakumiORM
         stmt&.close
       end
 
-      sig { params(params: T::Array[PGValue]).returns(T::Array[PGValue]) }
+      sig { params(params: T::Array[DBValue]).returns(T::Array[DBValue]) }
       def mysql_params(params)
         params.map do |v|
           case v

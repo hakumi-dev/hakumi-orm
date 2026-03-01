@@ -30,7 +30,7 @@ class TestSqlSecurity < HakumiORM::TestCase
       refute_includes q.sql, "OR 1=1", "payload leaked into SQL for #{dialect_case.name}"
       assert_includes q.sql, dialect_case.marker1
       assert_includes q.sql, dialect_case.marker2
-      assert_equal [payload_name, payload_email], q.pg_params
+      assert_equal [payload_name, payload_email], q.db_params
     end
   end
 
@@ -47,7 +47,7 @@ class TestSqlSecurity < HakumiORM::TestCase
       assert_includes q.sql, "msg = '?'"
       assert_includes q.sql, "/* ? in comment */"
       assert_equal 2, q.binds.length
-      assert_equal %w[safe x], q.pg_params
+      assert_equal %w[safe x], q.db_params
     end
   end
 

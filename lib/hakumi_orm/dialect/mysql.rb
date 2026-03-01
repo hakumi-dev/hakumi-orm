@@ -65,7 +65,7 @@ module HakumiORM
               "Could not acquire migration advisory lock (GET_LOCK returned #{value.inspect})"
       end
 
-      sig { override.params(value: T::Boolean).returns(PGValue) }
+      sig { override.params(value: T::Boolean).returns(DBValue) }
       def encode_boolean(value) = value ? 1 : 0
 
       sig { override.params(raw: Adapter::CellValue).returns(T::Boolean) }
@@ -108,16 +108,16 @@ module HakumiORM
         Date.new(raw[0, 4].to_i, raw[5, 2].to_i, raw[8, 2].to_i)
       end
 
-      sig { override.params(_value: T::Array[T.nilable(Integer)]).returns(PGValue) }
+      sig { override.params(_value: T::Array[T.nilable(Integer)]).returns(DBValue) }
       def encode_int_array(_value) = unsupported!(:integer_array)
 
-      sig { override.params(_value: T::Array[T.nilable(String)]).returns(PGValue) }
+      sig { override.params(_value: T::Array[T.nilable(String)]).returns(DBValue) }
       def encode_str_array(_value) = unsupported!(:string_array)
 
-      sig { override.params(_value: T::Array[T.nilable(Float)]).returns(PGValue) }
+      sig { override.params(_value: T::Array[T.nilable(Float)]).returns(DBValue) }
       def encode_float_array(_value) = unsupported!(:float_array)
 
-      sig { override.params(_value: T::Array[T.nilable(T::Boolean)]).returns(PGValue) }
+      sig { override.params(_value: T::Array[T.nilable(T::Boolean)]).returns(DBValue) }
       def encode_bool_array(_value) = unsupported!(:boolean_array)
 
       sig { override.params(_raw: Adapter::CellValue).returns(T::Array[T.nilable(Integer)]) }

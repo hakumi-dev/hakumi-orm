@@ -136,8 +136,8 @@ class TestSqlGolden < HakumiORM::TestCase
       assert_includes q_in.sql, " IS NULL"
       assert_includes q_not_in.sql, " AND "
       assert_includes q_not_in.sql, " IS NOT NULL"
-      assert_equal [18, 21], q_in.pg_params
-      assert_equal [18, 21], q_not_in.pg_params
+      assert_equal [18, 21], q_in.db_params
+      assert_equal [18, 21], q_not_in.db_params
     end
   end
 

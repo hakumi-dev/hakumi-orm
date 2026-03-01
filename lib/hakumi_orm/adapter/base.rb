@@ -45,7 +45,7 @@ module HakumiORM
       sig { abstract.returns(Dialect::Base) }
       def dialect; end
 
-      sig { abstract.params(sql: String, params: T::Array[PGValue]).returns(Result) }
+      sig { abstract.params(sql: String, params: T::Array[DBValue]).returns(Result) }
       def exec_params(sql, params); end
 
       sig { abstract.params(sql: String).returns(Result) }
@@ -54,13 +54,13 @@ module HakumiORM
       sig { abstract.params(name: String, sql: String).void }
       def prepare(name, sql); end
 
-      sig { abstract.params(name: String, params: T::Array[PGValue]).returns(Result) }
+      sig { abstract.params(name: String, params: T::Array[DBValue]).returns(Result) }
       def exec_prepared(name, params); end
 
       sig { abstract.void }
       def close; end
 
-      sig { params(bind: Bind).returns(PGValue) }
+      sig { params(bind: Bind).returns(DBValue) }
       def encode(bind)
         dialect.encode_bind(bind)
       end
@@ -70,7 +70,7 @@ module HakumiORM
         true
       end
 
-      sig { overridable.params(name: String, sql: String, params: T::Array[PGValue]).returns(Result) }
+      sig { overridable.params(name: String, sql: String, params: T::Array[DBValue]).returns(Result) }
       def prepare_exec(name, sql, params)
         prepare(name, sql)
         exec_prepared(name, params)
@@ -145,7 +145,7 @@ module HakumiORM
         T.cast(Process.clock_gettime(Process::CLOCK_MONOTONIC), Float)
       end
 
-      sig { params(sql: String, params: T::Array[PGValue], start: T.nilable(Float), note: T.nilable(String)).void }
+      sig { params(sql: String, params: T::Array[DBValue], start: T.nilable(Float), note: T.nilable(String)).void }
       def log_query_done(sql, params, start, note: nil)
         return unless start
 
@@ -179,12 +179,12 @@ module HakumiORM
         end
       end
 
-      sig { params(sql: String, params: T::Array[PGValue]).returns(T::Array[PGValue]) }
+      sig { params(sql: String, params: T::Array[DBValue]).returns(T::Array[DBValue]) }
       def filter_params_for_log(sql, params)
         return params if params.empty?
         return params unless sensitive_bind_reference?(sql)
 
-        T.let(Array.new(params.length, HakumiORM.config.log_filter_mask), T::Array[PGValue])
+        T.let(Array.new(params.length, HakumiORM.config.log_filter_mask), T::Array[DBValue])
       end
 
       sig { params(sql: String).returns(T::Boolean) }

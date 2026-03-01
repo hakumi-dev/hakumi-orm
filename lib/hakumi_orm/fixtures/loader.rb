@@ -260,10 +260,10 @@ module HakumiORM
         @adapter.exec_params(sql, values).close
       end
 
-      sig { params(table: Codegen::TableInfo, row: Types::FixtureRow).returns([T::Array[String], T::Array[PGValue]]) }
+      sig { params(table: Codegen::TableInfo, row: Types::FixtureRow).returns([T::Array[String], T::Array[DBValue]]) }
       def row_columns_and_values(table, row)
         columns = T.let([], T::Array[String])
-        values = T.let([], T::Array[PGValue])
+        values = T.let([], T::Array[DBValue])
         table.columns.each do |column|
           next unless row.key?(column.name)
 
@@ -284,7 +284,7 @@ module HakumiORM
         markers
       end
 
-      sig { params(column: Codegen::ColumnInfo, value: Types::FixtureValue).returns(PGValue) }
+      sig { params(column: Codegen::ColumnInfo, value: Types::FixtureValue).returns(DBValue) }
       def encode_value(column, value)
         return nil if value.nil?
 
