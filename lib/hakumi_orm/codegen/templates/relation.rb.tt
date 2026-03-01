@@ -27,16 +27,16 @@ module <%= module_name %>
 
 <%= ind %>  sig { returns(T.self_type) }
 <%= ind %>  def with_deleted
-<%= ind %>    @default_exprs = []
-<%= ind %>    mark_defaults_dirty!
-<%= ind %>    self
+<%= ind %>    relation = dup
+<%= ind %>    relation.assign_default_exprs([])
+<%= ind %>    relation
 <%= ind %>  end
 
 <%= ind %>  sig { returns(T.self_type) }
 <%= ind %>  def only_deleted
-<%= ind %>    @default_exprs = [<%= qualified_schema %>::<%= soft_delete_const %>.is_not_null]
-<%= ind %>    mark_defaults_dirty!
-<%= ind %>    self
+<%= ind %>    relation = dup
+<%= ind %>    relation.assign_default_exprs([<%= qualified_schema %>::<%= soft_delete_const %>.is_not_null])
+<%= ind %>    relation
 <%= ind %>  end
 
 <%= ind %>  sig { override.params(adapter: ::HakumiORM::Adapter::Base).returns(Integer) }

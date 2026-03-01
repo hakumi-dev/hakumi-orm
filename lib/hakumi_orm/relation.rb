@@ -2,7 +2,7 @@
 # frozen_string_literal: true
 
 module HakumiORM
-  # Mutable fluent query object that compiles and executes ORM relations.
+  # Immutable fluent query object that compiles and executes ORM relations.
   class Relation
     extend T::Sig
     extend T::Helpers
@@ -52,166 +52,165 @@ module HakumiORM
 
     sig { params(expr: Expr).returns(T.self_type) }
     def where(expr)
-      @where_exprs << expr
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.push_where_expr(expr)
+      relation
     end
 
     sig { params(sql: String, binds: T::Array[Bind]).returns(T.self_type) }
     def where_raw(sql, binds = [])
-      @where_exprs << RawExpr.new(sql, binds)
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.push_where_expr(RawExpr.new(sql, binds))
+      relation
     end
 
     sig { params(clause: OrderClause).returns(T.self_type) }
     def order(clause)
-      @order_clauses << clause
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.push_order_clause(clause)
+      relation
     end
 
     sig { params(field: FieldRef, direction: Symbol).returns(T.self_type) }
     def order_by(field, direction = :asc)
-      @order_clauses << OrderClause.new(field, direction)
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.push_order_clause(OrderClause.new(field, direction))
+      relation
     end
 
     sig { params(n: Integer).returns(T.self_type) }
     def limit(n)
-      @limit_value = n
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.assign_limit(n)
+      relation
     end
 
     sig { params(n: Integer).returns(T.self_type) }
     def offset(n)
-      @offset_value = n
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.assign_offset(n)
+      relation
     end
 
     sig { params(fields: FieldRef).returns(T.self_type) }
     def select(*fields)
-      @select_columns = T.let(fields, T.nilable(T::Array[FieldRef]))
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.assign_select_columns(fields)
+      relation
     end
 
     sig { params(clause: JoinClause).returns(T.self_type) }
     def join(clause)
-      @joins << clause
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.push_join_clause(clause)
+      relation
     end
 
     sig { params(clause: JoinClause).returns(T.self_type) }
     def left_joins(clause)
-      @joins << with_join_type(clause, :left)
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.push_join_clause(with_join_type(clause, :left))
+      relation
     end
 
     sig { returns(T.self_type) }
     def distinct
-      @distinct_value = true
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.enable_distinct
+      relation
     end
 
     sig { params(fields: FieldRef).returns(T.self_type) }
     def group(*fields)
-      @group_fields.concat(fields)
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.push_group_fields(fields)
+      relation
     end
 
     sig { params(expr: Expr).returns(T.self_type) }
     def having(expr)
-      @having_exprs << expr
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.push_having_expr(expr)
+      relation
     end
 
     sig { params(clause: String).returns(T.self_type) }
     def lock(clause = "FOR UPDATE")
-      @lock_value = clause
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.assign_lock(clause)
+      relation
     end
 
     sig { params(other: Relation[ModelType]).returns(T.self_type) }
     def or(other)
-      left = combined_where
+      left = where_expression
       right = other.where_expression
+      relation = dup
       if left && right
-        @where_exprs = [left.or(right)]
+        relation.replace_where_exprs([left.or(right)])
       elsif right
-        @where_exprs = [right]
+        relation.replace_where_exprs([right])
       end
-      invalidate_compiled_cache!
-      self
+      relation
     end
 
     sig { params(expr: Expr).returns(T.self_type) }
     def where_not(expr)
-      @where_exprs << NotExpr.new(expr)
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.push_where_expr(NotExpr.new(expr))
+      relation
     end
 
     sig { params(expr: Expr).returns(T.self_type) }
     def rewhere(expr)
-      @where_exprs = [expr]
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.replace_where_exprs([expr])
+      relation
     end
 
     sig { params(clauses: OrderClause).returns(T.self_type) }
     def reorder(*clauses)
-      @order_clauses = clauses
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.replace_order_clauses(clauses)
+      relation
     end
 
     sig { params(scopes: Symbol).returns(T.self_type) }
     def unscope(*scopes)
-      scopes.each { |scope| unscope_single!(scope) }
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      scopes.each { |scope| relation.apply_unscope(scope) }
+      relation
     end
 
     sig { params(table_name: String).returns(T.self_type) }
     def from(table_name)
       validate_table_name!(table_name)
-      @from_table_name = table_name
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.assign_from_table(table_name)
+      relation
     end
 
     sig { params(name: String, subquery: CompiledQuery).returns(T.self_type) }
     def with(name, subquery)
       validate_cte_name!(name)
-      @cte_entries << [name, subquery, false]
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.push_cte_entry([name, subquery, false])
+      relation
     end
 
     sig { params(name: String, subquery: CompiledQuery).returns(T.self_type) }
     def with_recursive(name, subquery)
       validate_cte_name!(name)
-      @cte_entries << [name, subquery, true]
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.push_cte_entry([name, subquery, true])
+      relation
     end
 
     sig { returns(T.self_type) }
     def unscoped
-      @default_exprs = []
-      mark_defaults_dirty!
-      invalidate_compiled_cache!
-      self
+      relation = dup
+      relation.assign_default_exprs([])
+      relation
     end
 
     sig { abstract.params(result: Adapter::Result, dialect: Dialect::Base).returns(T::Array[ModelType]) }
@@ -258,6 +257,101 @@ module HakumiORM
 
     protected
 
+    sig { params(expr: Expr).void }
+    def push_where_expr(expr)
+      @where_exprs << expr
+    end
+
+    sig { params(exprs: T::Array[Expr]).void }
+    def replace_where_exprs(exprs)
+      @where_exprs = exprs
+    end
+
+    sig { params(clause: OrderClause).void }
+    def push_order_clause(clause)
+      @order_clauses << clause
+    end
+
+    sig { params(clauses: T::Array[OrderClause]).void }
+    def replace_order_clauses(clauses)
+      @order_clauses = clauses
+    end
+
+    sig { params(clause: JoinClause).void }
+    def push_join_clause(clause)
+      @joins << clause
+    end
+
+    sig { params(fields: T::Array[FieldRef]).void }
+    def push_group_fields(fields)
+      @group_fields.concat(fields)
+    end
+
+    sig { params(expr: Expr).void }
+    def push_having_expr(expr)
+      @having_exprs << expr
+    end
+
+    sig { params(entry: CteEntry).void }
+    def push_cte_entry(entry)
+      @cte_entries << entry
+    end
+
+    sig { params(n: Integer).void }
+    def assign_limit(n)
+      @limit_value = n
+    end
+
+    sig { params(n: Integer).void }
+    def assign_offset(n)
+      @offset_value = n
+    end
+
+    sig { params(cols: T::Array[FieldRef]).void }
+    def assign_select_columns(cols)
+      @select_columns = cols
+    end
+
+    sig { void }
+    def enable_distinct
+      @distinct_value = true
+    end
+
+    sig { params(clause: String).void }
+    def assign_lock(clause)
+      @lock_value = clause
+    end
+
+    sig { params(name: T.nilable(String)).void }
+    def assign_from_table(name)
+      @from_table_name = name
+    end
+
+    sig { params(exprs: T::Array[Expr]).void }
+    def assign_default_exprs(exprs)
+      @default_exprs = exprs
+      @defaults_pristine = false
+    end
+
+    sig { params(scope: Symbol).void }
+    def apply_unscope(scope)
+      case scope
+      when :where then @where_exprs = []
+      when :order then @order_clauses = []
+      when :joins then @joins = []
+      when :group then @group_fields = []
+      when :having then @having_exprs = []
+      when :limit then @limit_value = nil
+      when :offset then @offset_value = nil
+      when :lock then @lock_value = nil
+      when :select then @select_columns = nil
+      when :distinct then @distinct_value = false
+      when :from then @from_table_name = nil
+      when :with then @cte_entries = []
+      else raise ArgumentError, "Unsupported unscope target: #{scope.inspect}"
+      end
+    end
+
     sig { returns(T.nilable(Expr)) }
     def where_expression = combined_where
 
@@ -272,22 +366,11 @@ module HakumiORM
 
       @table_name
     end
+
     sig { returns(T::Array[CteEntry]) }
     attr_reader :cte_entries
 
     private
-
-    IDENTIFIER = T.let(/\A[a-zA-Z_][a-zA-Z0-9_]*\z/, Regexp)
-
-    sig { void }
-    def mark_defaults_dirty!
-      @defaults_pristine = false
-    end
-
-    sig { void }
-    def invalidate_compiled_cache!
-      @compiled_select_cache.clear
-    end
 
     sig { params(source: Relation[ModelType]).void }
     def initialize_copy(source)
@@ -356,38 +439,6 @@ module HakumiORM
       JoinClause.new(join_type, clause.target_table, clause.source_field, clause.target_field)
     end
 
-    sig { params(scope: Symbol).void }
-    def unscope_single!(scope)
-      case scope
-      when :where
-        @where_exprs = []
-      when :order
-        @order_clauses = []
-      when :joins
-        @joins = []
-      when :group
-        @group_fields = []
-      when :having
-        @having_exprs = []
-      when :limit
-        @limit_value = nil
-      when :offset
-        @offset_value = nil
-      when :lock
-        @lock_value = nil
-      when :select
-        @select_columns = nil
-      when :distinct
-        @distinct_value = false
-      when :from
-        @from_table_name = nil
-      when :with
-        @cte_entries = []
-      else
-        raise ArgumentError, "Unsupported unscope target: #{scope.inspect}"
-      end
-    end
-
     sig { params(table_name: String).void }
     def validate_table_name!(table_name)
       parts = table_name.split(".")
@@ -402,6 +453,8 @@ module HakumiORM
 
       raise ArgumentError, "Invalid CTE name: #{name.inspect}"
     end
+
+    IDENTIFIER = T.let(/\A[a-zA-Z_][a-zA-Z0-9_]*\z/, Regexp)
   end
 end
 

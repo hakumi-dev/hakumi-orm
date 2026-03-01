@@ -21,41 +21,39 @@ class TestRelationSafety < HakumiORM::TestCase
     refute_same a, b
   end
 
-  test "where returns the same object, not a copy" do
+  test "where returns a new relation, not the same object" do
     base = UserRecord.all
     returned = base.where(UserSchema::ACTIVE.eq(true))
 
-    assert_same base, returned
+    refute_same base, returned
   end
 
-  test "branching from a stored base contaminates the original" do
-    base = UserRecord.all
-    base.where(UserSchema::ACTIVE.eq(true))
-    base.where(UserSchema::AGE.gt(30))
-    base.to_a(adapter: @adapter)
-
-    sql = @adapter.last_sql
-
-    assert_includes sql, '"users"."active"'
-    assert_includes sql, '"users"."age"'
-  end
-
-  test "two branches from the same base share state" do
+  test "branching from a stored base does not contaminate the original" do
     base = UserRecord.all
     _a = base.where(UserSchema::ACTIVE.eq(true))
-    _b = base.where(UserSchema::AGE.gt(18))
-
+    _b = base.where(UserSchema::AGE.gt(30))
     base.to_a(adapter: @adapter)
-    sql = @adapter.last_sql
 
-    assert_includes sql, '"users"."active"', "first branch leaked into base"
-    assert_includes sql, '"users"."age"', "second branch also leaked into base"
+    refute_includes @adapter.last_sql, "WHERE"
   end
 
-  test "dup creates an independent copy that does not share arrays" do
+  test "two branches from the same base are independent" do
     base = UserRecord.all
-    copy = base.dup
-    copy.where(UserSchema::ACTIVE.eq(true))
+    a = base.where(UserSchema::ACTIVE.eq(true))
+    b = base.where(UserSchema::AGE.gt(18))
+
+    a.to_a(adapter: @adapter)
+    assert_includes @adapter.last_sql, '"users"."active" ='
+    refute_includes @adapter.last_sql, '"users"."age" >'
+
+    b.to_a(adapter: @adapter)
+    assert_includes @adapter.last_sql, '"users"."age" >'
+    refute_includes @adapter.last_sql, '"users"."active" ='
+  end
+
+  test "fluent methods leave the original relation unchanged" do
+    base = UserRecord.all
+    _copy = base.where(UserSchema::ACTIVE.eq(true))
     base.to_a(adapter: @adapter)
 
     refute_includes @adapter.last_sql, "WHERE"

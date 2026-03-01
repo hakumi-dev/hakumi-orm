@@ -8,8 +8,9 @@ module HakumiORM
 
     sig { params(specs: PreloadSpec).returns(T.self_type) }
     def preload(*specs)
-      @_preload_nodes.concat(PreloadNode.from_specs(specs))
-      self
+      relation = dup
+      relation.push_preload_nodes(PreloadNode.from_specs(specs))
+      relation
     end
 
     sig { params(results: T::Array[ModelType]).returns(T.self_type) }
@@ -30,6 +31,13 @@ module HakumiORM
     def dispatch_preload_node(node, records, adapter, depth: 0)
       _ = depth
       custom_preload(node.name, records, adapter)
+    end
+
+    protected
+
+    sig { params(nodes: T::Array[PreloadNode]).void }
+    def push_preload_nodes(nodes)
+      @_preload_nodes.concat(nodes)
     end
   end
 end

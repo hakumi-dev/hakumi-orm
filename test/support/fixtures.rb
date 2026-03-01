@@ -559,16 +559,16 @@ class ArticleRelation < HakumiORM::Relation
 
   sig { returns(T.self_type) }
   def with_deleted
-    @default_exprs = []
-    mark_defaults_dirty!
-    self
+    relation = dup
+    relation.assign_default_exprs([])
+    relation
   end
 
   sig { returns(T.self_type) }
   def only_deleted
-    @default_exprs = [ArticleSchema::DELETED_AT.is_not_null]
-    mark_defaults_dirty!
-    self
+    relation = dup
+    relation.assign_default_exprs([ArticleSchema::DELETED_AT.is_not_null])
+    relation
   end
 
   sig { override.params(adapter: HakumiORM::Adapter::Base).returns(Integer) }

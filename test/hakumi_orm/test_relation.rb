@@ -38,7 +38,7 @@ class TestRelation < HakumiORM::TestCase
     assert_empty users
   end
 
-  test "where, order, limit, offset all return the same relation instance" do
+  test "where, order, limit, offset all return a UserRelation" do
     rel = UserRecord.all
                     .where(UserSchema::AGE.gt(18))
                     .order(UserSchema::NAME.asc)
@@ -879,16 +879,17 @@ class TestRelation < HakumiORM::TestCase
     assert_same pg_first, pg_second
   end
 
-  test "compile cache is invalidated when relation mutates" do
+  test "fluent methods return a new relation that includes the change" do
     rel = UserRecord.where(UserSchema::AGE.gt(18))
 
-    before = rel.compile(@adapter.dialect)
-    rel.limit(5)
-    after = rel.compile(@adapter.dialect)
+    rel_compiled = rel.compile(@adapter.dialect)
+    rel_limited = rel.limit(5)
+    limited_compiled = rel_limited.compile(@adapter.dialect)
 
-    refute_same before, after
-    refute_equal before.sql, after.sql
-    assert_includes after.sql, "LIMIT 5"
+    refute_same rel_compiled, limited_compiled
+    refute_equal rel_compiled.sql, limited_compiled.sql
+    assert_includes limited_compiled.sql, "LIMIT 5"
+    refute_includes rel_compiled.sql, "LIMIT"
   end
 
   test "compiled query cache does not leak across dup" do
