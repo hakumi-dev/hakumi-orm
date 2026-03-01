@@ -62,10 +62,10 @@ class TestVariant < HakumiORM::TestCase
 
   test "flow typing: constructs variant when field is present" do
     age = @record.age
-    result = UserRecord::WithAge.new(record: @record, age: age) if age
+    result = age ? UserRecord::WithAge.new(record: @record, age: age) : nil
 
     assert_instance_of UserRecord::WithAge, result
-    assert_equal 25, result.age
+    assert_equal 25, result&.age
   end
 
   test "flow typing: returns nil when field is absent" do

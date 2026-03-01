@@ -114,7 +114,7 @@ class TestTaskCommands < HakumiORM::TestCase
       assert_includes out, "Loaded fixtures"
       assert_includes out, fixtures_dir
     ensure
-      adapter.close
+      adapter&.close
     end
   end
 
@@ -147,7 +147,7 @@ class TestTaskCommands < HakumiORM::TestCase
       assert_equal 1, users_count
       assert_equal 0, posts_count
     ensure
-      adapter.close
+      adapter&.close
     end
   end
 
@@ -182,7 +182,7 @@ class TestTaskCommands < HakumiORM::TestCase
       assert_predicate rows[0][0], :positive?
       assert_predicate rows[1][0], :positive?
     ensure
-      adapter.close
+      adapter&.close
     end
   end
 
@@ -214,7 +214,7 @@ class TestTaskCommands < HakumiORM::TestCase
 
       assert_equal user_id, post_user_id
     ensure
-      adapter.close
+      adapter&.close
     end
   end
 
@@ -244,7 +244,7 @@ class TestTaskCommands < HakumiORM::TestCase
       assert_includes error.message, "Fixture foreign key check failed"
       assert_includes error.message, "posts.user_id"
     ensure
-      adapter.close
+      adapter&.close
     end
   end
 
@@ -287,7 +287,7 @@ class TestTaskCommands < HakumiORM::TestCase
       assert_includes error.message, "memberships.user_id -> users.id"
       assert_includes error.message, "memberships.team_id -> teams.id"
     ensure
-      adapter.close
+      adapter&.close
     end
   end
 
@@ -347,7 +347,7 @@ class TestTaskCommands < HakumiORM::TestCase
       assert_equal 4, count
       assert_equal %w[Alice Alice Bob Bob], user_names.sort
     ensure
-      adapter.close
+      adapter&.close
     end
   end
 
@@ -383,7 +383,7 @@ class TestTaskCommands < HakumiORM::TestCase
       assert_includes out, "users: 1 row(s)"
       assert_includes out, "posts: 1 row(s)"
     ensure
-      adapter.close
+      adapter&.close
     end
   end
 end
